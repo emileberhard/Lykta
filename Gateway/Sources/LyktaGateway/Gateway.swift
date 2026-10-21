@@ -17,10 +17,15 @@ enum Gateway {
                 return number
             }
             let arguments = Array(CommandLine.arguments.dropFirst())
-            if arguments.first == "events" {
+            switch arguments.first {
+            case "events":
                 try await printEvents(Store(path: try value("LYKTA_DATABASE", default: "lykta.sqlite"), maximumDevices: 1, maximumLiveActivities: 1),
                                 arguments: Array(arguments.dropFirst()))
                 return
+            case nil:
+                break
+            default:
+                throw ConfigurationError("Usage: lykta-gateway [events [--device UUID] [--limit N]]")
             }
             var keys: [PushEnvironment: (id: String, pem: String)] = [:]
             for environment in PushEnvironment.allCases {
@@ -37,10 +42,9 @@ enum Gateway {
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
             let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20) { await api.handle($0) }
-            log("Lykta gateway listening on \(host):\(port)")
-            try await withThrowingDiscardingTaskGroup { group in
-                group.addTask { try await Delivery(store: store, push: push).run() }
-                group.addTask { try await server.run() }
+            try await server.run {
+                log("Lykta gateway listening on \(host):\(port)")
+                try await Delivery(store: store, push: push).run()
             }
         } catch {
             log("Lykta gateway stopped: \(error)")

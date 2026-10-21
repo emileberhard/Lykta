@@ -53,7 +53,7 @@ struct HTTPServer: Sendable {
         self.handler = handler
     }
 
-    func run() async throws {
+    func run(alongside work: @escaping @Sendable () async throws -> Void) async throws {
         let server = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
             .serverChannelOption(.backlog, value: 256)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -65,6 +65,7 @@ struct HTTPServer: Sendable {
                 }
             }
         try await withThrowingDiscardingTaskGroup { group in
+            group.addTask(operation: work)
             try await server.executeThenClose { connections in
                 for try await connection in connections {
                     group.addTask { try? await serve(connection) }
