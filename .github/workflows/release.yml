@@ -59,3 +59,18 @@ jobs:
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist Config/ExportOptions.plist -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+
+  github-release:
+    needs: testflight
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - name: Publish the tag message as the release notes
+        run: |
+          tag=$(gh api "repos/$GH_REPO/git/ref/tags/$VERSION" --jq .object.sha)
+          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message | gh release create "$VERSION" --verify-tag --notes-file -
