@@ -31,7 +31,7 @@ only send changes.
 
 ## Use it from an agent
 
-In the app, Copy Setup copies the gateway address, an agent token and a link
+In the app, Copy Agent Setup copies the gateway address, an agent token and a link
 to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
 the API, and its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node and modifier.
@@ -52,8 +52,7 @@ just ios    # compile the app and widgets
 
 `Core` holds the layout language, `Rendering` draws it for the widget and the
 app, `App` registers the phone, and `Gateway` serves the API and delivers
-pushes. See
-[AGENTS.md](AGENTS.md) for ownership and invariants and the
+pushes. See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
 
 ## License and security

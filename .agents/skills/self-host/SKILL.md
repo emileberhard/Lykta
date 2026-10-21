@@ -25,7 +25,7 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
 
 Build the image from the repository root and run it with the keys mounted
 read-only. The container runs as an unprivileged user, so the key files must
-be readable by others.
+be world-readable.
 
 ```bash
 docker build --tag lykta-gateway .
@@ -77,11 +77,11 @@ gateway needs the matching key.
 1. `curl -fsS https://<host>/skill/SKILL.md` returns the agent skill.
 2. In the app, Send Demo shows the demo on the Lock Screen and in the Dynamic
    Island.
-3. With the agent token from Copy Setup, `GET /v1/activities/demo` reports
+3. With the agent token from Copy Agent Setup, `GET /v1/activities/demo` reports
    `"delivery": "accepted"`. Gateway logs go to stderr (`docker logs lykta`).
 
 ## Upgrade
 
-Rebuild the image and replace the container; all state is in the volume. A
-restart while an activity is starting marks it `unknown` instead of sending it
-twice.
+Rebuild the image and replace the container; all state is in the volume. An
+activity that is starting during the restart becomes `unknown` and is never
+sent twice.

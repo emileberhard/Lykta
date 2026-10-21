@@ -33,24 +33,23 @@ sequenceDiagram
 ## Decisions
 
 **Layouts are data rendered by native views.** The language is a tree of
-SwiftUI primitives and modifiers decoded by `LyktaCore`; `Rendering` maps each
-node to its SwiftUI view, and both the widget and the app compile it, so the
-app shows each live activity exactly as the Lock Screen does. Fixed templates would cap what agents can show, an
-extension cannot run downloaded code, and images lose live timers and text
-quality. A new primitive needs an app update; until then the phone shows the
-activity's title.
+SwiftUI primitives and modifiers decoded by `LyktaCore`. `Rendering` maps each
+node to its SwiftUI view. The widget and the app both compile it, so the app
+shows each live activity exactly as the Lock Screen does. Fixed templates would
+limit what agents can show, an extension cannot run downloaded code, and images
+lose live timers and text quality. A new primitive needs an app update; until
+then the phone shows the activity's title.
 
-**One decoder validates and renders.** The gateway and the widget compile the
+**One decoder validates and renders.** The gateway and the phone compile the
 same `Layout` type, so a layout the gateway accepts renders on the phone, and
 agents get errors with JSON paths when they send it. Budgets on bytes, nodes,
 depth and modifiers keep rendering bounded.
 
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it
-creates per activity. The app therefore never has to run to forward
-per-activity update tokens. The cost is the Broadcast capability and channel
-cleanup: channels are deleted five minutes after an activity ends and orphans
-are swept at startup.
+creates per activity, so the app never has to run to forward update tokens.
+The cost is the Broadcast capability and channel cleanup: the gateway deletes a
+channel five minutes after its activity ends and sweeps orphans at startup.
 
 **The layout travels in the push.** `ContentState` carries the title and the
 raw-deflated layout JSON; the phone decodes it once. The gateway checks the
@@ -63,7 +62,7 @@ with delivery `unknown` rather than being sent twice. An in-memory queue would
 lose work on restart; an external queue would add infrastructure.
 
 **Apple networking.** SwiftNIO serves HTTP/1.1 behind the operator's TLS proxy
-on macOS and Linux. APNs requests use `URLSession`, which on Linux runs on
+on macOS and Linux. APNs requests use `URLSession`. On Linux it runs on
 libcurl through FoundationNetworking, which negotiates the HTTP/2 that APNs
 requires; the container image ships that libcurl.
 
@@ -77,20 +76,22 @@ random bits stored as SHA-256 hashes. Registration is open up to a configured
 device limit; operators keep the gateway on a private network.
 
 **Observability.** Every fact needed to debug a phone lands in the gateway's
-`events` table, so nobody needs the phone or its logs. `Store` writes the
-gateway's events in the same transaction as the change they describe: puts,
-ends, syncs, failed requests and each APNs attempt with the request ID the
-gateway chose, Apple's `apns-unique-id` for the Push Notifications Console
-delivery log, the outcome and latency. The app records launches, scene phases,
-push-to-start tokens, authorization, each activity it observes and the content
-fingerprint it received, and MetricKit's crash, hang and daily metric reports.
-It keeps them in a bounded file queue and uploads them in batches, so events
-from background wakes and offline periods arrive later. Agents read their
-phone's events through `GET /v1/events`; operators read every phone with
-`lykta-gateway events`. Events hold IDs, states, fingerprints and errors, never
-tokens or activity content. They are kept 14 days and at most 8 MB per phone.
-The widget extension has no network access, so the app observes rendered
-content through ActivityKit instead.
+`events` table, so nobody needs the phone or its logs.
+
+- `Store` writes the gateway's events in the same transaction as the change
+  they describe: puts, ends, syncs, failed requests, and each APNs attempt with
+  the gateway's request ID, Apple's `apns-unique-id` for the Push Notifications
+  Console delivery log, the outcome and the latency.
+- The app records launches, scene phases, push-to-start tokens, authorization,
+  each activity it observes with the content fingerprint it received, and
+  MetricKit's crash, hang and daily metric reports. A bounded file queue holds
+  them until a batch upload, so events from background wakes and offline
+  periods arrive later. The widget extension has no network access, so the app
+  observes rendered content through ActivityKit instead.
+- Agents read their phone's events through `GET /v1/events`; operators read
+  every phone with `lykta-gateway events`.
+- Events hold IDs, states, fingerprints and errors, never tokens or activity
+  content. They are kept 14 days, at most 8 MB per phone.
 
 ## Expensive to change
 

@@ -14,9 +14,9 @@ the Lykta app. Send the token as `Authorization: Bearer <token>`.
 
 ## Start or update
 
-`PUT /v1/activities/{name}` with a JSON body. Names use 1 to 64 of `a-z`, `0-9`,
-`-`, `_` and `.`. The PUT starts the activity when no live activity has that
-name and updates it otherwise.
+`PUT /v1/activities/{name}` with a JSON body starts the activity when no live
+activity has that name, and updates it otherwise. A name is 1 to 64 characters
+from `a-z`, `0-9`, `-`, `_` and `.`.
 
 | Field | Meaning |
 | --- | --- |
@@ -48,9 +48,9 @@ curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
 
 ## End
 
-`DELETE /v1/activities/{name}` ends the activity with its last content.
-`?dismissAfter=seconds` (0 to 14400) removes it from the Lock Screen sooner;
-otherwise the system keeps it for up to four hours.
+`DELETE /v1/activities/{name}` ends the activity with its last content. The
+system keeps it on the Lock Screen for up to four hours; `?dismissAfter=seconds`
+(0 to 14400) removes it sooner. Live Activities also end after eight hours.
 
 ## Status
 
@@ -69,24 +69,26 @@ Accepted means Apple took the push, not that the phone displayed it.
 ## Debug
 
 When an activity does not appear or update, read `GET /v1/events` before
-retrying. It returns the newest events for this phone, oldest first, from both
-sides: what the gateway did (`activity.put`, `push.start`, `push.update`,
-`push.end` with Apple's outcome, `pushID` and `ms`, `device.sync`,
-`request.failed`) and what the phone saw (`activity.observed`,
-`activity.content`, `activity.state`, `app.error`, `app.authorization`,
-`metrickit.diagnostic`). A `fingerprint` that matches between `push.*` and
-`activity.content` proves the phone received that exact content. An accepted
-`push.start` followed by `activity.unseen` means iOS dropped the start, usually
-because the start budget is spent; wait instead of retrying. An
-`app.authorization` with `activitiesEnabled: false` means the user turned Live
-Activities off. Pass `?after=<seq>` to read only newer events and `limit` (1 to
-1000, default 200).
+retrying. It returns this phone's newest events, oldest first, from both sides:
+
+- The gateway: `activity.put`, `push.start`, `push.update` and `push.end` with
+  Apple's outcome, `pushID` and `ms`, `device.sync`, `request.failed`.
+- The phone: `activity.observed`, `activity.content`, `activity.state`,
+  `app.error`, `app.authorization`, `metrickit.diagnostic`.
+
+A `fingerprint` that matches between `push.*` and `activity.content` proves the
+phone received that exact content. An accepted `push.start` followed by
+`activity.unseen` means iOS dropped the start, usually because the start budget
+is spent; wait instead of retrying. An `app.authorization` with
+`activitiesEnabled: false` means the user turned Live Activities off. Pass
+`?after=<seq>` to read only newer events and `limit` (1 to 1000, default 200).
 
 ## Errors
 
-Errors are JSON: `{"error": "invalid_layout", "message": "lockScreen.hstack[1].colour: unknown key; expected alignment, hstack, modifiers, spacing"}`.
-The message names the JSON path to fix. `payload_too_large` means the layout
-does not fit Apple's 4 KB push limit; shorten text or simplify the layout.
-`device_not_ready` means the user has to open the Lykta app once.
-`too_many_activities` means you must end one first. Live Activities end after
-eight hours.
+Errors are JSON, and the message names the JSON path to fix:
+`{"error": "invalid_layout", "message": "lockScreen.hstack[1].colour: unknown key; expected alignment, hstack, modifiers, spacing"}`.
+
+- `payload_too_large`: the layout does not fit Apple's 4 KB push limit. Shorten
+  text or simplify the layout.
+- `device_not_ready`: the user has to open the Lykta app once.
+- `too_many_activities`: end an activity first.

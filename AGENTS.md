@@ -10,9 +10,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | Path | Owns |
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
-| `Rendering` | Rendering every node and modifier as SwiftUI, and the Lock Screen presentation; compiled into both the app and the widget extension |
+| `Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it |
 | `Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `App` | Registration, Keychain credentials, ActivityKit observation, device reports and showing live activities as the Lock Screen does |
+| `App` | Registration, Keychain credentials, ActivityKit observation, device reports and the in-app Lock Screen cards |
 | `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -27,8 +27,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - The gateway is the only content writer. The app never calls
   `Activity.request` or updates content; it ends an activity only when the
   gateway reports it ended, or on Reset.
-- Unknown stays unknown. A start with an unknown outcome is never retried, and
-  missing reports never become ended activities, except for activities absent
+- Unknown stays unknown. A start with an unknown outcome is never retried. A
+  missing report never ends an activity, except when the activity is absent
   from the first report of a new app install or update.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
@@ -53,6 +53,14 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 frameworks and adapt the design to them rather than adding packages. Use Swift
 6 language mode, Swift Testing, and no code comments.
 
+## Documentation
+
+The Markdown files are as much a part of Lykta as the code. Update the README,
+this file, `PRIVACY.md`, `docs/` and both skills in the same commit as the
+change they describe, and fix stale text wherever you find it. When the app or
+gateway changes what it stores or sends, update `PRIVACY.md` and tell the
+maintainer, because the App Store privacy label must match.
+
 ## Commands
 
 | Command | Use |
@@ -67,15 +75,15 @@ run on an iPhone; compiling proves neither.
 
 ## Release
 
-Pushing a version tag such as `0.2.0` that is newer than every other version
-tag and on `main` runs `.github/workflows/release.yml`: the tests, an unsigned
-archive with the tag as its version, then Xcode's cloud signing and upload to
-TestFlight with the `testflight` environment's App Store Connect key. App
-Store Connect picks the build number. The annotated tag's message becomes the
+Push a version tag, such as `0.2.0`, that is on `main` and newer than every
+other version tag. `.github/workflows/release.yml` then runs the tests, builds
+an unsigned archive with the tag as its version, and uploads it to TestFlight
+through Xcode's cloud signing with the `testflight` environment's App Store
+Connect key. App Store Connect picks the build number. The annotated tag's message becomes the
 GitHub release notes, so write it for users: what changed since the previous
 version. Submitting to App Review stays manual.
 
 Self-hosters build the gateway image from a tagged commit and the app from
 Xcode with their own `Config/Local.xcconfig`. Gateway state lives in SQLite,
-so replacing the container is safe; in-flight HTTP requests are dropped and
+so replacing the container is safe. It drops in-flight HTTP requests, and
 in-flight starts become `unknown`.
