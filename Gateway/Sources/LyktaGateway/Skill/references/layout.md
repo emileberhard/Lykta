@@ -1,0 +1,187 @@
+# Layout reference
+
+A layout is JSON that the phone renders as native SwiftUI. Nodes nest like
+SwiftUI views, and modifiers apply in order like SwiftUI modifiers. Every
+example below is valid.
+
+## Presentations
+
+| Key | Required | Shown |
+| --- | --- | --- |
+| `lockScreen` | yes | On the Lock Screen, in banners and in StandBy. Full width; the system may cut off anything taller than 160 points. |
+| `compactLeading`, `compactTrailing` | yes | Beside the camera when this is the only activity. One line each, shrunk to half size before truncating. |
+| `minimal` | yes | A small circle when several activities share the Dynamic Island. |
+| `expanded` | no | `{"leading", "trailing", "center", "bottom"}`, each optional, when the user presses the Dynamic Island. Leading and trailing move below the camera when they are too wide. |
+| `small` | no | Apple Watch Smart Stack and CarPlay. Defaults to the compact pair side by side. |
+| `background` | no | Lock Screen background color. |
+| `keyline` | no | Dynamic Island outline color. |
+| `link` | no | An `https` URL that opens when the user taps the activity. |
+
+Treat the compact and minimal views as a 28-point circle: a symbol, a short
+number or a ring. Use `{"if": "limitedWidth"}` when the Dynamic Island is
+narrower than usual.
+
+## Data
+
+`{{path}}` placeholders take values from the request's `data`. A placeholder
+that is the whole string keeps the value's JSON type, so
+`"progress": "{{fraction}}"` gives a number. Inside other text the value is
+inserted as text: `"{{done}} of {{total}}"`. Paths use dots for nesting and
+indices: `{{build.steps.0.name}}`. A missing value is an error.
+
+Dates are ISO 8601 strings (`"2026-10-21T18:00:00Z"`) or Unix seconds.
+
+## Nodes
+
+A string is text. Any other node is an object with exactly one of the keys
+below, its optional fields and an optional `modifiers` array.
+
+| Node | Optional fields |
+| --- | --- |
+| `{"text": "Hi"}` | Same as `"Hi"`. |
+| `{"symbol": "bolt.fill"}` | Any SF Symbol name. |
+| `{"timer": [start, end]}` | `countsDown` (true), `pausedAt` (a date), `showsHours` (true). Counts on the phone without updates. |
+| `{"date": date}` | `style`: `time` (default), `date`, `relative`, `offset`, `timer`. A `timer` date in the past counts up. |
+| `{"concat": [parts]}` | One run of text from text, symbol, date and timer parts. Parts take only text modifiers. |
+| `{"shape": kind}` | `fill`, `stroke`, `lineWidth` (1), `lineCap` (`butt`, `round`, `square`), `dash` (lengths), `trim` (`[from, to]` within 0 to 1), `cornerRadius` (8, `roundedRectangle` only). Kinds: `rectangle`, `roundedRectangle`, `circle`, `ellipse`, `capsule`, `containerRelativeShape`. |
+| `{"hstack": [nodes]}` | `alignment`: `top`, `center`, `bottom`, `firstTextBaseline`, `lastTextBaseline`. `spacing`. |
+| `{"vstack": [nodes]}` | `alignment`: `leading`, `center`, `trailing`. `spacing`. |
+| `{"zstack": [nodes]}` | `alignment`: `center`, `leading`, `trailing`, `top`, `bottom`, `topLeading`, `topTrailing`, `bottomLeading`, `bottomTrailing`. Later nodes draw on top. |
+| `{"spacer": true}` | Or a minimum length instead of `true`. |
+| `{"divider": true}` | |
+| `{"progress": 0.4}` | `style`: `linear` (default), `circular`. A value from 0 to 1. |
+| `{"progress": [start, end]}` | `style`, `countsDown` (false), `pausedAt`. Fills on the phone between the two dates. |
+| `{"gauge": value}` | `min` (0), `max` (1), `style`: `circular` (default), `circularCapacity`, `linear`, `linearCapacity`. Label nodes: `label`, `currentValueLabel`, `minimumValueLabel`, `maximumValueLabel`. |
+| `{"viewThatFits": [nodes]}` | `in`: `horizontal`, `vertical`. Shows the first node that fits, so put the largest first. |
+| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`. |
+
+## Modifiers
+
+Each modifier is an object with one key: `{"padding": 8}`.
+
+| Modifier | Value |
+| --- | --- |
+| `padding` | A number, or `{"top", "leading", "bottom", "trailing", "horizontal", "vertical"}` |
+| `frame` | `{"width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "alignment"}`; lengths may be `"infinity"` |
+| `fixedSize` | `true`, `"horizontal"` or `"vertical"` |
+| `layoutPriority` | A number; higher keeps its size first |
+| `offset` | `[x, y]` |
+| `rotation` | Degrees |
+| `scale` | 0 to 10 |
+| `opacity` | 0 to 1 |
+| `foreground` | A paint, or 2 to 3 paints for `palette` symbols |
+| `background`, `tint` | A paint |
+| `clip` | A shape kind, or a corner radius |
+| `shadow` | `{"color", "radius", "x", "y"}`, all optional |
+| `font` | `largeTitle`, `title`, `title2`, `title3`, `headline`, `subheadline`, `body`, `callout`, `footnote`, `caption`, `caption2`, or a size from 1 to 160 |
+| `fontWeight` | `ultraLight`, `thin`, `light`, `regular`, `medium`, `semibold`, `bold`, `heavy`, `black` |
+| `fontDesign` | `default`, `serif`, `rounded`, `monospaced` |
+| `fontWidth` | `compressed`, `condensed`, `standard`, `expanded` |
+| `bold`, `italic`, `underline`, `strikethrough`, `monospacedDigit` | `true` or `false` |
+| `tracking` | -20 to 20 |
+| `lineLimit` | 1 to 20 |
+| `minimumScaleFactor` | 0.1 to 1 |
+| `multilineTextAlignment` | `leading`, `center`, `trailing` |
+| `truncationMode` | `head`, `middle`, `tail` |
+| `textCase` | `uppercase`, `lowercase` |
+| `contentTransition` | `numericText`, `opacity`, `interpolate`, `identity`; animates changes between updates |
+| `symbolRenderingMode` | `monochrome`, `hierarchical`, `palette`, `multicolor` |
+| `imageScale` | `small`, `medium`, `large` |
+| `accessibilityLabel` | Text for VoiceOver |
+
+A paint is a color, a level (`primary`, `secondary`, `tertiary`,
+`quaternary`) or `{"gradient": [2 to 8 colors], "direction": d}` with `d` one
+of `vertical` (default), `horizontal`, `diagonal`, `radial`, `angular`. A color
+is `#RRGGBB`, `#RRGGBBAA` or one of `red`, `orange`, `yellow`, `green`, `mint`,
+`teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown`, `white`, `gray`,
+`black`, `clear`, `accent`.
+
+## Fitting
+
+A layout may be at most 32 KB with 256 nodes, 16 levels and 512 modifiers, and
+its compressed push must fit Apple's 4 KB limit. Within a presentation:
+
+- Give timers a fixed `frame` width; timer text otherwise reserves room for its
+  longest value.
+- Offer shorter alternatives with `viewThatFits`.
+- Bound text with `lineLimit` and `minimumScaleFactor`.
+- Prefer `spacer` and alignment over fixed offsets so content adapts to each
+  iPhone.
+
+## Examples
+
+A ring:
+
+```json
+{
+  "zstack": [
+    {"shape": "circle", "stroke": "quaternary", "lineWidth": 4},
+    {"shape": "circle", "stroke": "green", "lineWidth": 4, "lineCap": "round", "trim": [0, 0.7],
+     "modifiers": [{"rotation": -90}]},
+    {"text": "70", "modifiers": [{"font": 11}, {"monospacedDigit": true}]}
+  ],
+  "modifiers": [{"frame": {"width": 28, "height": 28}}]
+}
+```
+
+Inline symbols and styled runs:
+
+```json
+{"concat": [{"symbol": "airplane"}, " Gate ", {"text": "B12", "modifiers": [{"bold": true}]}],
+ "modifiers": [{"font": "headline"}]}
+```
+
+Alternatives for narrow space, and a stale state:
+
+```json
+{"viewThatFits": ["Deploying api to production", "Deploying api", "api"]}
+```
+
+```json
+{"if": "stale", "then": {"text": "Waiting for news", "modifiers": [{"foreground": "secondary"}]}, "else": "On track"}
+```
+
+A complete request body that later updates send as `data` only:
+
+```json
+{
+  "title": "Deploying api",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {"symbol": "shippingbox.fill", "modifiers": [{"font": "title2"}, {"foreground": "blue"}]},
+            {
+              "vstack": [
+                {"text": "Deploying {{service}}", "modifiers": [{"font": "headline"}]},
+                {"text": "{{step}}", "modifiers": [{"foreground": "secondary"}, {"lineLimit": 1}]}
+              ],
+              "alignment": "leading",
+              "spacing": 2
+            },
+            {"spacer": true},
+            {"date": "{{started}}", "style": "timer",
+             "modifiers": [{"monospacedDigit": true}, {"multilineTextAlignment": "trailing"}, {"frame": {"width": 56}}]}
+          ],
+          "spacing": 10
+        },
+        {"progress": "{{progress}}", "modifiers": [{"tint": "blue"}]}
+      ],
+      "spacing": 12,
+      "modifiers": [{"padding": 16}]
+    },
+    "compactLeading": {"symbol": "shippingbox.fill", "modifiers": [{"foreground": "blue"}]},
+    "compactTrailing": {"text": "{{done}}/{{total}}", "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}]},
+    "minimal": {"progress": "{{progress}}", "style": "circular", "modifiers": [{"tint": "blue"}]},
+    "expanded": {
+      "leading": {"symbol": "shippingbox.fill", "modifiers": [{"font": "title2"}, {"foreground": "blue"}]},
+      "trailing": {"text": "{{done}} of {{total}}", "modifiers": [{"monospacedDigit": true}]},
+      "center": {"text": "{{step}}", "modifiers": [{"font": "headline"}, {"lineLimit": 1}]},
+      "bottom": {"progress": "{{progress}}", "modifiers": [{"tint": "blue"}]}
+    },
+    "keyline": "blue"
+  },
+  "data": {"service": "api", "step": "Running migrations", "done": 3, "total": 5, "progress": 0.6, "started": 1793000000}
+}
+```
