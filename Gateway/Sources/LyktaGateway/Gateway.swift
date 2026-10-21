@@ -1,4 +1,5 @@
 import Foundation
+import LyktaCore
 
 @main
 enum Gateway {

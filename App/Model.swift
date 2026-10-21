@@ -95,17 +95,19 @@ final class Model {
 
     private func observeActivities() async {
         await withDiscardingTaskGroup { group in
-            for activity in Activity<LyktaActivity>.activities {
-                group.addTask { await self.observe(activity) }
+            for id in Activity<LyktaActivity>.activities.map(\.id) {
+                group.addTask { await self.observeState(of: id) }
             }
             await sync()
             for await activity in Activity<LyktaActivity>.activityUpdates {
-                group.addTask { await self.observe(activity) }
+                let id = activity.id
+                group.addTask { await self.observeState(of: id) }
             }
         }
     }
 
-    private func observe(_ activity: Activity<LyktaActivity>) async {
+    private func observeState(of id: String) async {
+        guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await _ in activity.activityStateUpdates {
             await sync()
         }
@@ -125,7 +127,7 @@ final class Model {
                                         activities: observed.map { .init(id: $0.attributes.id.uuidString, state: $0.activityState.name) })
         await showingErrors {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
-            for activity in observed where result.end.contains(activity.attributes.id.uuidString) {
+            for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id.uuidString) {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }

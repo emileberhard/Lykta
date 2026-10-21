@@ -168,8 +168,10 @@ struct GatewayTests {
     }
 }
 
-struct Rejection: Sendable {
+struct Rejection: Sendable, CustomTestStringConvertible {
     let method: String, target: String, body: JSONValue, status: Int, error: String
+
+    var testDescription: String { "\(method) \(target) → \(error)" }
 }
 
 struct Status: Decodable, Equatable {
