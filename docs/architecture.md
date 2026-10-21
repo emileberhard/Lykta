@@ -33,8 +33,9 @@ sequenceDiagram
 ## Decisions
 
 **Layouts are data rendered by native views.** The language is a tree of
-SwiftUI primitives and modifiers decoded by `LyktaCore`; the widget maps each
-node to its SwiftUI view. Fixed templates would cap what agents can show, an
+SwiftUI primitives and modifiers decoded by `LyktaCore`; `Rendering` maps each
+node to its SwiftUI view, and both the widget and the app compile it, so the
+app shows each live activity exactly as the Lock Screen does. Fixed templates would cap what agents can show, an
 extension cannot run downloaded code, and images lose live timers and text
 quality. A new primitive needs an app update; until then the phone shows the
 activity's title.

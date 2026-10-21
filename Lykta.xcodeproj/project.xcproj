@@ -16,6 +16,7 @@
   "files": [
     { "kind": "folder", "path": "App", "target-membership": [ "Lykta" ] },
     { "kind": "folder", "path": "Widgets", "target-membership": [ "LyktaWidgets" ] },
+    { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     {
       "kind": "group",
       "path": "Config",

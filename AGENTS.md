@@ -10,8 +10,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | Path | Owns |
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
-| `Widgets` | Rendering every node and modifier as SwiftUI, and the Live Activity presentations |
-| `App` | Registration, Keychain credentials, ActivityKit observation and device reports |
+| `Rendering` | Rendering every node and modifier as SwiftUI, and the Lock Screen presentation; compiled into both the app and the widget extension |
+| `Widgets` | The Live Activity configuration and Dynamic Island presentations |
+| `App` | Registration, Keychain credentials, ActivityKit observation, device reports and showing live activities as the Lock Screen does |
 | `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -19,7 +20,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 
 ## Invariants
 
-- A layout change touches `Core`, `Widgets` and the skill's `layout.md`
+- A layout change touches `Core`, `Rendering` and the skill's `layout.md`
   together. Gateway tests compile every JSON example in `layout.md`.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
