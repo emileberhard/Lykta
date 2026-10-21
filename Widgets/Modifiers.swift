@@ -1,0 +1,251 @@
+import LyktaCore
+import SwiftUI
+
+extension View {
+    @ViewBuilder func modified(by modifier: Modifier) -> some View {
+        switch modifier {
+        case let .padding(insets):
+            padding(EdgeInsets(top: insets.top, leading: insets.leading, bottom: insets.bottom, trailing: insets.trailing))
+        case let .frame(frame):
+            self.frame(width: frame.width.map { CGFloat($0) }, height: frame.height.map { CGFloat($0) }, alignment: frame.alignment.value)
+                .frame(minWidth: frame.minWidth.map { CGFloat($0) }, maxWidth: frame.maxWidth.map { CGFloat($0) },
+                       minHeight: frame.minHeight.map { CGFloat($0) }, maxHeight: frame.maxHeight.map { CGFloat($0) },
+                       alignment: frame.alignment.value)
+        case let .fixedSize(axes): fixedSize(horizontal: axes != .vertical, vertical: axes != .horizontal)
+        case let .layoutPriority(priority): layoutPriority(priority)
+        case let .offset(x, y): offset(x: x, y: y)
+        case let .rotation(degrees): rotationEffect(.degrees(degrees))
+        case let .scale(scale): scaleEffect(scale)
+        case let .opacity(opacity): self.opacity(opacity)
+        case let .foreground(paints) where paints.count == 3: foregroundStyle(paints[0].style, paints[1].style, paints[2].style)
+        case let .foreground(paints) where paints.count == 2: foregroundStyle(paints[0].style, paints[1].style)
+        case let .foreground(paints): foregroundStyle(paints[0].style)
+        case let .background(paint): background(paint.style)
+        case let .tint(paint): tint(paint.style)
+        case let .clip(.cornerRadius(radius)): clipShape(.rect(cornerRadius: radius))
+        case let .clip(.shape(kind)): clipShape(kind.shape(cornerRadius: 0))
+        case let .shadow(shadow): self.shadow(color: shadow.color.value, radius: shadow.radius, x: shadow.x, y: shadow.y)
+        case let .font(font): self.font(font.value)
+        case let .fontWeight(weight): fontWeight(weight.value)
+        case let .fontDesign(design): fontDesign(design.value)
+        case let .fontWidth(width): fontWidth(width.value)
+        case let .bold(isActive): bold(isActive)
+        case let .italic(isActive): italic(isActive)
+        case let .underline(isActive): underline(isActive)
+        case let .strikethrough(isActive): strikethrough(isActive)
+        case let .monospacedDigit(isActive): if isActive { monospacedDigit() } else { self }
+        case let .tracking(tracking): self.tracking(tracking)
+        case let .lineLimit(limit): lineLimit(limit)
+        case let .minimumScaleFactor(factor): minimumScaleFactor(factor)
+        case let .multilineTextAlignment(alignment): multilineTextAlignment(alignment.textValue)
+        case let .truncationMode(mode): truncationMode(mode == .head ? .head : mode == .middle ? .middle : .tail)
+        case let .textCase(textCase): self.textCase(textCase == .uppercase ? .uppercase : .lowercase)
+        case let .contentTransition(transition): contentTransition(transition.value)
+        case let .symbolRenderingMode(mode): symbolRenderingMode(mode.value)
+        case let .imageScale(scale): imageScale(scale == .small ? .small : scale == .medium ? .medium : .large)
+        case let .accessibilityLabel(label): accessibilityLabel(label)
+        }
+    }
+}
+
+extension Paint {
+    var style: AnyShapeStyle {
+        switch self {
+        case let .color(color): AnyShapeStyle(color.value)
+        case .level(.primary): AnyShapeStyle(.primary)
+        case .level(.secondary): AnyShapeStyle(.secondary)
+        case .level(.tertiary): AnyShapeStyle(.tertiary)
+        case .level(.quaternary): AnyShapeStyle(.quaternary)
+        case let .gradient(colors, direction):
+            let gradient = Gradient(colors: colors.map(\.value))
+            switch direction {
+            case .vertical: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .top, endPoint: .bottom))
+            case .horizontal: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing))
+            case .diagonal: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+            case .radial: AnyShapeStyle(EllipticalGradient(gradient: gradient))
+            case .angular: AnyShapeStyle(AngularGradient(gradient: gradient, center: .center))
+            }
+        }
+    }
+}
+
+extension ColorValue {
+    var value: Color {
+        switch self {
+        case let .rgb(red, green, blue, opacity): Color(red: red, green: green, blue: blue, opacity: opacity)
+        case let .named(name):
+            switch name {
+            case .red: .red
+            case .orange: .orange
+            case .yellow: .yellow
+            case .green: .green
+            case .mint: .mint
+            case .teal: .teal
+            case .cyan: .cyan
+            case .blue: .blue
+            case .indigo: .indigo
+            case .purple: .purple
+            case .pink: .pink
+            case .brown: .brown
+            case .white: .white
+            case .gray: .gray
+            case .black: .black
+            case .clear: .clear
+            case .accent: .accentColor
+            }
+        }
+    }
+}
+
+extension Modifier.Font {
+    var value: SwiftUI.Font {
+        switch self {
+        case let .size(size): .system(size: size)
+        case let .style(style):
+            switch style {
+            case .largeTitle: .largeTitle
+            case .title: .title
+            case .title2: .title2
+            case .title3: .title3
+            case .headline: .headline
+            case .subheadline: .subheadline
+            case .body: .body
+            case .callout: .callout
+            case .footnote: .footnote
+            case .caption: .caption
+            case .caption2: .caption2
+            }
+        }
+    }
+}
+
+extension Modifier.Weight {
+    var value: SwiftUI.Font.Weight {
+        switch self {
+        case .ultraLight: .ultraLight
+        case .thin: .thin
+        case .light: .light
+        case .regular: .regular
+        case .medium: .medium
+        case .semibold: .semibold
+        case .bold: .bold
+        case .heavy: .heavy
+        case .black: .black
+        }
+    }
+}
+
+extension Modifier.Design {
+    var value: SwiftUI.Font.Design {
+        switch self {
+        case .default: .default
+        case .serif: .serif
+        case .rounded: .rounded
+        case .monospaced: .monospaced
+        }
+    }
+}
+
+extension Modifier.Width {
+    var value: SwiftUI.Font.Width {
+        switch self {
+        case .compressed: .compressed
+        case .condensed: .condensed
+        case .standard: .standard
+        case .expanded: .expanded
+        }
+    }
+}
+
+extension Modifier.Transition {
+    var value: ContentTransition {
+        switch self {
+        case .numericText: .numericText()
+        case .opacity: .opacity
+        case .interpolate: .interpolate
+        case .identity: .identity
+        }
+    }
+}
+
+extension Modifier.SymbolRendering {
+    var value: SymbolRenderingMode {
+        switch self {
+        case .monochrome: .monochrome
+        case .hierarchical: .hierarchical
+        case .palette: .palette
+        case .multicolor: .multicolor
+        }
+    }
+}
+
+extension Node.Content.Shape.Kind {
+    func shape(cornerRadius: Double) -> AnyShape {
+        switch self {
+        case .rectangle: AnyShape(Rectangle())
+        case .roundedRectangle: AnyShape(RoundedRectangle(cornerRadius: cornerRadius))
+        case .circle: AnyShape(Circle())
+        case .ellipse: AnyShape(Ellipse())
+        case .capsule: AnyShape(Capsule())
+        case .containerRelativeShape: AnyShape(ContainerRelativeShape())
+        }
+    }
+}
+
+extension Node.Content.DateStyle {
+    var value: Text.DateStyle {
+        switch self {
+        case .time: .time
+        case .date: .date
+        case .relative: .relative
+        case .offset: .offset
+        case .timer: .timer
+        }
+    }
+}
+
+extension Node.Content.HorizontalAlignment {
+    var value: SwiftUI.HorizontalAlignment {
+        switch self {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
+        }
+    }
+
+    var textValue: TextAlignment {
+        switch self {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
+        }
+    }
+}
+
+extension Node.Content.VerticalAlignment {
+    var value: SwiftUI.VerticalAlignment {
+        switch self {
+        case .top: .top
+        case .center: .center
+        case .bottom: .bottom
+        case .firstTextBaseline: .firstTextBaseline
+        case .lastTextBaseline: .lastTextBaseline
+        }
+    }
+}
+
+extension Node.Content.Alignment {
+    var value: SwiftUI.Alignment {
+        switch self {
+        case .center: .center
+        case .leading: .leading
+        case .trailing: .trailing
+        case .top: .top
+        case .bottom: .bottom
+        case .topLeading: .topLeading
+        case .topTrailing: .topTrailing
+        case .bottomLeading: .bottomLeading
+        case .bottomTrailing: .bottomTrailing
+        }
+    }
+}

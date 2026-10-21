@@ -1,0 +1,40 @@
+{
+  "fill" : {
+    "solid" : "extended-srgb:0.00000,0.00000,0.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "screen",
+          "image-name" : "1-circle-pink.svg",
+          "name" : "circle"
+        },
+        {
+          "blend-mode" : "screen",
+          "image-name" : "2-squircle-amber.svg",
+          "name" : "squircle"
+        },
+        {
+          "blend-mode" : "screen",
+          "image-name" : "3-triangle-blue.svg",
+          "name" : "triangle"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

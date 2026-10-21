@@ -1,0 +1,78 @@
+import SwiftUI
+import UIKit
+
+struct HomeView: View {
+    let model: Model
+    @State private var attempt = 0
+    @State private var copies = 0
+    @State private var isConfirmingReset = false
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("Lykta")
+                .toolbar {
+                    Menu("More", systemImage: "ellipsis") {
+                        Button("Reset", systemImage: "arrow.counterclockwise", role: .destructive) { isConfirmingReset = true }
+                    }
+                }
+                .confirmationDialog("Reset Lykta?", isPresented: $isConfirmingReset) {
+                    Button("Reset", role: .destructive) {
+                        Task {
+                            await model.reset()
+                            attempt += 1
+                        }
+                    }
+                } message: {
+                    Text("Ends every activity, deletes this phone from the gateway and replaces the agent token.")
+                }
+        }
+        .task(id: attempt) { await model.run() }
+        .onOpenURL { openURL($0) }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch model.phase {
+        case .unconfigured:
+            ContentUnavailableView("No Gateway", systemImage: "network.slash",
+                                   description: Text("Set LYKTA_GATEWAY_HOST in Config/Local.xcconfig."))
+        case .connecting:
+            ProgressView()
+        case let .failed(message):
+            ContentUnavailableView {
+                Label("Gateway Unavailable", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Try Again") { attempt += 1 }
+            }
+        case .ready:
+            List {
+                if !model.areActivitiesEnabled {
+                    Button("Turn On Live Activities", systemImage: "exclamationmark.triangle") {
+                        openURL(URL(string: UIApplication.openSettingsURLString)!)
+                    }
+                }
+                Section {
+                    Button("Copy Setup for Your Agent", systemImage: "doc.on.doc") {
+                        model.copySetup()
+                        copies += 1
+                    }
+                    Button("Send Demo", systemImage: "sparkles") {
+                        Task { await model.sendDemo() }
+                    }
+                }
+                if !model.activities.isEmpty {
+                    Section("Live") {
+                        ForEach(model.activities, id: \.id) { Text($0.attributes.name) }
+                    }
+                }
+                if let error = model.error {
+                    Label(error, systemImage: "exclamationmark.octagon").foregroundStyle(.red)
+                }
+            }
+            .sensoryFeedback(.success, trigger: copies)
+        }
+    }
+}
