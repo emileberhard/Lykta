@@ -14,7 +14,7 @@ final class Model {
     }
 
     private(set) var phase: Phase
-    private(set) var activities: [Activity<LyktaActivity>] = []
+    private(set) var activities: [LiveActivity] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
     private(set) var error: String?
 
@@ -178,6 +178,7 @@ final class Model {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await content in activity.contentUpdates {
             record("activity.content", activity: activity.attributes.id, Self.describe(content))
+            activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)
         }
     }
 
@@ -203,7 +204,7 @@ final class Model {
     private func sync() async {
         guard let gateway, let credentials else { return }
         let observed = Activity<LyktaActivity>.activities
-        activities = observed
+        activities = observed.map(LiveActivity.init)
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
         await showingErrors("sync") {
@@ -213,7 +214,7 @@ final class Model {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
-        activities = Activity<LyktaActivity>.activities
+        activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)
     }
 
     @discardableResult
@@ -319,6 +320,31 @@ final class Model {
         return instance
     }
 }
+
+struct LiveActivity: Identifiable, Equatable {
+    let id: String
+    let content: LyktaActivity.ContentState
+    let state: ObservedState
+}
+
+private extension LiveActivity {
+    init(_ activity: Activity<LyktaActivity>) {
+        self.init(id: activity.id, content: activity.content.state, state: ObservedState(activity.activityState))
+    }
+}
+
+#if DEBUG
+extension Model {
+    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true, error: String? = nil) -> Model {
+        let model = Model()
+        model.phase = phase
+        model.activities = activities
+        model.areActivitiesEnabled = areActivitiesEnabled
+        model.error = error
+        return model
+    }
+}
+#endif
 
 private extension ObservedState {
     init(_ state: ActivityState) {
