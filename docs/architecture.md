@@ -63,9 +63,8 @@ lose work on restart; an external queue would add infrastructure.
 
 **Apple networking.** SwiftNIO serves HTTP/1.1 behind the operator's TLS proxy
 on macOS and Linux. APNs requests use `URLSession`, which on Linux runs on
-libcurl through FoundationNetworking. APNs requires HTTP/2, so the Linux build
-assumes libcurl negotiates it; if it does not, `APNs.swift` is the one file to
-replace, and the policy on non-Apple dependencies would need a decision.
+libcurl through FoundationNetworking, which negotiates the HTTP/2 that APNs
+requires; the container image ships that libcurl.
 
 **Two packages and a plain Xcode project.** `Core` has no dependencies and is
 the only package the app links; `Gateway` adds SwiftNIO and, on Linux,

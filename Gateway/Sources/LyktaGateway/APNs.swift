@@ -11,12 +11,12 @@ import LyktaCore
 import Synchronization
 
 extension PushEnvironment {
-    var pushOrigin: String {
-        self == .production ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com"
+    var pushOrigin: URL {
+        URL(string: self == .production ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com")!
     }
 
-    var channelOrigin: String {
-        self == .production ? "https://api-manage-broadcast.push.apple.com:2196" : "https://api-manage-broadcast.sandbox.push.apple.com:2195"
+    var channelOrigin: URL {
+        URL(string: self == .production ? "https://api-manage-broadcast.push.apple.com:2196" : "https://api-manage-broadcast.sandbox.push.apple.com:2195")!
     }
 }
 
@@ -36,7 +36,7 @@ enum APNsError: Error, Sendable, CustomStringConvertible {
 
 protocol PushService: Sendable {
     var environments: Set<PushEnvironment> { get }
-    func start(_ payload: Data, deviceToken: String, environment: PushEnvironment) async throws(APNsError)
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError)
     func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment) async throws(APNsError)
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError)
@@ -50,6 +50,13 @@ final class APNs: PushService {
     private let session: URLSession
 
     init(bundleID: String, teamID: String, keys: [PushEnvironment: (id: String, pem: String)]) throws {
+        let bundleCharacters = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-".utf8)
+        guard !bundleID.isEmpty, bundleID.utf8.allSatisfy(bundleCharacters.contains) else {
+            throw ConfigurationError("LYKTA_BUNDLE_ID must be a bundle identifier.")
+        }
+        guard ([teamID] + keys.values.map(\.id)).allSatisfy(Self.isAppleIdentifier) else {
+            throw ConfigurationError("Team and key IDs are 10 uppercase letters or digits.")
+        }
         self.bundleID = bundleID
         signers = try keys.mapValues { try Signer(teamID: teamID, keyID: $0.id, pem: $0.pem) }
         environments = Set(keys.keys)
@@ -58,19 +65,19 @@ final class APNs: PushService {
         session = URLSession(configuration: configuration)
     }
 
-    func start(_ payload: Data, deviceToken: String, environment: PushEnvironment) async throws(APNsError) {
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError) {
         let headers = ["apns-topic": "\(bundleID).push-type.liveactivity", "apns-push-type": "liveactivity", "apns-priority": "10"]
-        _ = try await send("POST", "\(environment.pushOrigin)/3/device/\(deviceToken)", environment, headers: headers, body: payload)
+        _ = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment, headers: headers, body: payload)
     }
 
     func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment) async throws(APNsError) {
         let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority), "apns-expiration": "0"]
-        _ = try await send("POST", "\(environment.pushOrigin)/4/broadcasts/apps/\(bundleID)", environment, headers: headers, body: payload)
+        _ = try await send("POST", environment.pushOrigin.appending(path: "4/broadcasts/apps/\(bundleID)"), environment, headers: headers, body: payload)
     }
 
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String {
         let body = Data(#"{"message-storage-policy":0,"push-type":"LiveActivity"}"#.utf8)
-        let (response, _) = try await send("POST", "\(environment.channelOrigin)/1/apps/\(bundleID)/channels", environment, headers: [:], body: body)
+        let (response, _) = try await send("POST", environment.channelOrigin.appending(path: "1/apps/\(bundleID)/channels"), environment, headers: [:], body: body)
         guard let channel = response.value(forHTTPHeaderField: "apns-channel-id"), !channel.isEmpty else {
             throw .unknown("channel created without apns-channel-id")
         }
@@ -78,21 +85,26 @@ final class APNs: PushService {
     }
 
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError) {
-        _ = try await send("DELETE", "\(environment.channelOrigin)/1/apps/\(bundleID)/channels", environment,
+        _ = try await send("DELETE", environment.channelOrigin.appending(path: "1/apps/\(bundleID)/channels"), environment,
                            headers: ["apns-channel-id": channel], body: nil)
     }
 
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String] {
         struct List: Decodable { let channels: [String] }
-        let (_, body) = try await send("GET", "\(environment.channelOrigin)/1/apps/\(bundleID)/all-channels", environment, headers: [:], body: nil)
+        let (_, body) = try await send("GET", environment.channelOrigin.appending(path: "1/apps/\(bundleID)/all-channels"), environment, headers: [:], body: nil)
         guard let list = try? JSONDecoder().decode(List.self, from: body) else { throw .unknown("unreadable channel list") }
         return list.channels
     }
 
-    private func send(_ method: String, _ url: String, _ environment: PushEnvironment, headers: [String: String],
+    private static func isAppleIdentifier(_ text: String) -> Bool {
+        let characters = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".utf8)
+        return text.utf8.count == 10 && text.utf8.allSatisfy(characters.contains)
+    }
+
+    private func send(_ method: String, _ url: URL, _ environment: PushEnvironment, headers: [String: String],
                       body: Data?) async throws(APNsError) -> (HTTPURLResponse, Data) {
         guard let signer = signers[environment] else { throw .notSent("no APNs key is configured for \(environment.rawValue)") }
-        var request = URLRequest(url: URL(string: url)!)
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("bearer \(try signer.token())", forHTTPHeaderField: "authorization")

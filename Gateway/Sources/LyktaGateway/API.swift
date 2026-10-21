@@ -6,14 +6,16 @@ struct API: Sendable {
     let environments: Set<PushEnvironment>
 
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
+        let failure: APIError
         do {
             return try await route(request, now: Int(Date().timeIntervalSince1970))
         } catch let error as APIError {
-            return Self.json(error.status, ["error": error.code, "message": error.message])
+            failure = error
         } catch {
             log("\(request.method) /\(request.path.joined(separator: "/")) failed: \(error)")
-            return Self.json(500, ["error": "internal", "message": "The gateway failed to handle the request."])
+            failure = APIError(.internal, "The gateway failed to handle the request.")
         }
+        return Self.json(failure.code.status, failure)
     }
 
     private func route(_ request: HTTPRequest, now: Int) async throws -> HTTPResponse {
@@ -27,16 +29,13 @@ struct API: Sendable {
         case ("POST", "v1/devices"):
             let registration: Registration = try Self.decode(request.body)
             guard environments.contains(registration.environment) else {
-                throw APIError(status: 400, code: "unsupported_environment",
-                               message: "This gateway has no APNs key for \(registration.environment.rawValue) builds.")
+                throw APIError(.unsupportedEnvironment, "This gateway has no APNs key for \(registration.environment.rawValue) builds.")
             }
-            let credentials = try await store.registerDevice(environment: registration.environment,
-                                                             appVersion: String(registration.appVersion.prefix(32)), now: now)
+            let credentials = try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion, now: now)
             return Self.json(201, credentials)
         case ("PUT", "v1/device"):
             let device = try await phone(request)
             let report: DeviceReport = try Self.decode(request.body)
-            try Self.validate(report)
             return Self.json(200, SyncResult(end: try await store.sync(device, report: report, now: now)))
         case ("DELETE", "v1/device"):
             try await store.deleteDevice(try await phone(request))
@@ -53,13 +52,13 @@ struct API: Sendable {
             let device = try await agent(request)
             let dismissAfter = try request.query["dismissAfter"].map { text in
                 guard let seconds = Int(text), (0...4 * 3600).contains(seconds) else {
-                    throw APIError(status: 400, code: "invalid_request", message: "dismissAfter must be 0 to 14400 seconds.")
+                    throw Self.invalid("dismissAfter must be 0 to 14400 seconds.")
                 }
                 return seconds
             }
             return Self.json(200, try await store.end(device, name: try Self.name(path[2]), dismissAfter: dismissAfter, now: now))
         default:
-            throw APIError(status: 404, code: "not_found", message: "No route for \(request.method) /\(path.joined(separator: "/")).")
+            throw APIError(.notFound, "No route for \(request.method) /\(path.joined(separator: "/")).")
         }
     }
 
@@ -73,17 +72,16 @@ struct API: Sendable {
         return device
     }
 
-    private static let unauthorized = APIError(status: 401, code: "unauthorized", message: "Send Authorization: Bearer <token>.")
+    private static let unauthorized = APIError(.unauthorized, "Send Authorization: Bearer <token>.")
 
     private static func bearer(_ request: HTTPRequest) throws -> String {
         guard let value = request.headers["authorization"], value.hasPrefix("Bearer ") else { throw unauthorized }
         return String(value.dropFirst(7))
     }
 
-    private static func name(_ name: String) throws -> String {
-        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-_.".utf8)
-        guard (1...64).contains(name.utf8.count), name.utf8.allSatisfy(allowed.contains) else {
-            throw APIError(status: 400, code: "invalid_name", message: "Names use 1 to 64 lowercase letters, digits, '-', '_' or '.'.")
+    private static func name(_ text: String) throws -> ActivityName {
+        guard let name = ActivityName(rawValue: text) else {
+            throw APIError(.invalidName, "Names use 1 to 64 lowercase letters, digits, '-', '_' or '.'.")
         }
         return name
     }
@@ -113,17 +111,8 @@ struct API: Sendable {
                                staleAfter: request.staleAfter, relevance: request.relevance)
     }
 
-    private static func validate(_ report: DeviceReport) throws {
-        let hex = Set("0123456789abcdef".utf8)
-        let states: Set = ["pending", "active", "stale", "ended", "dismissed", "unknown"]
-        guard report.pushToStartToken.map({ (1...256).contains($0.utf8.count) && $0.utf8.allSatisfy(hex.contains) }) != false,
-              report.appVersion.count <= 32, report.bundleInstance.count <= 64, report.activities.count <= 64,
-              report.activities.allSatisfy({ $0.id.count <= 64 && states.contains($0.state) })
-        else { throw invalid("The device report is malformed.") }
-    }
-
     private static func invalid(_ message: String) -> APIError {
-        APIError(status: 400, code: "invalid_request", message: message)
+        APIError(.invalidRequest, message)
     }
 
     private static func decode<T: Decodable>(_ body: [UInt8]) throws -> T {

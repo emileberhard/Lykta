@@ -1,3 +1,4 @@
+import Foundation
 #if canImport(SQLite3)
 import SQLite3
 #else
@@ -20,8 +21,13 @@ extension Int64: SQLBindable { var sqlValue: SQLValue { .integer(self) } }
 extension Int: SQLBindable { var sqlValue: SQLValue { .integer(Int64(self)) } }
 extension Double: SQLBindable { var sqlValue: SQLValue { .real(self) } }
 extension Bool: SQLBindable { var sqlValue: SQLValue { .integer(self ? 1 : 0) } }
+extension UUID: SQLBindable { var sqlValue: SQLValue { .text(uuidString) } }
 extension Optional: SQLBindable where Wrapped: SQLBindable {
     var sqlValue: SQLValue { self?.sqlValue ?? .null }
+}
+
+extension SQLBindable where Self: RawRepresentable<String> {
+    var sqlValue: SQLValue { .text(rawValue) }
 }
 
 struct SQLiteError: Error, CustomStringConvertible {
@@ -46,6 +52,15 @@ struct Row: Sendable {
 
     func optionalString(_ column: String) throws -> String? {
         self[column] == .null ? nil : try string(column)
+    }
+
+    func text<T>(_ column: String, as parse: (String) -> T?) throws -> T {
+        guard let value = parse(try string(column)) else { throw mismatch(column) }
+        return value
+    }
+
+    func optionalText<T>(_ column: String, as parse: (String) -> T?) throws -> T? {
+        self[column] == .null ? nil : try text(column, as: parse)
     }
 
     func integer(_ column: String) throws -> Int64 {

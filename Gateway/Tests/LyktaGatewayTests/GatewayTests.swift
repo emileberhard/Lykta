@@ -10,6 +10,7 @@ struct GatewayTests {
     let api: API
     let credentials: Credentials
     let now = Int(Date().timeIntervalSince1970)
+    let bundleInstance = UUID()
 
     init() async throws {
         store = try Store(path: ":memory:", maximumDevices: 2, maximumLiveActivities: 2)
@@ -79,7 +80,7 @@ struct GatewayTests {
         try await deliver(at: now)
         _ = try await send("DELETE", "/v1/activities/build")
         try await deliver(at: now + 1)
-        let result = try await report([.init(id: started.id, state: "active")])
+        let result = try await report([.init(id: started.id, state: .active)])
         #expect(result.end == [started.id])
     }
 
@@ -145,7 +146,8 @@ struct GatewayTests {
     }
 
     private func report(_ activities: [DeviceReport.Observed]) async throws -> SyncResult {
-        let report = DeviceReport(pushToStartToken: "abcdef", appVersion: "1.0 (1)", bundleInstance: "one", activities: activities)
+        let report = DeviceReport(pushToStartToken: PushToken(hex: "abcdef"), appVersion: "1.0 (1)", bundleInstance: bundleInstance,
+                                  activities: activities)
         return try await api.handle(HTTPRequest(method: "PUT", target: "/v1/device",
                                                 headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
                                                 body: Self.json(report))).decoded()
@@ -181,7 +183,7 @@ struct Status: Decodable, Equatable {
 }
 
 struct Identified: Decodable {
-    let id: String
+    let id: UUID
 }
 
 struct Failure: Decodable, Equatable {
@@ -220,7 +222,7 @@ final class FakePush: PushService {
         state.withLock { $0.failures[call] = error }
     }
 
-    func start(_ payload: Data, deviceToken: String, environment: PushEnvironment) async throws(APNsError) {
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError) {
         try record("start")
     }
 

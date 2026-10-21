@@ -21,7 +21,7 @@ struct Job: Sendable {
     let kind: Kind
     let activity: Activity
     let environment: PushEnvironment
-    let pushToken: String?
+    let pushToken: PushToken?
 }
 
 enum Outcome: Sendable {
@@ -31,6 +31,16 @@ enum Outcome: Sendable {
     case unknown(String)
     case channelGone
 }
+
+extension PushToken: SQLBindable {
+    var sqlValue: SQLValue { .text(description) }
+}
+
+extension PushEnvironment: SQLBindable {}
+extension ObservedState: SQLBindable {}
+extension DeliveryState: SQLBindable {}
+extension ActivityName: SQLBindable {}
+extension Activity.Phase: SQLBindable {}
 
 actor Store {
     static let maximumAttempts = 5
@@ -51,13 +61,13 @@ actor Store {
 
     func registerDevice(environment: PushEnvironment, appVersion: String, now: Int) throws -> Credentials {
         try db.transaction {
-            guard try count("SELECT count(*) AS n FROM devices") < maximumDevices else {
-                throw APIError(status: 403, code: "registration_closed", message: "This gateway accepts no more devices.")
+            guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
+                throw APIError(.registrationClosed, "This gateway accepts no more devices.")
             }
             let secret = Self.token("lykta_device_")
             let agentToken = Self.token("lykta_agent_")
             try db.run("INSERT INTO devices (id, secret_hash, agent_hash, environment, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       UUID().uuidString, Self.hash(secret), Self.hash(agentToken), environment.rawValue, appVersion, now)
+                       UUID(), Self.hash(secret), Self.hash(agentToken), environment, appVersion, now)
             return Credentials(deviceSecret: secret, agentToken: agentToken)
         }
     }
@@ -70,30 +80,30 @@ actor Store {
         try device(column: "agent_hash", hash: Self.hash(agentToken))
     }
 
-    func sync(_ device: Device, report: DeviceReport, now: Int) throws -> [String] {
+    func sync(_ device: Device, report: DeviceReport, now: Int) throws -> [UUID] {
         try db.transaction {
-            let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?.optionalString("bundle_instance")
+            let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
+                .optionalText("bundle_instance", as: UUID.init(uuidString:))
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, bundle_instance = ? WHERE id = ?",
                        report.pushToStartToken, report.appVersion, report.bundleInstance, device.id)
             let reported = Set(report.activities.map(\.id))
             if let previous, previous != report.bundleInstance {
                 for row in try db.query("SELECT id FROM activities WHERE device_id = ? AND phase != 'ended'", device.id) {
-                    let id = try row.string("id")
+                    let id = try row.text("id", as: UUID.init(uuidString:))
                     guard !reported.contains(id) else { continue }
                     try db.run("UPDATE activities SET phase = 'ended', ended_at = ?, error = 'The app was reinstalled or updated.' WHERE id = ?", now, id)
                 }
             }
-            var tombstones: [String] = []
+            var tombstones: [UUID] = []
             for observed in report.activities {
-                guard let phase = try db.query("SELECT phase FROM activities WHERE id = ? AND device_id = ?", observed.id, device.id).first?.string("phase") else {
-                    continue
-                }
-                let gone = observed.state == "ended" || observed.state == "dismissed"
+                guard let phase = try db.query("SELECT phase FROM activities WHERE id = ? AND device_id = ?", observed.id, device.id).first?
+                    .text("phase", as: Activity.Phase.init(rawValue:)) else { continue }
+                let gone = [.ended, .dismissed].contains(observed.state)
                 try db.run("""
                     UPDATE activities SET device_state = ?, phase = CASE WHEN ? THEN 'ended' ELSE phase END,
                       ended_at = CASE WHEN ? THEN COALESCE(ended_at, ?) ELSE ended_at END WHERE id = ?
                     """, observed.state, gone, gone, now, observed.id)
-                if phase == "ended", !gone { tombstones.append(observed.id) }
+                if phase == .ended, !gone { tombstones.append(observed.id) }
             }
             return tombstones
         }
@@ -105,11 +115,11 @@ actor Store {
 
     // MARK: Activities
 
-    func put(_ device: Device, name: String, request: ActivityRequest, now: Int) throws -> ActivityStatus {
+    func put(_ device: Device, name: ActivityName, request: ActivityRequest, now: Int) throws -> ActivityStatus {
         try db.transaction {
             let current = try liveActivity(device, name: name)
             guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
-                throw APIError(status: 400, code: "invalid_request", message: "Starting an activity needs a title and a layout.")
+                throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
             }
             let data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
             let content: String
@@ -117,12 +127,12 @@ actor Store {
                 let state = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
                 content = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
             } catch let error as LayoutError {
-                throw APIError(status: 400, code: "invalid_layout", message: error.description)
+                throw APIError(.invalidLayout, error.description)
             }
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
-            let id: String
+            let id: UUID
             if let current {
                 id = current.id
                 if content != current.content || alert != nil || request.staleAfter != nil || relevance != current.relevance {
@@ -133,32 +143,33 @@ actor Store {
                 }
             } else {
                 guard device.pushToken != nil else {
-                    throw APIError(status: 409, code: "device_not_ready", message: "The phone has not shared its push token yet. Open Lykta on the phone.")
+                    throw APIError(.deviceNotReady, "The phone has not shared its push token yet. Open Lykta on the phone.")
                 }
-                guard try count("SELECT count(*) AS n FROM activities WHERE device_id = ? AND phase IN ('starting', 'live')", device.id) < maximumLiveActivities else {
-                    throw APIError(status: 409, code: "too_many_activities", message: "End an activity before starting another; the limit is \(maximumLiveActivities).")
+                let live = try count(db.query("SELECT count(*) AS n FROM activities WHERE device_id = ? AND phase IN ('starting', 'live')", device.id))
+                guard live < maximumLiveActivities else {
+                    throw APIError(.tooManyActivities, "End an activity before starting another; the limit is \(maximumLiveActivities).")
                 }
-                id = UUID().uuidString
+                id = UUID()
                 try db.run("""
                     INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, relevance, alert,
                       revision, delivery, created_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?)
                     """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, relevance, alert, now)
             }
             let activity = try self.activity(id)
-            let size = try activity.payload(activity.phase == .starting ? "start" : "update", now: now,
+            let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
                                             channel: String(repeating: "x", count: 64), alert: activity.alert).count
             guard size <= Self.maximumPayloadBytes else {
-                throw APIError(status: 413, code: "payload_too_large",
-                               message: "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). Simplify the layout or shorten its text.")
+                throw APIError(.payloadTooLarge,
+                               "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). Simplify the layout or shorten its text.")
             }
             return activity.status
         }
     }
 
-    func end(_ device: Device, name: String, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
+    func end(_ device: Device, name: ActivityName, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
         try db.transaction {
             guard let current = try liveActivity(device, name: name) else {
-                throw APIError(status: 404, code: "not_found", message: "No live activity is named \(name).")
+                throw APIError(.notFound, "No live activity is named \(name).")
             }
             try db.run("""
                 UPDATE activities SET phase = CASE WHEN phase = 'starting' AND in_flight = 0 THEN 'ended' ELSE 'ending' END,
@@ -169,10 +180,10 @@ actor Store {
         }
     }
 
-    func status(_ device: Device, name: String) throws -> ActivityStatus {
+    func status(_ device: Device, name: ActivityName) throws -> ActivityStatus {
         guard let row = try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
                                      device.id, name).first else {
-            throw APIError(status: 404, code: "not_found", message: "No activity is named \(name).")
+            throw APIError(.notFound, "No activity is named \(name).")
         }
         return try Activity(row).status
     }
@@ -202,7 +213,7 @@ actor Store {
 
     func claim(now: Int, limit: Int) throws -> [Job] {
         try db.transaction {
-            let free = limit - (try count("SELECT count(*) AS n FROM activities WHERE in_flight = 1"))
+            let free = limit - (try count(db.query("SELECT count(*) AS n FROM activities WHERE in_flight = 1")))
             guard free > 0 else { return [] }
             let rows = try db.query("""
                 SELECT a.*, d.environment, d.push_token FROM activities a JOIN devices d ON d.id = a.device_id
@@ -222,13 +233,13 @@ actor Store {
                 case .ending: .end
                 case .ended: .deleteChannel
                 }
-                return Job(kind: kind, activity: activity, environment: PushEnvironment(rawValue: try row.string("environment"))!,
-                           pushToken: try row.optionalString("push_token"))
+                return Job(kind: kind, activity: activity, environment: try row.text("environment", as: PushEnvironment.init(rawValue:)),
+                           pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)))
             }
         }
     }
 
-    func setChannel(_ channel: String, for activityID: String) throws {
+    func setChannel(_ channel: String, for activityID: UUID) throws {
         try db.run("UPDATE activities SET channel = ? WHERE id = ?", channel, activityID)
     }
 
@@ -250,7 +261,7 @@ actor Store {
                 let alert = try job.activity.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
                 try db.run("""
                     UPDATE activities SET retry_at = ?, failures = failures + 1, delivery = ?, error = ?, alert = COALESCE(alert, ?) WHERE id = ?
-                    """, now + min(1 << (job.activity.failures + 1), 300), throttled ? "throttled" : "pending", error, alert, id)
+                    """, now + min(1 << (job.activity.failures + 1), 300), throttled ? DeliveryState.throttled : .pending, error, alert, id)
             case (.deleteChannel, _):
                 try db.run("UPDATE activities SET channel = NULL WHERE id = ?", id)
             case (.start, .accepted):
@@ -290,21 +301,22 @@ actor Store {
 
     private func device(column: String, hash: String) throws -> Device? {
         guard let row = try db.query("SELECT id, environment, push_token FROM devices WHERE \(column) = ?", hash).first else { return nil }
-        return Device(id: try row.string("id"), environment: PushEnvironment(rawValue: try row.string("environment"))!,
-                      pushToken: try row.optionalString("push_token"))
+        return Device(id: try row.text("id", as: UUID.init(uuidString:)),
+                      environment: try row.text("environment", as: PushEnvironment.init(rawValue:)),
+                      pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)))
     }
 
-    private func liveActivity(_ device: Device, name: String) throws -> Activity? {
+    private func liveActivity(_ device: Device, name: ActivityName) throws -> Activity? {
         try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? AND phase IN ('starting', 'live')", device.id, name)
             .first.map(Activity.init)
     }
 
-    private func activity(_ id: String) throws -> Activity {
+    private func activity(_ id: UUID) throws -> Activity {
         try Activity(db.query("SELECT * FROM activities WHERE id = ?", id)[0])
     }
 
-    private func count(_ sql: String, _ value: String? = nil) throws -> Int {
-        Int(try (value.map { try db.query(sql, $0) } ?? db.query(sql))[0].integer("n"))
+    private func count(_ rows: [Row]) throws -> Int {
+        Int(try rows[0].integer("n"))
     }
 
     private func decode(_ text: String) throws -> JSONValue {

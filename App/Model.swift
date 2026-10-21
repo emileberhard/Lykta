@@ -19,7 +19,7 @@ final class Model {
     private let gateway: GatewayClient?
     private let environment: PushEnvironment
     private var credentials: Credentials?
-    private var pushToken: String?
+    private var pushToken: PushToken?
 
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -88,7 +88,7 @@ final class Model {
 
     private func observePushTokens() async {
         for await token in Activity<LyktaActivity>.pushToStartTokenUpdates {
-            pushToken = token.map { String(format: "%02x", $0) }.joined()
+            pushToken = PushToken(token)
             await sync()
         }
     }
@@ -124,10 +124,10 @@ final class Model {
         let observed = Activity<LyktaActivity>.activities
         activities = observed
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, bundleInstance: Self.bundleInstance,
-                                        activities: observed.map { .init(id: $0.attributes.id.uuidString, state: $0.activityState.name) })
+                                        activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
         await showingErrors {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
-            for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id.uuidString) {
+            for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id) {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
@@ -148,25 +148,28 @@ final class Model {
         return "\(info["CFBundleShortVersionString"] as? String ?? "") (\(info["CFBundleVersion"] as? String ?? ""))"
     }()
 
-    private static var bundleInstance: String {
+    private static var bundleInstance: UUID {
         let defaults = UserDefaults.standard
-        if defaults.string(forKey: "bundleVersion") != appVersion || defaults.string(forKey: "bundleInstance") == nil {
-            defaults.set(appVersion, forKey: "bundleVersion")
-            defaults.set(UUID().uuidString, forKey: "bundleInstance")
+        if defaults.string(forKey: "bundleVersion") == appVersion,
+           let instance = defaults.string(forKey: "bundleInstance").flatMap(UUID.init(uuidString:)) {
+            return instance
         }
-        return defaults.string(forKey: "bundleInstance")!
+        let instance = UUID()
+        defaults.set(appVersion, forKey: "bundleVersion")
+        defaults.set(instance.uuidString, forKey: "bundleInstance")
+        return instance
     }
 }
 
-private extension ActivityState {
-    var name: String {
-        switch self {
-        case .active: "active"
-        case .stale: "stale"
-        case .ended: "ended"
-        case .dismissed: "dismissed"
-        case .pending: "pending"
-        @unknown default: "unknown"
+private extension ObservedState {
+    init(_ state: ActivityState) {
+        self = switch state {
+        case .pending: .pending
+        case .active: .active
+        case .stale: .stale
+        case .ended: .ended
+        case .dismissed: .dismissed
+        @unknown default: .unknown
         }
     }
 }

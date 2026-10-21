@@ -32,6 +32,14 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.
 - Tokens are stored only as hashes. Never log tokens, push tokens or payloads.
+- Boundaries decode into validated types: enums for states, UUIDs for ids,
+  `PushToken`, `ActivityName` and `APIError.Code`. Invalid input fails at the
+  decoder with a JSON path; stored rows that fail to parse throw rather than
+  default.
+- Mutable state has one owner: an actor, the main actor or a `Mutex` inside a
+  `Sendable` class. Never silence isolation with `@unchecked Sendable` or
+  `nonisolated(unsafe)`; pass identifiers, not ActivityKit handles, across
+  tasks.
 
 ## Dependencies and style
 

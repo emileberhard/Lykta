@@ -59,6 +59,12 @@ extension KeyedDecodingContainer<Key> {
         try decodeIfPresent(T.self, forKey: Key(stringValue: key))
     }
 
+    func text(_ key: String, maximumLength: Int) throws -> String {
+        let value: String = try required(key)
+        guard value.count <= maximumLength else { throw invalid("must be at most \(maximumLength) characters", at: key) }
+        return value
+    }
+
     func number(_ key: String, in range: ClosedRange<Double>) throws -> Double {
         let value: Double = try required(key)
         guard range.contains(value) else { throw invalid("must be between \(range.lowerBound) and \(range.upperBound)", at: key) }

@@ -42,11 +42,11 @@ struct Delivery: Sendable {
                     }
                     try await store.setChannel(channel, for: activity.id)
                 }
-                let payload = try activity.payload("start", now: now, channel: channel, alert: activity.alert)
+                let payload = try activity.payload(.start, now: now, channel: channel, alert: activity.alert)
                 try await push.start(payload, deviceToken: token, environment: job.environment)
             case .update, .end:
                 guard let channel = activity.channel else { return .channelGone }
-                let event = job.kind == .end ? "end" : "update"
+                let event: Payload.Event = job.kind == .end ? .end : .update
                 let priority = job.kind == .end || activity.alert != nil ? 10 : 5
                 try await push.broadcast(try activity.payload(event, now: now, alert: activity.alert), channel: channel,
                                          priority: priority, environment: job.environment)
