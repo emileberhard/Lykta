@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+concurrency: release
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  testflight:
+    needs: test
+    runs-on: xcode-27
+    environment: testflight
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check that this is the newest version on main
+        run: |
+          [[ $VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "::error::$VERSION is not MAJOR.MINOR.PATCH."; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$VERSION is not on main."; exit 1; }
+          newest=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          [[ $newest == "$VERSION" ]] || { echo "::error::$newest is newer than $VERSION."; exit 1; }
+
+      - name: Configure
+        env:
+          DEVELOPMENT_TEAM: ${{ vars.DEVELOPMENT_TEAM }}
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
+          LYKTA_GATEWAY_HOST: ${{ vars.LYKTA_GATEWAY_HOST }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        run: |
+          printf 'DEVELOPMENT_TEAM = %s\nLYKTA_BUNDLE_ID = %s\nLYKTA_GATEWAY_HOST = %s\n' \
+            "$DEVELOPMENT_TEAM" "$LYKTA_BUNDLE_ID" "$LYKTA_GATEWAY_HOST" > Config/Local.xcconfig
+          printf '%s' "$APP_STORE_CONNECT_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Archive
+        run: |
+          xcodebuild archive -quiet -project Lykta.xcodeproj -scheme Lykta -configuration Release \
+            -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Lykta.xcarchive" \
+            MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO
+
+      - name: Sign and upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist Config/ExportOptions.plist -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"

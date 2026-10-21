@@ -66,6 +66,12 @@ run on an iPhone; compiling proves neither.
 
 ## Release
 
+Pushing a version tag such as `0.2.0` that is newer than every other version
+tag and on `main` runs `.github/workflows/release.yml`: the tests, an unsigned
+archive with the tag as its version, then Xcode's cloud signing and upload to
+TestFlight with the `testflight` environment's App Store Connect key. App
+Store Connect picks the build number. Submitting to App Review stays manual.
+
 Self-hosters build the gateway image from a tagged commit and the app from
 Xcode with their own `Config/Local.xcconfig`. Gateway state lives in SQLite,
 so replacing the container is safe; in-flight HTTP requests are dropped and
