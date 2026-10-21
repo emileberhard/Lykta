@@ -12,6 +12,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `Widgets` | Rendering every node and modifier as SwiftUI, and the Live Activity presentations |
 | `App` | Registration, Keychain credentials, ActivityKit observation and device reports |
+| `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
