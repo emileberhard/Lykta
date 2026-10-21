@@ -27,6 +27,10 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
             }
         }
 
+        public var fingerprint: String {
+            LyktaCore.fingerprint(Array(title.utf8) + [0] + Array(packed))
+        }
+
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
             title = try fields.decode(String.self, forKey: .title)

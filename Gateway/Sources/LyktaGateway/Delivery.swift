@@ -1,4 +1,5 @@
 import Foundation
+import LyktaCore
 
 struct Delivery: Sendable {
     let store: Store
@@ -14,8 +15,7 @@ struct Delivery: Sendable {
                 if tick % 240 == 0 { try await store.housekeep(now: now) }
                 for job in try await store.claim(now: now, limit: concurrency) {
                     group.addTask {
-                        let outcome = try await send(job, now: now)
-                        try await store.finish(job, outcome, now: now)
+                        try await store.finish(job, try await send(job, now: now), now: now)
                     }
                 }
                 try await Task.sleep(for: .milliseconds(250))
@@ -23,12 +23,21 @@ struct Delivery: Sendable {
         }
     }
 
-    func send(_ job: Job, now: Int) async throws -> Outcome {
+    func send(_ job: Job, now: Int) async throws -> Attempt {
         let activity = job.activity
+        let id = UUID()
+        let clock = ContinuousClock()
+        let started = clock.now
+        var detail: [String: JSONValue] = [
+            "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
+            "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
+        ]
+        let outcome: Outcome
         do {
             switch job.kind {
             case .start:
-                guard let token = job.pushToken else { return .failed("The phone has no push token.", clearsPushToken: false) }
+                guard let token = job.pushToken else { return Attempt(outcome: .failed("The phone has no push token.", clearsPushToken: false), detail: detail) }
+                detail["pushToStartToken"] = .string(fingerprint(token.description.utf8))
                 let channel: String
                 if let existing = activity.channel {
                     channel = existing
@@ -36,28 +45,39 @@ struct Delivery: Sendable {
                     do {
                         channel = try await push.createChannel(environment: job.environment)
                     } catch .unknown {
-                        return .retry("Creating the broadcast channel had an unknown outcome.", throttled: false)
+                        return Attempt(outcome: .retry("Creating the broadcast channel had an unknown outcome.", throttled: false), detail: detail)
                     } catch {
-                        return Self.outcome(of: error)
+                        return Attempt(outcome: Self.outcome(of: error), detail: detail)
                     }
                     try await store.setChannel(channel, for: activity.id)
                 }
+                detail["channel"] = .string(channel)
                 let payload = try activity.payload(.start, now: now, channel: channel, alert: activity.alert)
-                try await push.start(payload, deviceToken: token, environment: job.environment)
+                detail["payloadBytes"] = .number(Double(payload.count))
+                detail["uniqueID"] = try await push.start(payload, deviceToken: token, environment: job.environment, id: id).map(JSONValue.string)
             case .update, .end:
-                guard let channel = activity.channel else { return .channelGone }
+                guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
                 let priority = job.kind == .end || activity.alert != nil ? 10 : 5
-                try await push.broadcast(try activity.payload(event, now: now, alert: activity.alert), channel: channel,
-                                         priority: priority, environment: job.environment)
+                let payload = try activity.payload(event, now: now, alert: activity.alert)
+                detail["channel"] = .string(channel)
+                detail["priority"] = .number(Double(priority))
+                detail["alert"] = .bool(activity.alert != nil)
+                detail["payloadBytes"] = .number(Double(payload.count))
+                detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, environment: job.environment, id: id)
+                    .map(JSONValue.string)
             case .deleteChannel:
-                guard let channel = activity.channel else { return .accepted }
+                guard let channel = activity.channel else { return Attempt(outcome: .accepted, detail: detail) }
+                detail["channel"] = .string(channel)
                 try await push.deleteChannel(channel, environment: job.environment)
             }
-            return .accepted
+            outcome = .accepted
         } catch let error as APNsError {
-            return Self.outcome(of: error)
+            outcome = Self.outcome(of: error)
         }
+        let elapsed = started.duration(to: clock.now).components
+        detail["ms"] = .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
+        return Attempt(outcome: outcome, detail: detail)
     }
 
     static func outcome(of error: APNsError) -> Outcome {

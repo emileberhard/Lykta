@@ -104,6 +104,7 @@ struct Activity: Sendable {
     }
 
     let id: UUID
+    let deviceID: UUID
     let name: ActivityName
     let phase: Phase
     let title: String
@@ -125,6 +126,7 @@ struct Activity: Sendable {
 
     init(_ row: Row) throws {
         id = try row.text("id", as: UUID.init(uuidString:))
+        deviceID = try row.text("device_id", as: UUID.init(uuidString:))
         name = try row.text("name", as: ActivityName.init(rawValue:))
         phase = try row.text("phase", as: Phase.init(rawValue:))
         title = try row.string("title")
@@ -151,6 +153,10 @@ struct Activity: Sendable {
                        endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
     }
 
+    func fingerprint() throws -> String {
+        try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)).fingerprint
+    }
+
     func payload(_ event: Payload.Event, now: Int, channel: String? = nil, alert: Alert? = nil) throws -> Data {
         var aps = Payload.APS(timestamp: now, event: event,
                               contentState: try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)))
@@ -159,8 +165,8 @@ struct Activity: Sendable {
             aps.attributes = LyktaActivity(id: id, name: name.rawValue)
             aps.inputPushChannel = channel
         }
-        if let alert = alert ?? (event == .start ? Alert(title: nil, body: "", sound: nil) : nil) {
-            aps.alert = Payload.Alert(title: alert.title ?? title, body: alert.body.isEmpty ? nil : alert.body,
+        if let alert = alert ?? (event == .start ? Alert(title: nil, body: "Live Activity started", sound: nil) : nil) {
+            aps.alert = Payload.Alert(title: alert.title ?? title, body: alert.body,
                                       sound: alert.sound == true ? "default" : nil)
         }
         if event != .end { aps.staleDate = staleAfter.map { now + $0 } }
@@ -177,7 +183,7 @@ struct Payload: Encodable {
 
     struct Alert: Encodable {
         let title: String
-        let body: String?
+        let body: String
         let sound: String?
     }
 

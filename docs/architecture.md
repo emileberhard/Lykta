@@ -75,6 +75,22 @@ generator.
 random bits stored as SHA-256 hashes. Registration is open up to a configured
 device limit; operators keep the gateway on a private network.
 
+**Observability.** Every fact needed to debug a phone lands in the gateway's
+`events` table, so nobody needs the phone or its logs. `Store` writes the
+gateway's events in the same transaction as the change they describe: puts,
+ends, syncs, failed requests and each APNs attempt with the request ID the
+gateway chose, Apple's `apns-unique-id` for the Push Notifications Console
+delivery log, the outcome and latency. The app records launches, scene phases,
+push-to-start tokens, authorization, each activity it observes and the content
+fingerprint it received, and MetricKit's crash, hang and daily metric reports.
+It keeps them in a bounded file queue and uploads them in batches, so events
+from background wakes and offline periods arrive later. Agents read their
+phone's events through `GET /v1/events`; operators read every phone with
+`lykta-gateway events`. Events hold IDs, states, fingerprints and errors, never
+tokens or activity content. They are kept 14 days and at most 8 MB per phone.
+The widget extension has no network access, so the app observes rendered
+content through ActivityKit instead.
+
 ## Expensive to change
 
 - The `ContentState` encoding and the `LyktaActivity` type name, which

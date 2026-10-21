@@ -15,6 +15,13 @@ struct API: Sendable {
             log("\(request.method) /\(request.path.joined(separator: "/")) failed: \(error)")
             failure = APIError(.internal, "The gateway failed to handle the request.")
         }
+        if let token = try? Self.bearer(request) {
+            do {
+                try await store.recordFailure(token: token, request: "\(request.method) /\(request.path.joined(separator: "/"))", failure)
+            } catch {
+                log("Recording a failed request failed: \(error)")
+            }
+        }
         return Self.json(failure.code.status, failure)
     }
 
@@ -40,6 +47,21 @@ struct API: Sendable {
         case ("DELETE", "v1/device"):
             try await store.deleteDevice(try await phone(request))
             return HTTPResponse(status: 204, contentType: "text/plain", body: [])
+        case ("POST", "v1/device/events"):
+            let device = try await phone(request)
+            try await store.ingest(device, try Self.decode(request.body))
+            return HTTPResponse(status: 204, contentType: "text/plain", body: [])
+        case ("GET", "v1/events"):
+            let device = try await agent(request)
+            let after = try request.query["after"].map { text in
+                guard let seq = Int64(text), seq >= 0 else { throw Self.invalid("after must be an event seq.") }
+                return seq
+            }
+            let limit = try request.query["limit"].map { text in
+                guard let limit = Int(text), (1...1000).contains(limit) else { throw Self.invalid("limit must be 1 to 1000.") }
+                return limit
+            } ?? 200
+            return Self.json(200, ["events": try await store.events(device: device.id, after: after, limit: limit)])
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -102,8 +124,8 @@ struct API: Sendable {
         }
         let request: Body = try decode(body)
         guard request.title.map({ (1...120).contains($0.count) }) != false else { throw invalid("title must be 1 to 120 characters.") }
-        guard request.alert.map({ $0.body.count <= 200 && ($0.title?.count ?? 0) <= 120 }) != false else {
-            throw invalid("alert title and body must be at most 120 and 200 characters.")
+        guard request.alert.map({ (1...200).contains($0.body.count) && ($0.title?.count ?? 0) <= 120 }) != false else {
+            throw invalid("alert title must be at most 120 characters and body 1 to 200.")
         }
         guard request.staleAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("staleAfter must be 1 to 28800 seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }

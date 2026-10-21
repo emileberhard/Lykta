@@ -36,8 +36,8 @@ enum APNsError: Error, Sendable, CustomStringConvertible {
 
 protocol PushService: Sendable {
     var environments: Set<PushEnvironment> { get }
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError)
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment) async throws(APNsError)
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError)
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String]
@@ -65,14 +65,20 @@ final class APNs: PushService {
         session = URLSession(configuration: configuration)
     }
 
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError) {
-        let headers = ["apns-topic": "\(bundleID).push-type.liveactivity", "apns-push-type": "liveactivity", "apns-priority": "10"]
-        _ = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment, headers: headers, body: payload)
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        let headers = ["apns-topic": "\(bundleID).push-type.liveactivity", "apns-push-type": "liveactivity", "apns-priority": "10",
+                       "apns-id": id.uuidString.lowercased()]
+        let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment,
+                                           headers: headers, body: payload)
+        return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment) async throws(APNsError) {
-        let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority), "apns-expiration": "0"]
-        _ = try await send("POST", environment.pushOrigin.appending(path: "4/broadcasts/apps/\(bundleID)"), environment, headers: headers, body: payload)
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority), "apns-expiration": "0",
+                       "apns-request-id": id.uuidString.lowercased()]
+        let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "4/broadcasts/apps/\(bundleID)"), environment,
+                                           headers: headers, body: payload)
+        return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String {

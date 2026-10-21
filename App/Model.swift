@@ -1,7 +1,9 @@
 import ActivityKit
 import Foundation
 import LyktaCore
+import MetricKit
 import Observation
+import SwiftUI
 import UIKit
 
 @Observable
@@ -18,8 +20,13 @@ final class Model {
 
     private let gateway: GatewayClient?
     private let environment: PushEnvironment
+    private let queue = EventQueue()
+    private let metrics = MetricManager()
     private var credentials: Credentials?
     private var pushToken: PushToken?
+    private var runTask: Task<Void, Never>?
+    private var flushTask: Task<Void, Never>?
+    private var metricsTask: Task<Void, Never>?
 
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -32,30 +39,39 @@ final class Model {
         phase = gateway == nil ? .unconfigured : .connecting
     }
 
-    func run() async {
-        guard let gateway else { return }
-        do {
-            if let saved = try Keychain.load() {
-                credentials = saved
-            } else {
-                let registered = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion))
-                try Keychain.save(registered)
-                credentials = registered
+    func start() {
+        if metricsTask == nil {
+            let authorization = ActivityAuthorizationInfo()
+            record("app.launch", [
+                "appVersion": .string(Self.appVersion), "os": .string(UIDevice.current.systemVersion), "hardware": .string(Self.hardware),
+                "environment": .string(environment.rawValue), "applicationState": .string(Self.describe(UIApplication.shared.applicationState)),
+                "activitiesEnabled": .bool(authorization.areActivitiesEnabled), "frequentPushesEnabled": .bool(authorization.frequentPushesEnabled),
+                "activities": .number(Double(Activity<LyktaActivity>.activities.count)),
+            ])
+            metricsTask = Task {
+                await withDiscardingTaskGroup { group in
+                    group.addTask { await self.observeDiagnostics() }
+                    group.addTask { await self.observeMetrics() }
+                }
             }
-            phase = .ready
-        } catch {
-            phase = .failed(error.localizedDescription)
-            return
         }
-        await withDiscardingTaskGroup { group in
-            group.addTask { await self.observePushTokens() }
-            group.addTask { await self.observeActivities() }
-            group.addTask { await self.observeAuthorization() }
+        runTask?.cancel()
+        runTask = Task { await run() }
+    }
+
+    func sceneChanged(to scenePhase: ScenePhase) {
+        let name = switch scenePhase {
+        case .active: "active"
+        case .inactive: "inactive"
+        case .background: "background"
+        @unknown default: "unknown"
         }
+        record("app.scene", ["phase": .string(name)])
     }
 
     func copySetup() {
         guard let gateway, let credentials else { return }
+        record("app.copySetup")
         UIPasteboard.general.string = """
             Show Live Activities on my iPhone with Lykta.
             Gateway: \(gateway.url.absoluteString)
@@ -66,7 +82,9 @@ final class Model {
 
     func sendDemo() async {
         guard let gateway, let credentials else { return }
-        await showingErrors {
+        record("app.demo")
+        await showingErrors("demo") {
+            try await gateway.endActivity("demo", agentToken: credentials.agentToken)
             try await gateway.putActivity("demo", title: Demo.title, layout: Demo.layout, data: Demo.data(start: .now),
                                           agentToken: credentials.agentToken)
         }
@@ -74,7 +92,8 @@ final class Model {
 
     func reset() async {
         guard let gateway, let credentials else { return }
-        await showingErrors {
+        record("app.reset")
+        await showingErrors("reset") {
             try await gateway.deleteDevice(secret: credentials.deviceSecret)
             Keychain.delete()
             self.credentials = nil
@@ -86,9 +105,35 @@ final class Model {
         }
     }
 
+    private func run() async {
+        guard let gateway else { return }
+        do {
+            if let saved = try Keychain.load() {
+                credentials = saved
+            } else {
+                let registered = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion))
+                try Keychain.save(registered)
+                credentials = registered
+                record("app.registered")
+            }
+            phase = .ready
+        } catch {
+            record("app.error", ["operation": .string("connect"), "error": .string(error.localizedDescription)])
+            phase = .failed(error.localizedDescription)
+            return
+        }
+        scheduleFlush()
+        await withDiscardingTaskGroup { group in
+            group.addTask { await self.observePushTokens() }
+            group.addTask { await self.observeActivities() }
+            group.addTask { await self.observeAuthorization() }
+        }
+    }
+
     private func observePushTokens() async {
         for await token in Activity<LyktaActivity>.pushToStartTokenUpdates {
             pushToken = PushToken(token)
+            record("activity.pushToStartToken", ["fingerprint": .string(fingerprint(PushToken(token).description.utf8))])
             await sync()
         }
     }
@@ -96,26 +141,59 @@ final class Model {
     private func observeActivities() async {
         await withDiscardingTaskGroup { group in
             for id in Activity<LyktaActivity>.activities.map(\.id) {
-                group.addTask { await self.observeState(of: id) }
+                group.addTask { await self.observe(id) }
             }
             await sync()
             for await activity in Activity<LyktaActivity>.activityUpdates {
                 let id = activity.id
-                group.addTask { await self.observeState(of: id) }
+                group.addTask { await self.observe(id) }
             }
+        }
+    }
+
+    private func observe(_ id: String) async {
+        guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else {
+            record("activity.vanished", ["activityKitID": .string(id)])
+            return
+        }
+        record("activity.observed", activity: activity.attributes.id, Self.describe(activity))
+        await withDiscardingTaskGroup { group in
+            group.addTask { await self.observeState(of: id) }
+            group.addTask { await self.observeContent(of: id) }
         }
     }
 
     private func observeState(of id: String) async {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
-        for await _ in activity.activityStateUpdates {
+        for await state in activity.activityStateUpdates {
+            record("activity.state", activity: activity.attributes.id, ["state": .string(ObservedState(state).rawValue)])
             await sync()
+        }
+    }
+
+    private func observeContent(of id: String) async {
+        guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
+        for await content in activity.contentUpdates {
+            record("activity.content", activity: activity.attributes.id, Self.describe(content))
         }
     }
 
     private func observeAuthorization() async {
         for await enabled in ActivityAuthorizationInfo().activityEnablementUpdates {
             areActivitiesEnabled = enabled
+            record("app.authorization", ["activitiesEnabled": .bool(enabled)])
+        }
+    }
+
+    private func observeDiagnostics() async {
+        for await report in metrics.diagnosticReports {
+            record("metrickit.diagnostic", Self.detail(of: report))
+        }
+    }
+
+    private func observeMetrics() async {
+        for await report in metrics.metricReports {
+            record("metrickit.metrics", Self.detail(of: report))
         }
     }
 
@@ -125,23 +203,98 @@ final class Model {
         activities = observed
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
-        await showingErrors {
+        await showingErrors("sync") {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
             for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id) {
+                record("activity.endedByGateway", activity: activity.attributes.id)
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
         activities = Activity<LyktaActivity>.activities
     }
 
-    private func showingErrors(_ operation: () async throws -> Void) async {
+    private func showingErrors(_ operation: String, _ body: () async throws -> Void) async {
         do {
-            try await operation()
+            try await body()
             error = nil
         } catch {
+            record("app.error", ["operation": .string(operation), "error": .string(error.localizedDescription)])
             self.error = error.localizedDescription
         }
     }
+
+    private func record(_ name: String, activity: UUID? = nil, _ detail: [String: JSONValue] = [:]) {
+        queue.append(Event(id: UUID(), at: .now, name: name, activity: activity, detail: .object(detail)))
+        scheduleFlush()
+    }
+
+    private func scheduleFlush() {
+        guard flushTask == nil else { return }
+        flushTask = Task {
+            try? await Task.sleep(for: .seconds(1))
+            await flush()
+            flushTask = nil
+        }
+    }
+
+    private func flush() async {
+        guard let gateway, let credentials else { return }
+        while !queue.events.isEmpty {
+            let batch = queue.batch()
+            do {
+                try await gateway.upload(EventBatch(events: batch), secret: credentials.deviceSecret)
+            } catch let error as AppError where error.status == 400 || error.status == 413 {
+                queue.remove(batch)
+                queue.append(Event(id: UUID(), at: .now, name: "telemetry.rejected", activity: nil, detail: .object([
+                    "events": .number(Double(batch.count)), "error": .string(error.localizedDescription),
+                ])))
+                return
+            } catch {
+                return
+            }
+            queue.remove(batch)
+        }
+    }
+
+    private static func describe(_ activity: Activity<LyktaActivity>) -> [String: JSONValue] {
+        describe(activity.content).merging([
+            "name": .string(activity.attributes.name), "activityKitID": .string(activity.id),
+            "state": .string(ObservedState(activity.activityState).rawValue),
+        ]) { $1 }
+    }
+
+    private static func describe(_ content: ActivityContent<LyktaActivity.ContentState>) -> [String: JSONValue] {
+        [
+            "fingerprint": .string(content.state.fingerprint), "layoutReadable": .bool(content.state.layout != nil),
+            "staleDate": content.staleDate.map { .string($0.ISO8601Format()) } ?? .null, "relevance": .number(content.relevanceScore),
+        ]
+    }
+
+    private static func describe(_ state: UIApplication.State) -> String {
+        switch state {
+        case .active: "active"
+        case .inactive: "inactive"
+        case .background: "background"
+        @unknown default: "unknown"
+        }
+    }
+
+    private static func detail(of report: some Encodable) -> [String: JSONValue] {
+        do {
+            let data = try JSONEncoder().encode(report)
+            guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: data) else { return ["error": .string("not an object")] }
+            guard data.count > Event.maximumDetailBytes else { return fields }
+            return fields.filter { $0.value.json.count < 4096 }.merging(["truncatedFrom": .number(Double(data.count))]) { $1 }
+        } catch {
+            return ["error": .string("\(error)")]
+        }
+    }
+
+    private static let hardware: String = {
+        var system = utsname()
+        uname(&system)
+        return withUnsafeBytes(of: system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }()
 
     private static let appVersion: String = {
         let info = Bundle.main.infoDictionary ?? [:]

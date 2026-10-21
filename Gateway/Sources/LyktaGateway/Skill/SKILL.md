@@ -62,6 +62,21 @@ otherwise the system keeps it for up to four hours.
 
 Accepted means Apple took the push, not that the phone displayed it.
 
+## Debug
+
+When an activity does not appear or update, read `GET /v1/events` before
+retrying. It returns the newest events for this phone, oldest first, from both
+sides: what the gateway did (`activity.put`, `push.start`, `push.update`,
+`push.end` with Apple's outcome, `pushID` and `ms`, `device.sync`,
+`request.failed`) and what the phone saw (`activity.observed`,
+`activity.content`, `activity.state`, `app.error`, `app.authorization`,
+`metrickit.diagnostic`). A `fingerprint` that matches between `push.*` and
+`activity.content` proves the phone received that exact content. An accepted
+`push.start` with no later `activity.observed` means iOS dropped the start; an
+`app.authorization` with `activitiesEnabled: false` means the user turned Live
+Activities off. Pass `?after=<seq>` to read only newer events and `limit` (1 to
+1000, default 200).
+
 ## Errors
 
 Errors are JSON: `{"error": "invalid_layout", "message": "lockScreen.hstack[1].colour: unknown key; expected alignment, hstack, modifiers, spacing"}`.

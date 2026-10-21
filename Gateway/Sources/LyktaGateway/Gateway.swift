@@ -16,6 +16,12 @@ enum Gateway {
                 }
                 return number
             }
+            let arguments = Array(CommandLine.arguments.dropFirst())
+            if arguments.first == "events" {
+                try await printEvents(Store(path: try value("LYKTA_DATABASE", default: "lykta.sqlite"), maximumDevices: 1, maximumLiveActivities: 1),
+                                arguments: Array(arguments.dropFirst()))
+                return
+            }
             var keys: [PushEnvironment: (id: String, pem: String)] = [:]
             for environment in PushEnvironment.allCases {
                 let prefix = "LYKTA_\(environment.rawValue.uppercased())_KEY"
@@ -30,7 +36,7 @@ enum Gateway {
             let api = API(store: store, environments: push.environments)
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
-            let server = HTTPServer(host: host, port: port, maximumBodyBytes: 65_536) { await api.handle($0) }
+            let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20) { await api.handle($0) }
             log("Lykta gateway listening on \(host):\(port)")
             try await withThrowingDiscardingTaskGroup { group in
                 group.addTask { try await Delivery(store: store, push: push).run() }
@@ -39,6 +45,29 @@ enum Gateway {
         } catch {
             log("Lykta gateway stopped: \(error)")
             exit(1)
+        }
+    }
+
+    private static func printEvents(_ store: Store, arguments: [String]) async throws {
+        var device: UUID?
+        var limit = 500
+        var rest = arguments[...]
+        while let flag = rest.popFirst() {
+            switch (flag, rest.popFirst()) {
+            case let ("--device", value?):
+                guard let id = UUID(uuidString: value) else { throw ConfigurationError("--device needs a device UUID.") }
+                device = id
+            case let ("--limit", value?):
+                guard let number = Int(value), number > 0 else { throw ConfigurationError("--limit needs a positive integer.") }
+                limit = number
+            default:
+                throw ConfigurationError("Usage: lykta-gateway events [--device UUID] [--limit N]")
+            }
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        for event in try await store.events(device: device, after: nil, limit: limit) {
+            FileHandle.standardOutput.write(try encoder.encode(event) + Data("\n".utf8))
         }
     }
 }

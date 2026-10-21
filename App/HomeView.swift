@@ -3,7 +3,6 @@ import UIKit
 
 struct HomeView: View {
     let model: Model
-    @State private var attempt = 0
     @State private var copies = 0
     @State private var isConfirmingReset = false
     @Environment(\.openURL) private var openURL
@@ -21,14 +20,13 @@ struct HomeView: View {
                     Button("Reset", role: .destructive) {
                         Task {
                             await model.reset()
-                            attempt += 1
+                            model.start()
                         }
                     }
                 } message: {
                     Text("Ends every activity, deletes this phone from the gateway and replaces the agent token.")
                 }
         }
-        .task(id: attempt) { await model.run() }
         .onOpenURL { openURL($0) }
     }
 
@@ -45,7 +43,7 @@ struct HomeView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Try Again") { attempt += 1 }
+                Button("Try Again") { model.start() }
             }
         case .ready:
             List {

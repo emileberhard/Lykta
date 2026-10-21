@@ -97,6 +97,26 @@ struct GatewayTests {
         #expect(try response.decoded() as Failure == Failure(error: rejection.error))
     }
 
+    @Test func recordsWhatTheGatewayAndThePhoneSaw() async throws {
+        let started: Identified = try await put("build", Self.start)
+        try await deliver(at: now)
+        let observed = Event(id: UUID(), at: Date(), name: "activity.observed", activity: started.id, detail: ["state": "active"])
+        let upload = EventBatch(events: [observed, observed])
+        let uploaded = await api.handle(HTTPRequest(method: "POST", target: "/v1/device/events",
+                                                    headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: Self.json(upload)))
+        #expect(uploaded.status == 204)
+        _ = try await send("PUT", "/v1/activities/Build", body: Self.start)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.map(\.name) == ["device.registered", "device.sync", "activity.put", "push.start", "activity.observed", "request.failed"])
+        let push = try #require(events.events.first { $0.name == "push.start" })
+        #expect(push.source == "gateway")
+        #expect(push.activity == started.id)
+        #expect(push.detail["outcome"] == "accepted")
+        #expect(push.detail["uniqueID"] != nil)
+        #expect(events.events.first { $0.name == "activity.put" }?.detail["fingerprint"] == push.detail["fingerprint"])
+        #expect(events.events.first { $0.name == "activity.observed" }?.source == "app")
+    }
+
     @Test func requiresTheAgentToken() async throws {
         let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/activities",
                                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
@@ -182,6 +202,17 @@ struct Status: Decodable, Equatable {
     let error: String?
 }
 
+struct Events: Decodable {
+    struct Entry: Decodable {
+        let name: String
+        let source: String
+        let activity: UUID?
+        let detail: [String: JSONValue]
+    }
+
+    let events: [Entry]
+}
+
 struct Identified: Decodable {
     let id: UUID
 }
@@ -222,17 +253,27 @@ final class FakePush: PushService {
         state.withLock { $0.failures[call] = error }
     }
 
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment) async throws(APNsError) {
-        try record("start")
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        struct Sent: Decodable {
+            struct APS: Decodable {
+                struct Alert: Decodable { let title: String; let body: String }
+                let alert: Alert
+            }
+            let aps: APS
+        }
+        let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
+        try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body")
+        return "unique-\(id)"
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment) async throws(APNsError) {
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         struct Sent: Decodable {
             struct APS: Decodable { let event: String }
             let aps: APS
         }
         let event = (try? JSONDecoder().decode(Sent.self, from: payload).aps.event) ?? "malformed"
         try record(event, detail: " \(priority)")
+        return nil
     }
 
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String {

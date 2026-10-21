@@ -32,6 +32,6 @@ enum Keychain {
     }
 
     private static func failure(_ status: OSStatus) -> AppError {
-        AppError(errorDescription: SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)")
+        AppError(status: nil, errorDescription: SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)")
     }
 }

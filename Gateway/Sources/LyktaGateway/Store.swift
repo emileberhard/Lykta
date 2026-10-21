@@ -16,7 +16,7 @@ struct ActivityRequest: Sendable {
 }
 
 struct Job: Sendable {
-    enum Kind: Sendable { case start, update, end, deleteChannel }
+    enum Kind: String, Sendable { case start, update, end, deleteChannel }
 
     let kind: Kind
     let activity: Activity
@@ -32,6 +32,51 @@ enum Outcome: Sendable {
     case channelGone
 }
 
+struct Attempt: Sendable {
+    let outcome: Outcome
+    let detail: [String: JSONValue]
+}
+
+struct StoredEvent: Encodable, Sendable {
+    let seq: Int64
+    let device: UUID
+    let activity: UUID?
+    let source: String
+    let name: String
+    let at: Date
+    let receivedAt: Date
+    let detail: JSONValue
+
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        device = try row.text("device_id", as: UUID.init(uuidString:))
+        activity = try row.optionalText("activity_id", as: UUID.init(uuidString:))
+        source = try row.string("source")
+        name = try row.string("name")
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")) / 1000)
+        receivedAt = Date(timeIntervalSince1970: Double(try row.integer("received_at")) / 1000)
+        detail = try JSONDecoder().decode(JSONValue.self, from: Data(try row.string("detail").utf8))
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(seq, forKey: .seq)
+        try fields.encode(device, forKey: .device)
+        try fields.encode(activity, forKey: .activity)
+        try fields.encode(source, forKey: .source)
+        try fields.encode(name, forKey: .name)
+        try fields.encode(at.formatted(Self.time), forKey: .at)
+        try fields.encode(receivedAt.formatted(Self.time), forKey: .receivedAt)
+        try fields.encode(detail, forKey: .detail)
+    }
+
+    private static let time = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+    private enum CodingKeys: String, CodingKey {
+        case seq, device, activity, source, name, at, receivedAt, detail
+    }
+}
+
 extension PushToken: SQLBindable {
     var sqlValue: SQLValue { .text(description) }
 }
@@ -45,6 +90,8 @@ extension Activity.Phase: SQLBindable {}
 actor Store {
     static let maximumAttempts = 5
     static let maximumPayloadBytes = 4096
+    static let eventRetention = 14 * 86400
+    static let maximumEventBytesPerDevice = 8 << 20
 
     private let db: Database
     private let maximumDevices: Int
@@ -64,10 +111,13 @@ actor Store {
             guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
                 throw APIError(.registrationClosed, "This gateway accepts no more devices.")
             }
+            let id = UUID()
             let secret = Self.token("lykta_device_")
             let agentToken = Self.token("lykta_agent_")
             try db.run("INSERT INTO devices (id, secret_hash, agent_hash, environment, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       UUID(), Self.hash(secret), Self.hash(agentToken), environment, appVersion, now)
+                       id, Self.hash(secret), Self.hash(agentToken), environment, appVersion, now)
+            try record("device.registered", device: id, activity: nil,
+                       ["environment": .string(environment.rawValue), "appVersion": .string(appVersion)])
             return Credentials(deviceSecret: secret, agentToken: agentToken)
         }
     }
@@ -87,11 +137,14 @@ actor Store {
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, bundle_instance = ? WHERE id = ?",
                        report.pushToStartToken, report.appVersion, report.bundleInstance, device.id)
             let reported = Set(report.activities.map(\.id))
-            if let previous, previous != report.bundleInstance {
+            let isNewInstall = previous != nil && previous != report.bundleInstance
+            var abandoned: [JSONValue] = []
+            if isNewInstall {
                 for row in try db.query("SELECT id FROM activities WHERE device_id = ? AND phase != 'ended'", device.id) {
                     let id = try row.text("id", as: UUID.init(uuidString:))
                     guard !reported.contains(id) else { continue }
                     try db.run("UPDATE activities SET phase = 'ended', ended_at = ?, error = 'The app was reinstalled or updated.' WHERE id = ?", now, id)
+                    abandoned.append(.string(id.uuidString))
                 }
             }
             var tombstones: [UUID] = []
@@ -105,6 +158,20 @@ actor Store {
                     """, observed.state, gone, gone, now, observed.id)
                 if phase == .ended, !gone { tombstones.append(observed.id) }
             }
+            let token = switch report.pushToStartToken {
+            case nil: "none"
+            case device.pushToken: "unchanged"
+            case let .some(token): "new \(fingerprint(token.description.utf8))"
+            }
+            try record("device.sync", device: device.id, activity: nil, [
+                "appVersion": .string(report.appVersion),
+                "install": .string(report.bundleInstance.uuidString),
+                "newInstall": .bool(isNewInstall),
+                "pushToStartToken": .string(token),
+                "activities": .array(report.activities.map { .object(["id": .string($0.id.uuidString), "state": .string($0.state.rawValue)]) }),
+                "endedByReinstall": .array(abandoned),
+                "toldToEnd": .array(tombstones.map { .string($0.uuidString) }),
+            ])
             return tombstones
         }
     }
@@ -162,6 +229,10 @@ actor Store {
                 throw APIError(.payloadTooLarge,
                                "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). Simplify the layout or shorten its text.")
             }
+            try record("activity.put", device: device.id, activity: id, [
+                "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
+                "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+            ])
             return activity.status
         }
     }
@@ -176,7 +247,12 @@ actor Store {
                   ended_at = CASE WHEN phase = 'starting' AND in_flight = 0 THEN ? END, dismiss_at = ?, retry_at = 0, failures = 0
                   WHERE id = ?
                 """, now, dismissAfter.map { now + $0 }, current.id)
-            return try activity(current.id).status
+            let ended = try activity(current.id)
+            try record("activity.end", device: device.id, activity: ended.id, [
+                "name": .string(name.rawValue), "phase": .string(ended.phase.rawValue),
+                "dismissAfter": dismissAfter.map { .number(Double($0)) } ?? .null,
+            ])
+            return ended.status
         }
     }
 
@@ -204,11 +280,55 @@ actor Store {
     }
 
     func housekeep(now: Int) throws {
-        try db.run("""
-            UPDATE activities SET phase = 'ended', ended_at = ?, error = COALESCE(error, 'Live Activities last at most 8 hours.')
-              WHERE phase != 'ended' AND in_flight = 0 AND created_at <= ?
-            """, now, now - 8 * 3600)
+        try db.transaction {
+            for row in try db.query("SELECT id, device_id FROM activities WHERE phase != 'ended' AND in_flight = 0 AND created_at <= ?", now - 8 * 3600) {
+                let id = try row.text("id", as: UUID.init(uuidString:))
+                try db.run("""
+                    UPDATE activities SET phase = 'ended', ended_at = ?, error = COALESCE(error, 'Live Activities last at most 8 hours.') WHERE id = ?
+                    """, now, id)
+                try record("activity.expired", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: id, [:])
+            }
+        }
         try db.run("DELETE FROM activities WHERE phase = 'ended' AND channel IS NULL AND ended_at <= ?", now - 7 * 86400)
+        try db.run("DELETE FROM events WHERE received_at < ?", Int64(now - Self.eventRetention) * 1000)
+        try db.run("""
+            DELETE FROM events WHERE seq IN (SELECT seq FROM (
+              SELECT seq, SUM(bytes) OVER (PARTITION BY device_id ORDER BY seq DESC) AS total FROM events) WHERE total > ?)
+            """, Self.maximumEventBytesPerDevice)
+    }
+
+    // MARK: Events
+
+    func ingest(_ device: Device, _ batch: EventBatch) throws {
+        let receivedAt = Self.milliseconds(.now)
+        try db.transaction {
+            for event in batch.events {
+                let detail = String(decoding: event.detail.json, as: UTF8.self)
+                try db.run("""
+                    INSERT OR IGNORE INTO events (id, device_id, activity_id, source, name, at, received_at, bytes, detail)
+                      VALUES (?, ?, ?, 'app', ?, ?, ?, ?, ?)
+                    """, event.id, device.id, event.activity, event.name, Self.milliseconds(event.at), receivedAt, detail.utf8.count, detail)
+            }
+        }
+    }
+
+    func events(device: UUID?, after: Int64?, limit: Int) throws -> [StoredEvent] {
+        let rows = if let after {
+            try db.query("SELECT * FROM events WHERE (?1 IS NULL OR device_id = ?1) AND seq > ?2 ORDER BY seq LIMIT ?3", device, after, limit)
+        } else {
+            Array(try db.query("SELECT * FROM events WHERE (?1 IS NULL OR device_id = ?1) ORDER BY seq DESC LIMIT ?2", device, limit).reversed())
+        }
+        return try rows.map(StoredEvent.init)
+    }
+
+    func recordFailure(token: String, request: String, _ error: APIError) throws {
+        guard let device = try device(column: "agent_hash", hash: Self.hash(token)) ?? device(column: "secret_hash", hash: Self.hash(token)) else {
+            return
+        }
+        try record("request.failed", device: device.id, activity: nil, [
+            "request": .string(request), "status": .number(Double(error.code.status)),
+            "error": .string(error.code.rawValue), "message": .string(error.message),
+        ])
     }
 
     func claim(now: Int, limit: Int) throws -> [Job] {
@@ -247,8 +367,8 @@ actor Store {
         Set(try db.query("SELECT channel FROM activities WHERE channel IS NOT NULL").map { try $0.string("channel") })
     }
 
-    func finish(_ job: Job, _ outcome: Outcome, now: Int) throws {
-        var outcome = outcome
+    func finish(_ job: Job, _ attempt: Attempt, now: Int) throws {
+        var outcome = attempt.outcome
         if case let .unknown(error) = outcome, job.kind != .start { outcome = .retry(error, throttled: false) }
         if case let .retry(error, _) = outcome, job.activity.failures + 1 >= Self.maximumAttempts {
             outcome = .failed(error, clearsPushToken: false)
@@ -256,6 +376,15 @@ actor Store {
         let id = job.activity.id
         let revision = job.activity.revision
         try db.transaction {
+            let (result, error): (String, String?) = switch outcome {
+            case .accepted: ("accepted", nil)
+            case let .retry(error, throttled): (throttled ? "throttled" : "retry", error)
+            case let .failed(error, _): ("failed", error)
+            case let .unknown(error): ("unknown", error)
+            case .channelGone: ("channelGone", nil)
+            }
+            try record("push.\(job.kind.rawValue)", device: job.activity.deviceID, activity: id,
+                       attempt.detail.merging(["outcome": .string(result), "error": error.map(JSONValue.string) ?? .null]) { $1 })
             switch (job.kind, outcome) {
             case let (_, .retry(error, throttled)):
                 let alert = try job.activity.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
@@ -298,6 +427,19 @@ actor Store {
     }
 
     // MARK: Helpers
+
+    private func record(_ name: String, device: UUID, activity: UUID?, _ detail: [String: JSONValue]) throws {
+        let now = Self.milliseconds(.now)
+        let json = String(decoding: JSONValue.object(detail).json, as: UTF8.self)
+        try db.run("""
+            INSERT INTO events (id, device_id, activity_id, source, name, at, received_at, bytes, detail)
+              VALUES (?, ?, ?, 'gateway', ?, ?, ?, ?, ?)
+            """, UUID(), device, activity, name, now, now, json.utf8.count, json)
+    }
+
+    private static func milliseconds(_ date: Date) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1000).rounded())
+    }
 
     private func device(column: String, hash: String) throws -> Device? {
         guard let row = try db.query("SELECT id, environment, push_token FROM devices WHERE \(column) = ?", hash).first else { return nil }
@@ -379,5 +521,19 @@ actor Store {
         ) STRICT;
         CREATE UNIQUE INDEX IF NOT EXISTS live_activity_names ON activities(device_id, name) WHERE phase IN ('starting', 'live');
         CREATE INDEX IF NOT EXISTS activity_devices ON activities(device_id);
+        CREATE TABLE IF NOT EXISTS events (
+          seq INTEGER PRIMARY KEY,
+          id TEXT NOT NULL UNIQUE,
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          activity_id TEXT,
+          source TEXT NOT NULL CHECK (source IN ('app', 'gateway')),
+          name TEXT NOT NULL,
+          at INTEGER NOT NULL,
+          received_at INTEGER NOT NULL,
+          bytes INTEGER NOT NULL,
+          detail TEXT NOT NULL
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS device_events ON events(device_id, seq);
+        CREATE INDEX IF NOT EXISTS event_age ON events(received_at);
         """
 }
