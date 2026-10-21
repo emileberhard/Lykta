@@ -4,6 +4,8 @@ import UIKit
 struct HomeView: View {
     let model: Model
     @State private var copies = 0
+    @State private var demos = 0
+    @State private var isSendingDemo = false
     @State private var isConfirmingReset = false
     @Environment(\.openURL) private var openURL
 
@@ -57,9 +59,20 @@ struct HomeView: View {
                         model.copySetup()
                         copies += 1
                     }
-                    Button("Send Demo", systemImage: "sparkles") {
-                        Task { await model.sendDemo() }
+                    Button {
+                        Task {
+                            isSendingDemo = true
+                            if await model.sendDemo() { demos += 1 }
+                            isSendingDemo = false
+                        }
+                    } label: {
+                        Label {
+                            Text("Send Demo")
+                        } icon: {
+                            if isSendingDemo { ProgressView() } else { Image(systemName: "sparkles") }
+                        }
                     }
+                    .disabled(isSendingDemo)
                 }
                 if !model.activities.isEmpty {
                     Section("Live") {
@@ -71,6 +84,7 @@ struct HomeView: View {
                 }
             }
             .sensoryFeedback(.success, trigger: copies)
+            .sensoryFeedback(.success, trigger: demos)
         }
     }
 }

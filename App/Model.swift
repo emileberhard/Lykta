@@ -80,11 +80,14 @@ final class Model {
             """
     }
 
-    func sendDemo() async {
-        guard let gateway, let credentials else { return }
+    func sendDemo() async -> Bool {
+        guard let gateway, let credentials else { return false }
         record("app.demo")
-        await showingErrors("demo") {
-            try await gateway.endActivity("demo", agentToken: credentials.agentToken)
+        let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == "demo" && $0.activityState == .active }
+        return await showingErrors("demo") {
+            if !isShowing {
+                try await gateway.endActivity("demo", agentToken: credentials.agentToken)
+            }
             try await gateway.putActivity("demo", title: Demo.title, layout: Demo.layout, data: Demo.data(start: .now),
                                           agentToken: credentials.agentToken)
         }
@@ -213,13 +216,16 @@ final class Model {
         activities = Activity<LyktaActivity>.activities
     }
 
-    private func showingErrors(_ operation: String, _ body: () async throws -> Void) async {
+    @discardableResult
+    private func showingErrors(_ operation: String, _ body: () async throws -> Void) async -> Bool {
         do {
             try await body()
             error = nil
+            return true
         } catch {
             record("app.error", ["operation": .string(operation), "error": .string(error.localizedDescription)])
             self.error = error.localizedDescription
+            return false
         }
     }
 
