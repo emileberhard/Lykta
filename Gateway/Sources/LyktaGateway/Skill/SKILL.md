@@ -27,6 +27,10 @@ name and updates it otherwise.
 | `staleAfter` | Seconds until the phone marks the activity as out of date. Each PUT renews it. |
 | `relevance` | 0 to 100. The most relevant activity takes the Dynamic Island. |
 
+iOS budgets how many activities an app may start by push. Once the budget is
+spent it silently drops new starts for a while, so keep one name per purpose and
+update it; never end and restart an activity to refresh it.
+
 Updates normally send only `data`; the title and layout keep their last values.
 Timers and timer-driven progress run on the phone, so send them once instead of
 updating every second. The phone shows at most one update per second per
@@ -72,7 +76,8 @@ sides: what the gateway did (`activity.put`, `push.start`, `push.update`,
 `activity.content`, `activity.state`, `app.error`, `app.authorization`,
 `metrickit.diagnostic`). A `fingerprint` that matches between `push.*` and
 `activity.content` proves the phone received that exact content. An accepted
-`push.start` with no later `activity.observed` means iOS dropped the start; an
+`push.start` followed by `activity.unseen` means iOS dropped the start, usually
+because the start budget is spent; wait instead of retrying. An
 `app.authorization` with `activitiesEnabled: false` means the user turned Live
 Activities off. Pass `?after=<seq>` to read only newer events and `limit` (1 to
 1000, default 200).

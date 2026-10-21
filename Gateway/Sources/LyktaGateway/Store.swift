@@ -288,6 +288,17 @@ actor Store {
                     """, now, id)
                 try record("activity.expired", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: id, [:])
             }
+            for row in try db.query("""
+                SELECT id, device_id FROM activities a WHERE phase = 'live' AND delivery = 'accepted' AND device_state IS NULL
+                  AND created_at <= ? AND NOT EXISTS (SELECT 1 FROM events WHERE activity_id = a.id AND name = 'activity.unseen')
+                """, now - 60) {
+                try record("activity.unseen", device: try row.text("device_id", as: UUID.init(uuidString:)),
+                           activity: try row.text("id", as: UUID.init(uuidString:)),
+                           ["reason": .string("""
+                               Apple accepted the start over a minute ago, but the phone has not reported the activity. \
+                               iOS drops starts when the app's push-to-start budget is spent or Live Activities are off.
+                               """)])
+            }
         }
         try db.run("DELETE FROM activities WHERE phase = 'ended' AND channel IS NULL AND ended_at <= ?", now - 7 * 86400)
         try db.run("DELETE FROM events WHERE received_at < ?", Int64(now - Self.eventRetention) * 1000)
