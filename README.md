@@ -57,4 +57,7 @@ phone, and `Gateway` serves the API and delivers pushes. See
 
 ## License
 
-MIT. The name and icon are covered by [TRADEMARK.md](TRADEMARK.md).
+[PolyForm Shield 1.0.0](LICENSE): read, run, change, self-host and share
+Lykta for any purpose except providing a product that competes with it. The
+name and icon are covered by [TRADEMARK.md](TRADEMARK.md), and
+[PRIVACY.md](PRIVACY.md) describes what the gateway stores.
