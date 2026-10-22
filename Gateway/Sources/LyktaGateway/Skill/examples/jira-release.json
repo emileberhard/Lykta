@@ -52,7 +52,7 @@
                         {"font": 20},
                         {"bold": true},
                         {"fontDesign": "rounded"},
-                        {"contentTransition": "numericText"}
+                        {"contentTransition": {"numericText": "{{done}}"}}
                       ]
                     },
                     {"text": "of {{total}}", "modifiers": [{"font": 10}, {"foreground": "#626F86"}]}
@@ -68,11 +68,7 @@
                     [
                       {
                         "hstack": [
-                          {
-                            "shape": "circle",
-                            "fill": "#22A06B",
-                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
-                          },
+                          {"shape": "circle", "fill": "#22A06B", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
                           {
                             "concat": [{"text": "{{done}}", "modifiers": [{"bold": true}]}, " done"],
                             "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
@@ -82,11 +78,7 @@
                       },
                       {
                         "hstack": [
-                          {
-                            "shape": "circle",
-                            "fill": "#8F7EE7",
-                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
-                          },
+                          {"shape": "circle", "fill": "#8F7EE7", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
                           {
                             "concat": [{"text": "{{review}}", "modifiers": [{"bold": true}]}, " in review"],
                             "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
@@ -98,11 +90,7 @@
                     [
                       {
                         "hstack": [
-                          {
-                            "shape": "circle",
-                            "fill": "#1D7AFC",
-                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
-                          },
+                          {"shape": "circle", "fill": "#1D7AFC", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
                           {
                             "concat": [{"text": "{{doing}}", "modifiers": [{"bold": true}]}, " in progress"],
                             "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
@@ -112,11 +100,7 @@
                       },
                       {
                         "hstack": [
-                          {
-                            "shape": "circle",
-                            "fill": "#E2483D",
-                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
-                          },
+                          {"shape": "circle", "fill": "#E2483D", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
                           {
                             "concat": [{"text": "{{blocked}}", "modifiers": [{"bold": true}]}, " blocked"],
                             "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
@@ -131,21 +115,23 @@
                   "verticalSpacing": 4
                 },
                 {
-                  "link": "{{blocker.url}}",
-                  "label": {
-                    "hstack": [
-                      {
-                        "symbol": "exclamationmark.octagon.fill",
-                        "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]
-                      },
-                      {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
-                      {
-                        "text": "{{blocker.summary}}",
-                        "modifiers": [{"font": "caption"}, {"foreground": "#44546F"}, {"lineLimit": 1}]
-                      },
-                      {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#44546F"}]}
-                    ],
-                    "spacing": 5
+                  "each": "blockers",
+                  "as": "blocker",
+                  "do": {
+                    "link": "{{blocker.url}}",
+                    "label": {
+                      "hstack": [
+                        {"symbol": "exclamationmark.octagon.fill", "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]},
+                        {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
+                        {
+                          "text": "{{blocker.summary}}",
+                          "modifiers": [{"font": "caption"}, {"foreground": "#44546F"}, {"lineLimit": 1}]
+                        },
+                        {"spacer": 0},
+                        {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#44546F"}]}
+                      ],
+                      "spacing": 5
+                    }
                   }
                 }
               ],
@@ -230,78 +216,63 @@
       "bottom": {
         "vstack": [
           {
-            "grid": [
-              [
-                {
-                  "hstack": [
-                    {"shape": "circle", "fill": "#22A06B", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
-                    {
-                      "concat": [{"text": "{{done}}", "modifiers": [{"bold": true}]}, " done"],
-                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
-                    }
-                  ],
-                  "spacing": 5
-                },
-                {
-                  "hstack": [
-                    {"shape": "circle", "fill": "#8F7EE7", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
-                    {
-                      "concat": [{"text": "{{review}}", "modifiers": [{"bold": true}]}, " in review"],
-                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
-                    }
-                  ],
-                  "spacing": 5
-                }
-              ],
-              [
-                {
-                  "hstack": [
-                    {"shape": "circle", "fill": "#1D7AFC", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
-                    {
-                      "concat": [{"text": "{{doing}}", "modifiers": [{"bold": true}]}, " in progress"],
-                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
-                    }
-                  ],
-                  "spacing": 5
-                },
-                {
-                  "hstack": [
-                    {"shape": "circle", "fill": "#E2483D", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
-                    {
-                      "concat": [{"text": "{{blocked}}", "modifiers": [{"bold": true}]}, " blocked"],
-                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
-                    }
-                  ],
-                  "spacing": 5
-                }
-              ]
+            "hstack": [
+              {
+                "hstack": [
+                  {"shape": "circle", "fill": "#22A06B", "modifiers": [{"frame": {"width": 6, "height": 6}}]},
+                  {"concat": [{"text": "{{done}}", "modifiers": [{"bold": true}]}, " done"]}
+                ],
+                "spacing": 4
+              },
+              {
+                "hstack": [
+                  {"shape": "circle", "fill": "#8F7EE7", "modifiers": [{"frame": {"width": 6, "height": 6}}]},
+                  {"concat": [{"text": "{{review}}", "modifiers": [{"bold": true}]}, " review"]}
+                ],
+                "spacing": 4
+              },
+              {
+                "hstack": [
+                  {"shape": "circle", "fill": "#1D7AFC", "modifiers": [{"frame": {"width": 6, "height": 6}}]},
+                  {"concat": [{"text": "{{doing}}", "modifiers": [{"bold": true}]}, " doing"]}
+                ],
+                "spacing": 4
+              },
+              {
+                "hstack": [
+                  {"shape": "circle", "fill": "#E2483D", "modifiers": [{"frame": {"width": 6, "height": 6}}]},
+                  {"concat": [{"text": "{{blocked}}", "modifiers": [{"bold": true}]}, " blocked"]}
+                ],
+                "spacing": 4
+              }
             ],
-            "alignment": "leading",
-            "horizontalSpacing": 14,
-            "verticalSpacing": 4
+            "spacing": 10,
+            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
           },
           {
-            "link": "{{blocker.url}}",
-            "label": {
-              "hstack": [
-                {
-                  "symbol": "exclamationmark.octagon.fill",
-                  "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]
-                },
-                {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
-                {
-                  "text": "{{blocker.summary}}",
-                  "modifiers": [{"font": "caption"}, {"foreground": "secondary"}, {"lineLimit": 1}]
-                },
-                {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]}
-              ],
-              "spacing": 5
+            "each": "blockers",
+            "as": "blocker",
+            "do": {
+              "link": "{{blocker.url}}",
+              "label": {
+                "hstack": [
+                  {"symbol": "exclamationmark.octagon.fill", "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]},
+                  {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
+                  {
+                    "text": "{{blocker.summary}}",
+                    "modifiers": [{"font": "caption"}, {"foreground": "secondary"}, {"lineLimit": 1}]
+                  },
+                  {"spacer": 0},
+                  {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]}
+                ],
+                "spacing": 5
+              }
             }
           }
         ],
         "alignment": "leading",
-        "spacing": 8,
-        "modifiers": [{"padding": {"top": 6}}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
+        "spacing": 6,
+        "modifiers": [{"padding": {"top": 6, "horizontal": 6}}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
       }
     },
     "background": "#FFFFFF",
@@ -313,15 +284,14 @@
     "version": "4.2",
     "done": 7,
     "review": 2,
-    "doing": 2,
-    "blocked": 1,
+    "doing": 1,
+    "blocked": 2,
     "total": 12,
     "freeze": 1793008040,
-    "blocker": {
-      "key": "APP-142",
-      "summary": "Payment sheet crashes on iPad",
-      "url": "https://example.atlassian.net/browse/APP-142"
-    },
+    "blockers": [
+      {"key": "APP-142", "summary": "Payment sheet crashes on iPad", "url": "https://example.atlassian.net/browse/APP-142"},
+      {"key": "APP-139", "summary": "Receipts miss the VAT line", "url": "https://example.atlassian.net/browse/APP-139"}
+    ],
     "board": "https://example.atlassian.net/jira/software/projects/APP/boards/1"
   },
   "staleAfter": 1800,
