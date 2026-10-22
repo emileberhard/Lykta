@@ -2,95 +2,146 @@
   "title": "Orion is coming home",
   "layout": {
     "lockScreen": {
-      "hstack": [
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {
+                  "shape": "ellipse",
+                  "stroke": "#9CC3FF",
+                  "lineWidth": 1.6,
+                  "modifiers": [{"frame": {"width": 16, "height": 6.72}}, {"rotation": -25}]
+                },
+                {"shape": "circle", "fill": "#9CC3FF", "modifiers": [{"frame": {"width": 4.8, "height": 4.8}}]}
+              ],
+              "modifiers": [{"frame": {"width": 16, "height": 16}}]
+            },
+            {"text": "Orion · coming home", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+            {"spacer": true},
+            {"text": "Day {{day}}", "modifiers": [{"font": "footnote"}, {"fontWeight": "medium"}, {"opacity": 0.8}]}
+          ],
+          "spacing": 6,
+          "modifiers": [{"foreground": "#9CC3FF"}]
+        },
         {
           "zstack": [
             {
-              "shape": "circle",
-              "stroke": "#1C2740",
-              "lineWidth": 4,
-              "lineCap": "round",
-              "trim": [0, 0.75],
-              "modifiers": [{"rotation": 135}]
-            },
-            {
-              "shape": "circle",
-              "stroke": {"gradient": ["#FF9F0A", "#5AC8FA"], "direction": "horizontal"},
-              "lineWidth": 4,
-              "lineCap": "round",
-              "trim": [0, "{{arc}}"],
-              "modifiers": [{"rotation": 135}]
-            },
-            {
-              "symbol": "globe.americas.fill",
-              "modifiers": [{"font": 26.400000000000002}, {"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+              "zstack": [
+                {
+                  "shape": "ellipse",
+                  "stroke": "#3A4E7A",
+                  "lineWidth": 1.6,
+                  "dash": [3, 4],
+                  "trim": [0.5264, "{{pathTrim}}"],
+                  "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
+                },
+                {
+                  "shape": "ellipse",
+                  "stroke": "#9CC3FF",
+                  "lineWidth": 1.8,
+                  "lineCap": "round",
+                  "trim": ["{{pathTrim}}", 0.9318],
+                  "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
+                },
+                {
+                  "shape": "circle",
+                  "fill": {"gradient": ["#7FD0FF", "#1F6FD1", "#0B2F6B"], "direction": "radial"},
+                  "modifiers": [{"frame": {"width": 22, "height": 22}}, {"offset": [11.0, 35.0]}]
+                },
+                {
+                  "shape": "circle",
+                  "fill": "#C9C9C9",
+                  "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": [276.0, 16.0]}]
+                },
+                {
+                  "shape": "circle",
+                  "fill": "#A3A3A3",
+                  "modifiers": [{"frame": {"width": 3.2, "height": 3.2}}, {"offset": [278.4, 18.4]}]
+                },
+                {
+                  "zstack": [
+                    {"shape": "circle", "fill": "#16264D"},
+                    {
+                      "shape": "circle",
+                      "fill": "white",
+                      "modifiers": [{"frame": {"width": 6.8, "height": 6.8}}, {"shadow": {"color": "white", "radius": 3}}]
+                    }
+                  ],
+                  "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": "{{orionOffset}}"}]
+                }
+              ],
+              "alignment": "topLeading",
+              "modifiers": [{"frame": {"width": 300, "height": 56, "alignment": "topLeading"}}]
             }
           ],
-          "modifiers": [{"frame": {"width": 66, "height": 66}}]
+          "modifiers": [{"frame": {"maxWidth": "infinity"}}]
         },
         {
-          "vstack": [
+          "hstack": [
             {
-              "hstack": [
-                {"text": "Orion · coming home", "modifiers": [{"font": "headline"}]},
-                {"spacer": true},
-                {
-                  "text": "Day {{day}}",
-                  "modifiers": [
-                    {"font": "caption2"},
-                    {"fontWeight": "semibold"},
-                    {"foreground": "#5AC8FA"},
-                    {"padding": {"horizontal": 7, "vertical": 3}},
-                    {"background": "#5AC8FA26"},
-                    {"clip": "capsule"}
-                  ]
-                }
-              ]
-            },
-            {
-              "text": "{{distance}} km out · {{speed}} km/h",
-              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#8E9BB5"}]
-            },
-            {
-              "hstack": [
-                {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "#8E9BB5"}]},
-                {"spacer": true},
+              "vstack": [
+                {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "#FFFFFFC7"}]},
                 {
                   "date": "{{entry}}",
                   "style": "timer",
                   "modifiers": [
-                    {"font": "title2"},
-                    {"bold": true},
-                    {"fontDesign": "rounded"},
+                    {"font": 28},
+                    {"fontWeight": "bold"},
                     {"monospacedDigit": true},
-                    {"multilineTextAlignment": "trailing"}
+                    {"frame": {"width": 110, "alignment": "leading"}}
                   ]
                 }
               ],
-              "alignment": "lastTextBaseline"
+              "alignment": "leading",
+              "spacing": 0
             },
+            {"spacer": true},
             {
-              "concat": [{"symbol": "water.waves"}, " Splashdown ~", {"date": "{{splashdown}}"}, " · {{site}}"],
-              "modifiers": [{"font": "caption2"}, {"foreground": "#8E9BB5"}]
+              "vstack": [{"text": "{{distance}} km out"}, {"concat": ["Splashdown ~", {"date": "{{splashdown}}"}]}],
+              "alignment": "trailing",
+              "spacing": 2,
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#FFFFFFC7"}]
             }
           ],
-          "alignment": "leading",
-          "spacing": 3
+          "alignment": "bottom"
         }
       ],
-      "spacing": 16,
-      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+      "alignment": "leading",
+      "spacing": 4,
+      "modifiers": [
+        {"padding": {"horizontal": 16, "vertical": 14}},
+        {"foreground": "white"},
+        {"background": {"gradient": ["#02040C", "#0B1636"], "direction": "vertical"}}
+      ]
     },
     "compactLeading": {
-      "symbol": "globe.americas.fill",
-      "modifiers": [{"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+      "zstack": [
+        {
+          "zstack": [
+            {
+              "shape": "ellipse",
+              "stroke": "#9CC3FF",
+              "lineWidth": 1.8,
+              "modifiers": [{"frame": {"width": 18, "height": 7.56}}, {"rotation": -25}]
+            },
+            {
+              "shape": "circle",
+              "fill": "#9CC3FF",
+              "modifiers": [{"frame": {"width": 5.3999999999999995, "height": 5.3999999999999995}}]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 18, "height": 18}}]
+        }
+      ],
+      "modifiers": [{"padding": {"leading": 2}}]
     },
     "compactTrailing": {
       "date": "{{entry}}",
       "style": "timer",
       "modifiers": [
         {"monospacedDigit": true},
-        {"foreground": "#5AC8FA"},
+        {"foreground": "#9CC3FF"},
         {"multilineTextAlignment": "trailing"},
         {"frame": {"width": 52}}
       ]
@@ -100,7 +151,7 @@
         {"shape": "circle", "stroke": "#1C2740", "lineWidth": 3},
         {
           "shape": "circle",
-          "stroke": "#5AC8FA",
+          "stroke": "#9CC3FF",
           "lineWidth": 3,
           "lineCap": "round",
           "trim": [0, "{{fraction}}"],
@@ -113,76 +164,119 @@
       "leading": {
         "zstack": [
           {
-            "shape": "circle",
-            "stroke": "#1C2740",
-            "lineWidth": 3,
-            "lineCap": "round",
-            "trim": [0, 0.75],
-            "modifiers": [{"rotation": 135}]
-          },
-          {
-            "shape": "circle",
-            "stroke": {"gradient": ["#FF9F0A", "#5AC8FA"], "direction": "horizontal"},
-            "lineWidth": 3,
-            "lineCap": "round",
-            "trim": [0, "{{arc}}"],
-            "modifiers": [{"rotation": 135}]
-          },
-          {
-            "symbol": "globe.americas.fill",
-            "modifiers": [{"font": 16.0}, {"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+            "zstack": [
+              {
+                "shape": "ellipse",
+                "stroke": "#9CC3FF",
+                "lineWidth": 2.2,
+                "modifiers": [{"frame": {"width": 22, "height": 9.24}}, {"rotation": -25}]
+              },
+              {"shape": "circle", "fill": "#9CC3FF", "modifiers": [{"frame": {"width": 6.6, "height": 6.6}}]}
+            ],
+            "modifiers": [{"frame": {"width": 22, "height": 22}}]
           }
         ],
-        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+        "modifiers": [{"padding": {"leading": 8, "top": 4}}]
       },
       "center": {
-        "vstack": [
-          {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
-          {
-            "date": "{{entry}}",
-            "style": "timer",
-            "modifiers": [
-              {"font": 28},
-              {"bold": true},
-              {"fontDesign": "rounded"},
-              {"monospacedDigit": true},
-              {"multilineTextAlignment": "center"},
-              {"frame": {"width": 110}}
-            ]
-          }
-        ],
-        "spacing": 0
+        "text": "Orion · coming home",
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "#9CC3FF"}]
       },
       "trailing": {
         "text": "Day {{day}}",
         "modifiers": [
-          {"font": "caption2"},
-          {"fontWeight": "semibold"},
-          {"foreground": "#5AC8FA"},
-          {"padding": {"horizontal": 7, "vertical": 3}},
-          {"background": "#5AC8FA26"},
-          {"clip": "capsule"},
-          {"padding": {"trailing": 4}}
+          {"font": "footnote"},
+          {"fontWeight": "medium"},
+          {"foreground": "#9CC3FF"},
+          {"opacity": 0.8},
+          {"padding": {"trailing": 8, "top": 4}}
         ]
       },
       "bottom": {
-        "concat": [{"symbol": "water.waves"}, " Splashdown ~", {"date": "{{splashdown}}"}, " · {{distance}} km out"],
-        "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
+        "zstack": [
+          {
+            "zstack": [
+              {
+                "shape": "ellipse",
+                "stroke": "#3A4E7A",
+                "lineWidth": 1.6,
+                "dash": [3, 4],
+                "trim": [0.5264, "{{pathTrim}}"],
+                "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
+              },
+              {
+                "shape": "ellipse",
+                "stroke": "#9CC3FF",
+                "lineWidth": 1.8,
+                "lineCap": "round",
+                "trim": ["{{pathTrim}}", 0.9318],
+                "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
+              },
+              {
+                "shape": "circle",
+                "fill": {"gradient": ["#7FD0FF", "#1F6FD1", "#0B2F6B"], "direction": "radial"},
+                "modifiers": [{"frame": {"width": 22, "height": 22}}, {"offset": [11.0, 35.0]}]
+              },
+              {
+                "shape": "circle",
+                "fill": "#C9C9C9",
+                "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": [276.0, 16.0]}]
+              },
+              {
+                "shape": "circle",
+                "fill": "#A3A3A3",
+                "modifiers": [{"frame": {"width": 3.2, "height": 3.2}}, {"offset": [278.4, 18.4]}]
+              },
+              {
+                "zstack": [
+                  {"shape": "circle", "fill": "#16264D"},
+                  {
+                    "shape": "circle",
+                    "fill": "white",
+                    "modifiers": [{"frame": {"width": 6.8, "height": 6.8}}, {"shadow": {"color": "white", "radius": 3}}]
+                  }
+                ],
+                "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": "{{orionOffset}}"}]
+              }
+            ],
+            "alignment": "topLeading",
+            "modifiers": [{"frame": {"width": 300, "height": 56, "alignment": "topLeading"}}]
+          },
+          {
+            "vstack": [
+              {"text": "Entry interface in", "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]},
+              {
+                "date": "{{entry}}",
+                "style": "timer",
+                "modifiers": [
+                  {"font": "title3"},
+                  {"fontWeight": "bold"},
+                  {"monospacedDigit": true},
+                  {"multilineTextAlignment": "center"},
+                  {"frame": {"width": 80}}
+                ]
+              }
+            ],
+            "spacing": 0,
+            "modifiers": [{"offset": [8, 0]}]
+          }
+        ],
+        "alignment": "bottom",
+        "modifiers": [{"frame": {"maxWidth": "infinity"}}]
       }
     },
-    "background": "#03060E",
-    "keyline": "#5AC8FA",
+    "background": "#02040C",
+    "keyline": "#9CC3FF",
     "link": "https://www.nasa.gov/mission/artemis-ii/"
   },
   "data": {
     "day": 9,
     "distance": "41 000",
-    "speed": "24 600",
-    "site": "Pacific",
     "entry": 1793002460,
     "splashdown": 1793003900,
-    "arc": 0.56,
-    "fraction": 0.75
+    "fraction": 0.75,
+    "pathTrim": 0.6278,
+    "orionOffset": [83.4, 7.3]
   },
   "staleAfter": 1800,
   "endAfter": 14400
