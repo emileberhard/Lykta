@@ -37,7 +37,10 @@ sequenceDiagram
 SwiftUI primitives and modifiers decoded by `LyktaCore`. `Rendering` maps each
 node to its SwiftUI view. The widget and the app both compile it, so the app
 shows each live activity with the Lock Screen's views, text sizes and height
-limit. Fixed templates would limit what agents can show, an extension cannot
+limit. Only the app target defines `LYKTA_APP`, which swaps
+`ProgressView(timerInterval:)`, a bar the app would redraw every frame, for a
+`TimelineView` that redraws it a thousand times over its interval; the widget
+keeps the bar the system animates. Fixed templates would limit what agents can show, an extension cannot
 run downloaded code, and images lose live timers and text quality. A new
 primitive needs an app update; until then the phone shows the activity's title.
 

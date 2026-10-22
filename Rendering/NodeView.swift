@@ -113,12 +113,41 @@ private struct ProgressNodeView: View {
         case let .value(value):
             ProgressView(value: value)
         case let .interval(interval, countsDown, pausedAt?):
-            let elapsed = pausedAt.timeIntervalSince(interval.lowerBound) / interval.upperBound.timeIntervalSince(interval.lowerBound)
-            let fraction = min(max(elapsed.isFinite ? elapsed : 1, 0), 1)
-            ProgressView(value: countsDown ? 1 - fraction : fraction)
+            ProgressView(value: interval.progress(at: pausedAt, countsDown: countsDown))
         case let .interval(interval, countsDown, nil):
+            #if LYKTA_APP
+            TimelineView(ProgressSchedule(interval: interval)) { context in
+                ProgressView(value: interval.progress(at: context.date, countsDown: countsDown))
+            }
+            #else
             ProgressView(timerInterval: interval, countsDown: countsDown) { EmptyView() } currentValueLabel: { EmptyView() }
+            #endif
         }
+    }
+}
+
+#if LYKTA_APP
+private struct ProgressSchedule: TimelineSchedule {
+    private static let steps = 1000.0
+
+    let interval: ClosedRange<Date>
+
+    func entries(from start: Date, mode: TimelineScheduleMode) -> UnfoldFirstSequence<Date> {
+        let step = interval.upperBound.timeIntervalSince(interval.lowerBound) / Self.steps
+        return sequence(first: start) { date in
+            guard date < interval.upperBound else { return nil }
+            let next = max(date.addingTimeInterval(step), interval.lowerBound)
+            return next > date ? min(next, interval.upperBound) : interval.upperBound
+        }
+    }
+}
+#endif
+
+private extension ClosedRange<Date> {
+    func progress(at date: Date, countsDown: Bool) -> Double {
+        let elapsed = date.timeIntervalSince(lowerBound) / upperBound.timeIntervalSince(lowerBound)
+        let fraction = Swift.min(Swift.max(elapsed.isFinite ? elapsed : 1, 0), 1)
+        return countsDown ? 1 - fraction : fraction
     }
 }
 

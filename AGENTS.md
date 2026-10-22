@@ -10,7 +10,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | Path | Owns |
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
-| `Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it |
+| `Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `Widgets` | The Live Activity configuration and Dynamic Island presentations |
 | `App` | Registration, Keychain credentials, ActivityKit observation, device reports, the in-app Lock Screen cards and the example gallery |
 | `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |

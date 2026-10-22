@@ -74,6 +74,10 @@
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": "$(LYKTA_BUNDLE_ID)",
         "PRODUCT_NAME": "Lykta",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS": [
+          "$(inherited)",
+          "LYKTA_APP",
+        ],
       },
     }, {
       "name": "LyktaWidgets",
