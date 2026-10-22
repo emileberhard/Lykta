@@ -6,16 +6,7 @@
         {
           "hstack": [
             {
-              "zstack": [
-                {
-                  "shape": "ellipse",
-                  "stroke": "#9CC3FF",
-                  "lineWidth": 1.6,
-                  "modifiers": [{"frame": {"width": 16, "height": 6.72}}, {"rotation": -25}]
-                },
-                {"shape": "circle", "fill": "#9CC3FF", "modifiers": [{"frame": {"width": 4.8, "height": 4.8}}]}
-              ],
-              "modifiers": [{"frame": {"width": 16, "height": 16}}]
+              "svg": "<svg width='22' height='13' viewBox='0 0 24 14'><path d='M4 9.5C9 13 14 1 19.5 3.2c3 1.2 3 6.4 0 7.6C14 13 9 1 4 4.5' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'/><circle cx='3.6' cy='7' r='2.4' fill='currentColor'/></svg>"
             },
             {"text": "Orion · coming home", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
             {"spacer": true},
@@ -25,57 +16,7 @@
           "modifiers": [{"foreground": "#9CC3FF"}]
         },
         {
-          "zstack": [
-            {
-              "zstack": [
-                {
-                  "shape": "ellipse",
-                  "stroke": "#3A4E7A",
-                  "lineWidth": 1.6,
-                  "dash": [3, 4],
-                  "trim": [0.5264, "{{pathTrim}}"],
-                  "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
-                },
-                {
-                  "shape": "ellipse",
-                  "stroke": "#9CC3FF",
-                  "lineWidth": 1.8,
-                  "lineCap": "round",
-                  "trim": ["{{pathTrim}}", 0.9318],
-                  "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
-                },
-                {
-                  "shape": "circle",
-                  "fill": {"gradient": ["#7FD0FF", "#1F6FD1", "#0B2F6B"], "direction": "radial"},
-                  "modifiers": [{"frame": {"width": 22, "height": 22}}, {"offset": [11.0, 35.0]}]
-                },
-                {
-                  "shape": "circle",
-                  "fill": "#C9C9C9",
-                  "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": [276.0, 16.0]}]
-                },
-                {
-                  "shape": "circle",
-                  "fill": "#A3A3A3",
-                  "modifiers": [{"frame": {"width": 3.2, "height": 3.2}}, {"offset": [278.4, 18.4]}]
-                },
-                {
-                  "zstack": [
-                    {"shape": "circle", "fill": "#16264D"},
-                    {
-                      "shape": "circle",
-                      "fill": "white",
-                      "modifiers": [{"frame": {"width": 6.8, "height": 6.8}}, {"shadow": {"color": "white", "radius": 3}}]
-                    }
-                  ],
-                  "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": "{{orionOffset}}"}]
-                }
-              ],
-              "alignment": "topLeading",
-              "modifiers": [{"frame": {"width": 300, "height": 56, "alignment": "topLeading"}}]
-            }
-          ],
-          "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+          "svg": "<svg viewBox='0 0 340 64'><defs><radialGradient id='earth' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#A8E4FF'/><stop offset='.5' stop-color='#2F7BEA'/><stop offset='1' stop-color='#0A275E'/></radialGradient><radialGradient id='moon' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#F4F4F4'/><stop offset='1' stop-color='#7D838C'/></radialGradient><filter id='glow'><feGaussianBlur stdDeviation='2.5'/></filter></defs><ellipse cx='42' cy='34' rx='24' ry='8' fill='none' stroke='#9CC3FF' stroke-opacity='.22' stroke-width='1'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-opacity='.4' stroke-width='1.2' stroke-dasharray='2 3'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-width='1.8' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><circle cx='26' cy='34' r='13' fill='#2F7BEA' opacity='.35' filter='url(#glow)'/><circle cx='26' cy='34' r='10' fill='url(#earth)'/><circle cx='300' cy='32' r='5.5' fill='url(#moon)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-opacity='.55' stroke-width='11' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}' filter='url(#glow)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>"
         },
         {
           "hstack": [
@@ -116,25 +57,8 @@
       ]
     },
     "compactLeading": {
-      "zstack": [
-        {
-          "zstack": [
-            {
-              "shape": "ellipse",
-              "stroke": "#9CC3FF",
-              "lineWidth": 1.8,
-              "modifiers": [{"frame": {"width": 18, "height": 7.56}}, {"rotation": -25}]
-            },
-            {
-              "shape": "circle",
-              "fill": "#9CC3FF",
-              "modifiers": [{"frame": {"width": 5.3999999999999995, "height": 5.3999999999999995}}]
-            }
-          ],
-          "modifiers": [{"frame": {"width": 18, "height": 18}}]
-        }
-      ],
-      "modifiers": [{"padding": {"leading": 2}}]
+      "svg": "<svg width='22' height='13' viewBox='0 0 24 14'><path d='M4 9.5C9 13 14 1 19.5 3.2c3 1.2 3 6.4 0 7.6C14 13 9 1 4 4.5' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'/><circle cx='3.6' cy='7' r='2.4' fill='currentColor'/></svg>",
+      "modifiers": [{"foreground": "#9CC3FF"}, {"padding": {"leading": 2}}]
     },
     "compactTrailing": {
       "date": "{{entry}}",
@@ -154,7 +78,7 @@
           "stroke": "#9CC3FF",
           "lineWidth": 3,
           "lineCap": "round",
-          "trim": [0, "{{fraction}}"],
+          "trim": [0, "{{progress}}"],
           "modifiers": [{"rotation": -90}]
         }
       ],
@@ -162,21 +86,8 @@
     },
     "expanded": {
       "leading": {
-        "zstack": [
-          {
-            "zstack": [
-              {
-                "shape": "ellipse",
-                "stroke": "#9CC3FF",
-                "lineWidth": 2.2,
-                "modifiers": [{"frame": {"width": 22, "height": 9.24}}, {"rotation": -25}]
-              },
-              {"shape": "circle", "fill": "#9CC3FF", "modifiers": [{"frame": {"width": 6.6, "height": 6.6}}]}
-            ],
-            "modifiers": [{"frame": {"width": 22, "height": 22}}]
-          }
-        ],
-        "modifiers": [{"padding": {"leading": 8, "top": 4}}]
+        "svg": "<svg width='26' height='15' viewBox='0 0 24 14'><path d='M4 9.5C9 13 14 1 19.5 3.2c3 1.2 3 6.4 0 7.6C14 13 9 1 4 4.5' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round'/><circle cx='3.6' cy='7' r='2.4' fill='currentColor'/></svg>",
+        "modifiers": [{"foreground": "#9CC3FF"}, {"padding": {"leading": 8, "top": 6}}]
       },
       "center": {
         "text": "Orion · coming home",
@@ -193,91 +104,31 @@
         ]
       },
       "bottom": {
-        "zstack": [
+        "vstack": [
           {
-            "zstack": [
-              {
-                "shape": "ellipse",
-                "stroke": "#3A4E7A",
-                "lineWidth": 1.6,
-                "dash": [3, 4],
-                "trim": [0.5264, "{{pathTrim}}"],
-                "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
-              },
-              {
-                "shape": "ellipse",
-                "stroke": "#9CC3FF",
-                "lineWidth": 1.8,
-                "lineCap": "round",
-                "trim": ["{{pathTrim}}", 0.9318],
-                "modifiers": [{"frame": {"width": 280, "height": 92}}, {"offset": [25, 6]}]
-              },
-              {
-                "shape": "circle",
-                "fill": {"gradient": ["#7FD0FF", "#1F6FD1", "#0B2F6B"], "direction": "radial"},
-                "modifiers": [{"frame": {"width": 22, "height": 22}}, {"offset": [11.0, 35.0]}]
-              },
-              {
-                "shape": "circle",
-                "fill": "#C9C9C9",
-                "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": [276.0, 16.0]}]
-              },
-              {
-                "shape": "circle",
-                "fill": "#A3A3A3",
-                "modifiers": [{"frame": {"width": 3.2, "height": 3.2}}, {"offset": [278.4, 18.4]}]
-              },
-              {
-                "zstack": [
-                  {"shape": "circle", "fill": "#16264D"},
-                  {
-                    "shape": "circle",
-                    "fill": "white",
-                    "modifiers": [{"frame": {"width": 6.8, "height": 6.8}}, {"shadow": {"color": "white", "radius": 3}}]
-                  }
-                ],
-                "modifiers": [{"frame": {"width": 12, "height": 12}}, {"offset": "{{orionOffset}}"}]
-              }
-            ],
-            "alignment": "topLeading",
-            "modifiers": [{"frame": {"width": 300, "height": 56, "alignment": "topLeading"}}]
+            "svg": "<svg viewBox='0 0 340 64'><defs><radialGradient id='earth' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#A8E4FF'/><stop offset='.5' stop-color='#2F7BEA'/><stop offset='1' stop-color='#0A275E'/></radialGradient><radialGradient id='moon' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#F4F4F4'/><stop offset='1' stop-color='#7D838C'/></radialGradient><filter id='glow'><feGaussianBlur stdDeviation='2.5'/></filter></defs><ellipse cx='42' cy='34' rx='24' ry='8' fill='none' stroke='#9CC3FF' stroke-opacity='.22' stroke-width='1'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-opacity='.4' stroke-width='1.2' stroke-dasharray='2 3'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-width='1.8' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><circle cx='26' cy='34' r='13' fill='#2F7BEA' opacity='.35' filter='url(#glow)'/><circle cx='26' cy='34' r='10' fill='url(#earth)'/><circle cx='300' cy='32' r='5.5' fill='url(#moon)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-opacity='.55' stroke-width='11' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}' filter='url(#glow)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>"
           },
           {
-            "vstack": [
-              {"text": "Entry interface in", "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]},
+            "hstack": [
+              {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
               {
                 "date": "{{entry}}",
                 "style": "timer",
-                "modifiers": [
-                  {"font": "title3"},
-                  {"fontWeight": "bold"},
-                  {"monospacedDigit": true},
-                  {"multilineTextAlignment": "center"},
-                  {"frame": {"width": 80}}
-                ]
+                "modifiers": [{"font": "headline"}, {"monospacedDigit": true}, {"frame": {"width": 64, "alignment": "leading"}}]
               }
             ],
-            "spacing": 0,
-            "modifiers": [{"offset": [8, 0]}]
+            "alignment": "firstTextBaseline",
+            "spacing": 6
           }
         ],
-        "alignment": "bottom",
-        "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+        "spacing": 2
       }
     },
     "background": "#02040C",
     "keyline": "#9CC3FF",
     "link": "https://www.nasa.gov/mission/artemis-ii/"
   },
-  "data": {
-    "day": 9,
-    "distance": "41 000",
-    "entry": 1793002460,
-    "splashdown": 1793003900,
-    "fraction": 0.75,
-    "pathTrim": 0.6278,
-    "orionOffset": [83.4, 7.3]
-  },
+  "data": {"day": 9, "distance": "41 000", "entry": 1793002460, "splashdown": 1793003900, "progress": 0.82},
   "staleAfter": 1800,
   "endAfter": 14400
 }

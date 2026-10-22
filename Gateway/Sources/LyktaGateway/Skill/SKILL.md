@@ -144,7 +144,7 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 | [homelab](examples/homelab.json) | Server graphs as line charts, each linking to its dashboard |
 | [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
 | [movie-night](examples/movie-night.json) | A pausable film timer with a lights toggle and remote buttons |
-| [orion-return](examples/orion-return.json) | A spacecraft's path home from the Moon, drawn with trimmed ellipses and an offset dot |
+| [orion-return](examples/orion-return.json) | Artemis II's figure-eight path around the Moon and home, drawn in SVG with Orion placed by progress |
 | [pr-inbox](examples/pr-inbox.json) | Pull requests as rows from a list, each opening GitHub |
 | [printer](examples/printer.json) | 3D print progress, a camera check and a pause button |
 | [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside, reset with a button |
