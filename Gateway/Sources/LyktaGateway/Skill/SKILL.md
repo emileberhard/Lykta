@@ -157,5 +157,5 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 | [printer](examples/printer.json) | A drawn printer whose print grows in the filament's color, with a camera check and a pause button |
 | [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside around a drawn puppy, reset with a button, with an Apple Watch view |
 | [recipe-steps](examples/recipe-steps.json) | Cookbook steps that slide in on Next and Back, with page dots and a ring timer |
-| [shopping-list](examples/shopping-list.json) | A two-column checklist of toggles that works without an agent |
+| [shopping-list](examples/shopping-list.json) | A checklist grouped by aisle that works without an agent and follows light and dark mode |
 | [solar-eclipse](examples/solar-eclipse.json) | A countdown to totality over the eclipse's phases, drawn in SVG with a glowing corona |
