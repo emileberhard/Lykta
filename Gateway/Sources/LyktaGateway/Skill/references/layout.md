@@ -38,6 +38,11 @@ repeats `node` once per entry of a data list, reading the entry as
 {"vstack": [{"each": "steps", "as": "step", "do": {"text": "{{step.name}}"}}], "alignment": "leading"}
 ```
 
+A path segment in brackets reads its index or key from the data:
+`{{steps[step].text}}` with `"step": 2` reads `steps.2.text`, from a list or an
+object with the key `"2"`. Together with buttons that change `step`, this pages
+through steps the data holds.
+
 Dates are ISO 8601 strings (`"2026-10-21T18:00:00Z"`) or Unix seconds.
 
 ## Nodes
@@ -67,7 +72,7 @@ below, its optional fields and an optional `modifiers` array.
 | `{"grid": [[nodes], [nodes]]}` | Rows of cells whose columns line up. `alignment`, `horizontalSpacing`, `verticalSpacing`. |
 | `{"chart": [marks]}` | `min` and `max` for the value axis, `axes` (false). See [charts](#charts). |
 | `{"link": url, "label": node}` | Opens the URL. See [links, buttons and toggles](#links-buttons-and-toggles). |
-| `{"button": name, "label": node}` | `style`: `automatic`, `plain`, `bordered`, `borderedProminent`. |
+| `{"button": name, "label": node}` | `style`: `automatic`, `plain`, `bordered`, `borderedProminent`. `set`, `add`, `now` change the data when pressed. |
 | `{"toggle": "data.path", "label": node}` | `style`: `switch` (default), `button`, `checkbox`. Shows and flips the boolean at that data path. |
 
 ## Modifiers
@@ -199,12 +204,56 @@ toggles work once the phone is unlocked.
 - A `link` opens its URL, like the presentation-wide `link`.
 - A `button` press is delivered to agents through `GET /v1/actions` with the
   button's name, which is 1 to 64 characters from `a-z`, `0-9`, `-`, `_` and
-  `.`. Nothing on the phone changes until an agent responds with an update.
+  `.`. Unless the button changes the data itself, nothing on the phone changes
+  until an agent responds with an update.
 - A `toggle` names a boolean in the data instead of holding a state. A tap
   flips that value on the gateway, which redraws the activity at once and also
   reports the change through `GET /v1/actions`. A checklist therefore works
   without any agent listening. Inside `each`, `"toggle": "item.done"` names the
   current entry.
+
+A button changes the data on the gateway, which redraws the activity at once,
+so it works while no agent runs:
+
+| Key | Change |
+| --- | --- |
+| `set` | `{"path": value}` sets each path to the value. Values fill from the data like the rest of the layout, so `"set": {"answer": "{{choice.label}}"}` copies a label. |
+| `add` | `{"path": number}` adds the number to the number at the path. `{"path": {"since": "date.path"}}` adds the seconds since the date at that path, which moves a paused timer's start and end past the pause. |
+| `now` | `{"path": seconds}` sets the path to the time the gateway receives the press, in Unix seconds, plus the seconds. |
+
+Paths name values the data already holds, take `each` names and brackets like
+placeholders, and each value changes once per button. Every change reads the
+data as it was before the press. A press whose result the layout cannot show,
+such as Next past the last step, changes nothing. Buttons that share a name
+must change the data alike. A press counts only for a control the data shows,
+so a button in the branch of an `if` on data that is not taken does nothing,
+and a second tap on Pause after the activity paused is ignored.
+
+```json
+{
+  "hstack": [
+    {"button": "back", "label": {"symbol": "chevron.left"}, "add": {"index": -1}},
+    {"text": "{{steps[index].name}}"},
+    {"button": "next", "label": {"symbol": "chevron.right"}, "add": {"index": 1}}
+  ]
+}
+```
+
+A timer that pauses and resumes keeps `pausedAt` null while it runs:
+
+```json
+{
+  "hstack": [
+    {"timer": ["{{start}}", "{{end}}"], "pausedAt": "{{pausedAt}}", "modifiers": [{"frame": {"width": 56}}]},
+    {
+      "if": "{{paused}}",
+      "then": {"button": "resume", "label": {"symbol": "play.fill"}, "set": {"paused": false, "pausedAt": null},
+               "add": {"start": {"since": "pausedAt"}, "end": {"since": "pausedAt"}}},
+      "else": {"button": "pause", "label": {"symbol": "pause.fill"}, "set": {"paused": true}, "now": {"pausedAt": 0}}
+    }
+  ]
+}
+```
 
 ```json
 {

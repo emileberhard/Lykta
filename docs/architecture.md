@@ -102,12 +102,18 @@ real payload against the 4 KB APNs limit before accepting a request.
 device secret. The gateway applies a toggle itself: it flips the boolean at the
 toggle's data path, raises the revision and pushes the new content, so the
 switch stays right with no agent listening and the gateway remains the only
-content writer. Buttons and toggles both join a per-phone action log that
-agents read with `GET /v1/actions`, long-polling from a cursor. The gateway
-never calls out: webhooks would need every agent to expose an endpoint and would
-let a layout make the gateway request arbitrary URLs. An agent that writes data
-a toggle may have changed reads the activity and sends `ifRevision`, which the
-gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
+content writer. A button applies its declared changes the same way: `set`,
+`add` and `now` read the data from before the press, and a press whose result
+the layout cannot fill, or that would outgrow the push or the phone's decoder,
+changes nothing. That covers steppers, resets and pause buttons without a
+scripting language or an agent; anything richer stays with agents. A press
+counts only for a control the current data shows, so a stale second tap on a
+button an `if` has since hidden is refused. Buttons and toggles both join a
+per-phone action log that agents read with `GET /v1/actions`, long-polling from
+a cursor. The gateway never calls out: webhooks would need every agent to expose
+an endpoint and would let a layout make the gateway request arbitrary URLs. An
+agent that writes data a tap may have changed reads the activity and sends
+`ifRevision`, which the gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
 most 1,000 per phone. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip.
 

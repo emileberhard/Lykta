@@ -53,7 +53,7 @@ struct NodeView: View {
             ConditionalNodeView(condition: condition, then: then, otherwise: otherwise)
         case let .link(url, label):
             Link(destination: url) { NodeView(label) }
-        case let .button(name, label, style):
+        case let .button(name, label, style, _):
             ButtonNodeView(name: name, label: label, style: style)
         case let .toggle(path, isOn, label, style):
             ToggleNodeView(path: path, isOn: isOn, label: label, style: style)

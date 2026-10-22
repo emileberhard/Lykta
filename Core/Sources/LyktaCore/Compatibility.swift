@@ -156,6 +156,9 @@ extension Layout {
         "0.2.4": [
             "color.rgb", "color.shortHex", "svg",
         ],
+        "0.5.0": [
+            "button.add", "button.add.since", "button.now", "button.set",
+        ],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

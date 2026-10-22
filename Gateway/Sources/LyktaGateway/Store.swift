@@ -384,29 +384,31 @@ actor Store {
             let activity = try Activity(row)
             let layout = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(activity.content.utf8)).layout
             var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
+            let data = try decode(activity.data)
+            let changed: JSONValue
             switch action.input {
             case let .button(name):
-                guard layout?.buttons.contains(name) == true else { throw APIError(.conflict, "The activity no longer shows the button \(name).") }
+                guard let effects = layout?.buttons[name] else { throw APIError(.conflict, "The activity no longer shows the button \(name).") }
+                changed = try Self.pressing { () throws(LayoutError) in try effects.applied(to: data, at: Date(timeIntervalSince1970: TimeInterval(now))) }
                 try db.run("INSERT INTO actions (id, device_id, activity_id, button, at) VALUES (?, ?, ?, ?, ?)",
                            action.id, device.id, activity.id, name, now)
                 detail["button"] = .string(name)
             case let .toggle(path, isOn):
                 guard layout?.toggles[path] != nil else { throw APIError(.conflict, "The activity no longer shows the toggle \(path).") }
-                let data: JSONValue
-                do {
-                    data = try decode(activity.data).replacing(path, with: .bool(isOn))
-                } catch let error as LayoutError {
-                    throw APIError(.conflict, error.description)
-                }
-                if data != (try decode(activity.data)) {
-                    let content = try Self.encoded(Self.content(title: activity.title, layout: decode(activity.layout), data: data))
-                    try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(data), content, activity.id)
-                    _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
-                }
+                changed = try Self.pressing { () throws(LayoutError) in try data.replacing(path, with: .bool(isOn)) }
                 try db.run("INSERT INTO actions (id, device_id, activity_id, toggle, is_on, at) VALUES (?, ?, ?, ?, ?, ?)",
                            action.id, device.id, activity.id, path, isOn, now)
                 detail["toggle"] = .string(path)
                 detail["isOn"] = .bool(isOn)
+            }
+            if changed != data {
+                let template = try decode(activity.layout)
+                let state = try Self.pressing { () throws(LayoutError) in
+                    try LyktaActivity.ContentState(title: activity.title, layout: template.filled(with: changed).json)
+                }
+                try Self.admit(state, on: device)
+                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(changed), Self.encoded(state), activity.id)
+                _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -613,6 +615,14 @@ actor Store {
             return try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
         } catch let error as LayoutError {
             throw APIError(.invalidLayout, error.description)
+        }
+    }
+
+    private static func pressing<T>(_ change: () throws(LayoutError) -> T) throws(APIError) -> T {
+        do {
+            return try change()
+        } catch {
+            throw APIError(.conflict, "The press cannot change the data: \(error)")
         }
     }
 

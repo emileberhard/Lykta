@@ -51,16 +51,21 @@ public struct Layout: Decodable, Sendable {
         }
         var budget = (nodes: 0, modifiers: 0)
         for root in roots { try Self.admit(root, depth: 1, budget: &budget) }
+        var effects: [String: Effects] = [:]
+        for case let .button(name, _, _, change) in roots.flatMap(\.descendants).map(\.content) {
+            guard effects[name, default: change] == change else { throw LayoutError("buttons named \(name) change the data differently") }
+            effects[name] = change
+        }
         requirement = log.requirement
         features = log.features
     }
 
-    public var buttons: Set<String> {
-        Set(roots.flatMap(\.descendants).compactMap { if case let .button(name, _, _) = $0.content { name } else { nil } })
+    public var buttons: [String: Effects] {
+        Dictionary(roots.flatMap(\.shown).compactMap { if case let .button(name, _, _, effects) = $0.content { (name, effects) } else { nil } }) { $1 }
     }
 
     public var toggles: [String: Bool] {
-        Dictionary(roots.flatMap(\.descendants).compactMap { if case let .toggle(path, isOn, _, _) = $0.content { (path, isOn) } else { nil } }) { $1 }
+        Dictionary(roots.flatMap(\.shown).compactMap { if case let .toggle(path, isOn, _, _) = $0.content { (path, isOn) } else { nil } }) { $1 }
     }
 
     private var roots: [Node] {
@@ -97,10 +102,14 @@ public struct Layout: Decodable, Sendable {
     private static func date(_ decoder: any Decoder) throws -> Date {
         let container = try decoder.singleValueContainer()
         if let seconds = try? container.decode(Double.self) { return Date(timeIntervalSince1970: seconds) }
-        let text = try container.decode(String.self)
-        if let date = try? Date(text, strategy: .iso8601) { return date }
-        if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text) { return date }
-        throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected an ISO 8601 date or Unix seconds")
+        guard let date = date(try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected an ISO 8601 date or Unix seconds")
+        }
+        return date
+    }
+
+    static func date(_ text: String) -> Date? {
+        (try? Date(text, strategy: .iso8601)) ?? (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text))
     }
 }
 
@@ -137,11 +146,20 @@ public struct Node: Decodable, Sendable {
     }
 
     var children: [Node] {
-        content.children + modifiers.compactMap { if case let .overlay(node) = $0 { node } else { nil } }
+        content.children + overlays
     }
 
     var descendants: [Node] {
         [self] + children.flatMap(\.descendants)
+    }
+
+    var shown: [Node] {
+        let branch = if case let .conditional(.value(holds), then, otherwise) = content { [holds ? then : otherwise].compactMap(\.self) } else { content.children }
+        return [self] + (branch + overlays).flatMap(\.shown)
+    }
+
+    private var overlays: [Node] {
+        modifiers.compactMap { if case let .overlay(node) = $0 { node } else { nil } }
     }
 
     var isControl: Bool {
@@ -171,7 +189,7 @@ extension Node {
         case viewThatFits([Node], axis: Axis?)
         case conditional(Condition, then: Node, else: Node?)
         case link(URL, label: Node)
-        case button(String, label: Node, style: ButtonStyle)
+        case button(String, label: Node, style: ButtonStyle, effects: Effects)
         case toggle(String, isOn: Bool, label: Node, style: ToggleStyle)
         case grid([[Node]], alignment: Alignment, horizontalSpacing: Double?, verticalSpacing: Double?)
         case chart(Chart)
@@ -272,7 +290,7 @@ extension Node {
             "viewThatFits": ["in"],
             "if": ["then", "else"],
             "link": ["label"],
-            "button": ["label", "style"],
+            "button": ["label", "style", "set", "add", "now"],
             "toggle": ["isOn", "label", "style"],
             "grid": ["alignment", "horizontalSpacing", "verticalSpacing"],
             "chart": ["min", "max", "axes"],
@@ -362,7 +380,7 @@ extension Node {
             case "button":
                 let name: String = try fields.required(kind)
                 guard Self.isName(name) else { throw fields.invalid("use 1 to 64 lowercase letters, digits, '-', '_' or '.'", at: kind) }
-                self = .button(name, label: try fields.control(kind), style: try fields.optional("style") ?? .automatic)
+                self = .button(name, label: try fields.control(kind), style: try fields.optional("style") ?? .automatic, effects: try Effects(fields))
             case "toggle":
                 let path: String = try fields.required(kind)
                 guard (1...256).contains(path.utf8.count) else { throw fields.invalid("expected a data path of at most 256 bytes", at: kind) }
@@ -395,7 +413,7 @@ extension Node {
             case let .gauge(gauge):
                 [gauge.label, gauge.currentValueLabel, gauge.minimumValueLabel, gauge.maximumValueLabel].compactMap(\.self)
             case let .conditional(_, then, otherwise): [then] + [otherwise].compactMap(\.self)
-            case let .link(_, label), let .button(_, label, _), let .toggle(_, _, label, _): [label]
+            case let .link(_, label), let .button(_, label, _, _), let .toggle(_, _, label, _): [label]
             case let .grid(rows, _, _, _): rows.flatMap(\.self)
             case .text, .symbol, .timer, .date, .shape, .svg, .spacer, .divider, .progress, .chart: []
             }

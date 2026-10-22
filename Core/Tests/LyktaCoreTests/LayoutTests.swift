@@ -41,8 +41,21 @@ struct LayoutTests {
         let json = layout(#"{"vstack": [{"button": "retry", "label": "Retry"}, {"toggle": "items.0.done", "isOn": true, "label": "Milk"}]}"#,
                           extra: #", "expanded": {"bottom": {"button": "stop", "label": "Stop", "style": "borderedProminent"}}"#)
         let layout = try Layout(json: Array(json.utf8))
-        #expect(layout.buttons == ["retry", "stop"])
+        #expect(Set(layout.buttons.keys) == ["retry", "stop"])
         #expect(layout.toggles == ["items.0.done": true])
+    }
+
+    @Test func onlyControlsTheDataShowsCanBePressed() throws {
+        let json = layout(#"{"if": true, "then": {"button": "pause", "label": "Pause"}, "else": {"button": "play", "label": "Play"}}"#,
+                          extra: #", "expanded": {"bottom": {"if": "dark", "then": {"button": "dim", "label": "Dim"}}}"#)
+        #expect(Set(try Layout(json: Array(json.utf8)).buttons.keys) == ["pause", "dim"])
+    }
+
+    @Test func buttonsWithOneNameChangeTheDataAlike() {
+        let json = layout(#"{"vstack": [{"button": "go", "label": "Go", "add": {"n": 1}}, {"button": "go", "label": "Go", "add": {"n": -1}}]}"#)
+        #expect(error(in: json) == "buttons named go change the data differently")
+        #expect(error(in: layout(#"{"button": "go", "label": "Go", "set": {"a": 1}, "add": {"a.b": 1}}"#))
+            == #"lockScreen: "a" contains "a.b"; change each value once"#)
     }
 
     @Test func numbersFromDataRenderAsText() throws {
@@ -139,6 +152,44 @@ struct TemplateTests {
         #expect(throws: LayoutError("isOn: a toggle reads isOn from the data at its path")) {
             try json(#"{"toggle": "items.0.done", "isOn": false, "label": "Milk"}"#).filled(with: data)
         }
+    }
+
+    @Test func bracketsLookUpAPathFromTheData() throws {
+        let data = try json(#"{"step": 2, "steps": {"2": {"text": "Stir"}}, "names": ["a", "b"], "pick": 1, "item": {"key": "2"}}"#)
+        #expect(try json(#"["{{steps[step].text}}", "{{names[pick]}}", "{{steps[item.key].text}}"]"#).filled(with: data)
+            == json(#"["Stir", "b", "Stir"]"#))
+        #expect(throws: LayoutError(#"text: data "steps" must be an index or a key to look up "names[steps]""#)) {
+            try json(#"{"text": "{{names[steps]}}"}"#).filled(with: data)
+        }
+    }
+
+    @Test func buttonEffectsNameConcreteDataPaths() throws {
+        let data = try json(#"{"items": [{"count": 1}, {"count": 4}], "paused": 10}"#)
+        let template = try json(#"""
+            [{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1, "items[item.count].count": {"since": "paused"}}}}]
+            """#)
+        #expect(throws: LayoutError(#"[0].do.add.items[item.count].count: data has no value at "items.4.count""#)) { try template.filled(with: data) }
+        let each = try json(#"[{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1}, "set": {"paused": "{{item.count}}"}}}]"#)
+        #expect(try each.filled(with: data) == json(#"""
+            [{"button": "more", "label": "+", "add": {"items.0.count": 1}, "set": {"paused": 1}},
+             {"button": "more", "label": "+", "add": {"items.1.count": 1}, "set": {"paused": 4}}]
+            """#))
+    }
+
+    @Test func effectsChangeTheDataFromItsStateBeforeThePress() throws {
+        let play = try button(#"{"set": {"pausedAt": null, "playing": true}, "add": {"start": {"since": "pausedAt"}, "n": 1}, "now": {"last": 30}}"#)
+        let data = try json(#"{"pausedAt": 1000, "playing": false, "start": 400, "n": 2, "last": 0}"#)
+        #expect(try play.applied(to: data, at: Date(timeIntervalSince1970: 1060))
+            == json(#"{"pausedAt": null, "playing": true, "start": 460, "n": 3, "last": 1090}"#))
+        #expect(throws: LayoutError(#""n" would not be a finite number"#)) {
+            try button(#"{"add": {"n": 1e308}}"#).applied(to: json(#"{"n": 1e308}"#), at: .now)
+        }
+    }
+
+    private func button(_ effects: String) throws -> Effects {
+        let lockScreen = #"{"button": "go", "label": "Go", \#(effects.dropFirst())"#
+        return try #require(Layout(json: Array(#"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"}"#.utf8))
+            .buttons["go"])
     }
 
     @Test func replacesOneValueAtADataPath() throws {

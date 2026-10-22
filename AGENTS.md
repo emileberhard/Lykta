@@ -47,6 +47,11 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - The gateway is the only content writer. The app never calls
   `Activity.request` or updates content; it ends an activity only when the
   gateway reports it ended, or on Reset.
+- A tap changes data only through the gateway, in the transaction that logs
+  it: a toggle sets its boolean and a button applies its `set`, `add` and
+  `now`, all read from the data before the tap. A tap counts only for a
+  control the current data shows, and a result that fails to fill, fit or
+  pass the phone's decoder version changes nothing.
 - Unknown stays unknown. A start with an unknown outcome is never retried. A
   missing report never ends an activity, except when the activity is absent
   from the first report of a new app install or update.

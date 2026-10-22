@@ -31,6 +31,10 @@ struct CompatibilityTests {
         "svg": #"{"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}"#,
         "color.shortHex": ##"{"text": "a", "modifiers": [{"foreground": "#abc"}]}"##,
         "color.rgb": #"{"text": "a", "modifiers": [{"foreground": "rgb(1, 2, 3)"}]}"#,
+        "button.set": #"{"button": "ok", "label": "OK", "set": {"done": true}}"#,
+        "button.add": #"{"button": "next", "label": "Next", "add": {"step": 1}}"#,
+        "button.add.since": #"{"button": "resume", "label": "Resume", "add": {"end": {"since": "pausedAt"}}}"#,
+        "button.now": #"{"button": "out", "label": "Out", "now": {"last": 0}}"#,
     ]
 
     @Test func detectsFeaturesAtTheirVersion() throws {
@@ -48,7 +52,7 @@ struct CompatibilityTests {
         #expect(layout.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
         let baseline = try Layout(json: Array(Self.layout(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
         #expect(baseline.requirement == nil)
-        #expect(Layout.version == Version(0, 2, 4))
+        #expect(Layout.version == Version(0, 5, 0))
     }
 
     @Test func recordsEveryWayAValueIsNamed() throws {

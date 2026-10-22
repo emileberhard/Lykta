@@ -297,6 +297,39 @@ struct GatewayTests {
         #expect(stale.status == 409)
     }
 
+    @Test func buttonsChangeTheDataTheyShow() async throws {
+        let started: Identified = try await put("film", Self.film)
+        try await deliver(at: now)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("play"))).status == 409)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("pause"))).status == 204)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("pause"))).status == 409)
+        var detail: Detail = try await send("GET", "/v1/activities/film").decoded()
+        #expect(detail.revision == 2)
+        #expect(abs(try detail.data.number(at: "pausedAt") - Double(now)) < 5)
+        #expect(try detail.data.value(at: "playing") == .bool(false))
+        try await deliver(at: now + 1)
+        #expect(push.sent == ["createChannel", "start", "update 5"])
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("play"))).status == 204)
+        detail = try await send("GET", "/v1/activities/film").decoded()
+        #expect(detail.revision == 3)
+        #expect(try detail.data.value(at: "pausedAt") == .null)
+        let pressed: Actions = try await send("GET", "/v1/actions?after=0").decoded()
+        #expect(pressed.actions.map(\.button) == ["pause", "play"])
+    }
+
+    @Test func aPressTheLayoutCannotShowChangesNothing() async throws {
+        let started: Identified = try await put("recipe", Self.recipe)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("next"))).status == 204)
+        let refused = await act(Action(id: UUID(), activity: started.id, input: .button("next")))
+        #expect(refused.status == 409)
+        #expect(try refused.decoded() as Failure == Failure(error: "conflict"))
+        let detail: Detail = try await send("GET", "/v1/activities/recipe").decoded()
+        #expect(detail.revision == 2)
+        #expect(try detail.data.value(at: "step") == .number(2))
+        let pressed: Actions = try await send("GET", "/v1/actions?after=0").decoded()
+        #expect(pressed.actions.count == 1)
+    }
+
     @Test func buttonPressesReachTheAgentInOrder() async throws {
         let started: Identified = try await put("deploy", Self.question)
         let empty: Actions = try await send("GET", "/v1/actions").decoded()
@@ -331,7 +364,7 @@ struct GatewayTests {
     @Test func skillExamplesCompile() throws {
         let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
         let blocks = markdown.components(separatedBy: "```json\n").dropFirst().map { $0.components(separatedBy: "\n```")[0] }
-        #expect(blocks.count == 9)
+        #expect(blocks.count == 11)
         for block in blocks {
             guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: Data(block.utf8)) else {
                 Issue.record("not an object: \(block)")
@@ -364,7 +397,8 @@ struct GatewayTests {
     // MARK: Helpers
 
     static let snippetData: JSONValue = [
-        "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1), "progress": .number(0.6),
+        "steps": .array([["name": "Build"], ["name": "Test"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1),
+        "progress": .number(0.6), "paused": .bool(true), "pausedAt": .number(1_793_000_000), "start": .number(1_792_999_000), "end": .number(1_793_002_000),
     ]
 
     static func layout(_ lockScreen: JSONValue) -> JSONValue {
@@ -392,6 +426,27 @@ struct GatewayTests {
             "lockScreen": ["hstack": .array([["button": "retry", "label": "Retry"], ["button": "stop", "label": "Stop"]])],
             "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
         ],
+    ]
+
+    static let film: JSONValue = [
+        "title": "Film",
+        "layout": [
+            "lockScreen": ["if": "{{playing}}",
+                           "then": ["button": "pause", "label": "Pause", "now": ["pausedAt": .number(0)], "set": ["playing": .bool(false)]],
+                           "else": ["button": "play", "label": "Play", "set": ["pausedAt": .null, "playing": .bool(true)],
+                                    "add": ["start": ["since": "pausedAt"]]]],
+            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
+        ],
+        "data": ["playing": .bool(true), "pausedAt": .null, "start": .number(1_793_000_000)],
+    ]
+
+    static let recipe: JSONValue = [
+        "title": "Recipe",
+        "layout": [
+            "lockScreen": ["vstack": .array(["{{steps[step]}}", ["button": "next", "label": "Next", "add": ["step": .number(1)]]])],
+            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
+        ],
+        "data": ["step": .number(1), "steps": ["1": "Chop", "2": "Fry"]],
     ]
 
     static let oversized: JSONValue = [

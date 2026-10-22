@@ -6,6 +6,18 @@ extension JSONValue {
         return try template.fill(self, at: "", in: [:])
     }
 
+    func value(at path: String) throws(LayoutError) -> JSONValue {
+        var value = self
+        for part in path.split(separator: ".", omittingEmptySubsequences: false) {
+            switch value {
+            case let .object(fields) where fields[String(part)] != nil: value = fields[String(part)]!
+            case let .array(items) where Int(part).map(items.indices.contains) == true: value = items[Int(part)!]
+            default: throw LayoutError("data has no value at \"\(path)\"")
+            }
+        }
+        return value
+    }
+
     public func replacing(_ path: String, with value: JSONValue) throws(LayoutError) -> JSONValue {
         try replacing(path.split(separator: ".", omittingEmptySubsequences: false)[...], with: value, path: path)
     }
@@ -41,6 +53,12 @@ private struct Template {
             }
             if let binding = fields["toggle"] {
                 filled.merge(try bind(binding, at: path, in: scope, existing: filled)) { $1 }
+            }
+            if fields["button"] != nil {
+                for key in ["set", "add", "now"] {
+                    guard case let .object(changes) = filled[key] else { continue }
+                    filled[key] = .object(try relocate(changes, of: key, at: Self.join(path, key), in: scope))
+                }
             }
             return .object(filled)
         case let .array(items):
@@ -94,7 +112,7 @@ private struct Template {
               name.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0 == "_" }) else {
             throw LayoutError("\(path).as: a name starts with a letter and has only letters, digits and _")
         }
-        let list = Self.resolve(source, in: scope)
+        let list = try locate(source, in: scope, for: "\(path).each")
         guard case let .array(items) = try self.value(at: list, for: "\(path).each") else {
             throw LayoutError("\(path).each: data \"\(source)\" is not a list")
         }
@@ -115,11 +133,30 @@ private struct Template {
         guard case let .string(source) = binding, !source.isEmpty, !source.contains("{{") else {
             throw LayoutError("\(Self.join(path, "toggle")): expected a data path such as \"items.0.done\"")
         }
-        let target = Self.resolve(source, in: scope)
+        let target = try locate(source, in: scope, for: Self.join(path, "toggle"))
         guard case let .bool(isOn) = try value(at: target, for: Self.join(path, "toggle")) else {
             throw LayoutError("\(Self.join(path, "toggle")): data \"\(target)\" must be true or false")
         }
         return ["toggle": .string(target), "isOn": .bool(isOn)]
+    }
+
+    private func relocate(_ changes: [String: JSONValue], of kind: String, at path: String,
+                          in scope: [String: String]) throws(LayoutError) -> [String: JSONValue] {
+        var located: [String: JSONValue] = [:]
+        for (target, change) in changes {
+            let at = Self.join(path, target)
+            var change = change
+            if kind == "add", case var .object(fields) = change, case let .string(since) = fields["since"] {
+                let date = try locate(since, in: scope, for: at)
+                _ = try value(at: date, for: at)
+                fields["since"] = .string(date)
+                change = .object(fields)
+            }
+            let resolved = try locate(target, in: scope, for: at)
+            _ = try value(at: resolved, for: at)
+            located[resolved] = change
+        }
+        return located
     }
 
     private mutating func substitute(_ text: String, at path: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
@@ -128,7 +165,7 @@ private struct Template {
         while let open = rest.range(of: "{{") {
             guard let close = rest[open.upperBound...].range(of: "}}") else { throw LayoutError("\(path): unclosed {{") }
             let key = rest[open.upperBound..<close.lowerBound].trimmingCharacters(in: .whitespaces)
-            let value = try value(at: Self.resolve(key, in: scope), for: path)
+            let value = try value(at: locate(key, in: scope, for: path), for: path)
             if output.isEmpty, open.lowerBound == rest.startIndex, close.upperBound == rest.endIndex {
                 try measure(value)
                 return value
@@ -155,15 +192,30 @@ private struct Template {
     }
 
     private func value(at key: String, for path: String) throws(LayoutError) -> JSONValue {
-        var value = data
-        for part in key.split(separator: ".", omittingEmptySubsequences: false) {
-            switch value {
-            case let .object(fields) where fields[String(part)] != nil: value = fields[String(part)]!
-            case let .array(items) where Int(part).map(items.indices.contains) == true: value = items[Int(part)!]
-            default: throw LayoutError("\(path): data has no value at \"\(key)\"")
-            }
+        do {
+            return try data.value(at: key)
+        } catch {
+            throw LayoutError("\(path): \(error)")
         }
-        return value
+    }
+
+    private func locate(_ key: String, in scope: [String: String], for path: String) throws(LayoutError) -> String {
+        var located = ""
+        var rest = Substring(key)
+        while let open = rest.firstIndex(of: "[") {
+            guard let close = rest[open...].firstIndex(of: "]"), !rest[rest.index(after: open)..<close].contains("[") else {
+                throw LayoutError("\(path): \"\(key)\" has an unclosed [")
+            }
+            let inner = String(rest[rest.index(after: open)..<close])
+            let segment = switch try value(at: Self.resolve(inner, in: scope), for: path) {
+            case let .number(index) where index >= 0 && index == index.rounded(): index.textValue
+            case let .string(name) where !name.isEmpty && !name.contains(where: { ".[]".contains($0) }): name
+            default: throw LayoutError("\(path): data \"\(inner)\" must be an index or a key to look up \"\(key)\"")
+            }
+            located += rest[..<open] + "." + segment
+            rest = rest[rest.index(after: close)...]
+        }
+        return Self.resolve(located + rest, in: scope)
     }
 
     private static func resolve(_ key: String, in scope: [String: String]) -> String {

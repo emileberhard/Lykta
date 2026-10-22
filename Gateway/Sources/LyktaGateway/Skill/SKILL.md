@@ -57,8 +57,9 @@ curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
 
 Layouts can hold links, buttons and toggles (see the layout reference). A
 toggle flips a boolean in the activity's data on the gateway and redraws at
-once, so a checklist works while no agent runs. Button presses wait for an
-agent, which reads them from `GET /v1/actions`:
+once, so a checklist works while no agent runs. A button can change the data
+the same way with `set`, `add` and `now`, so steppers, resets and pause buttons
+work on their own. Agents read every press and toggle from `GET /v1/actions`:
 
 ```bash
 cursor=$(curl -sS "$LYKTA_URL/v1/actions" -H "Authorization: Bearer $LYKTA_TOKEN" | jq .cursor)
@@ -75,10 +76,15 @@ open until an action arrives, so loop on it with the returned cursor to answer
 presses within a second. Toggle changes appear as
 `{"toggle": "items.0.done", "isOn": true}`. Actions are kept for a day.
 
-Answer a press with a PUT, such as the next step or an outcome. Because the
-user can change toggled data at any moment, an agent that rewrites data reads
-the activity first and sends the `revision` it read as `ifRevision`; on
-`conflict`, read again and redo the change.
+Answer a press of a button without changes with a PUT, such as the next step
+or an outcome. A button with `set`, `add` or `now` has already changed the data
+when its press reaches you, so read the activity for the result instead of
+applying the press again. A press counts for the button with that name that the
+activity shows when the press arrives, so name buttons for what they do, such
+as `approve-deploy-42` rather than `yes`. Because the user can change the data
+at any moment, an agent that rewrites data reads the activity first and sends
+the `revision` it read as `ifRevision`; on `conflict`, read again and redo the
+change.
 
 ## End
 
