@@ -28,6 +28,7 @@ extension JSONValue {
 private struct Template {
     let data: JSONValue
     var repeated = 0
+    var bytes = 0
 
     mutating func fill(_ value: JSONValue, at path: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
         switch value {
@@ -35,6 +36,7 @@ private struct Template {
             guard fields["each"] == nil else { throw LayoutError("\(path): each must be an item in a list") }
             var filled: [String: JSONValue] = [:]
             for (key, value) in fields where key != "toggle" {
+                try count(key.utf8.count)
                 filled[key] = try fill(value, at: Self.join(path, key), in: scope)
             }
             if let binding = fields["toggle"] {
@@ -53,8 +55,33 @@ private struct Template {
             return .array(filled)
         case let .string(text) where text.contains("{{"):
             return try substitute(text, at: path, in: scope)
-        case .string, .number, .bool, .null:
+        case let .string(text):
+            try count(text.utf8.count)
             return value
+        case .number, .bool, .null:
+            try count(1)
+            return value
+        }
+    }
+
+    private mutating func count(_ size: Int) throws(LayoutError) {
+        bytes += size
+        guard bytes <= Layout.maximumBytes else { throw LayoutError("the filled layout is over \(Layout.maximumBytes) bytes") }
+    }
+
+    private mutating func measure(_ value: JSONValue) throws(LayoutError) {
+        switch value {
+        case let .object(fields):
+            for (key, value) in fields {
+                try count(key.utf8.count)
+                try measure(value)
+            }
+        case let .array(items):
+            for item in items { try measure(item) }
+        case let .string(text):
+            try count(text.utf8.count)
+        case .number, .bool, .null:
+            try count(1)
         }
     }
 
@@ -95,24 +122,30 @@ private struct Template {
         return ["toggle": .string(target), "isOn": .bool(isOn)]
     }
 
-    private func substitute(_ text: String, at path: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
+    private mutating func substitute(_ text: String, at path: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
         var output = ""
         var rest = Substring(text)
         while let open = rest.range(of: "{{") {
             guard let close = rest[open.upperBound...].range(of: "}}") else { throw LayoutError("\(path): unclosed {{") }
             let key = rest[open.upperBound..<close.lowerBound].trimmingCharacters(in: .whitespaces)
             let value = try value(at: Self.resolve(key, in: scope), for: path)
-            if output.isEmpty, open.lowerBound == rest.startIndex, close.upperBound == rest.endIndex { return value }
-            output += rest[..<open.lowerBound]
-            switch value {
-            case let .string(string): output += path == "svg" || path.hasSuffix(".svg") ? Self.escaped(string) : string
-            case let .number(number): output += number.textValue
-            case let .bool(bool): output += String(bool)
+            if output.isEmpty, open.lowerBound == rest.startIndex, close.upperBound == rest.endIndex {
+                try measure(value)
+                return value
+            }
+            let inserted = switch value {
+            case let .string(string): path == "svg" || path.hasSuffix(".svg") ? Self.escaped(string) : string
+            case let .number(number): number.textValue
+            case let .bool(bool): String(bool)
             case .null: throw LayoutError("\(path): data \"\(key)\" is null and cannot be inserted into text")
             case .array, .object: throw LayoutError("\(path): data \"\(key)\" is not a single value and cannot be inserted into text")
             }
+            try count(rest[..<open.lowerBound].utf8.count + inserted.utf8.count)
+            output += rest[..<open.lowerBound]
+            output += inserted
             rest = rest[close.upperBound...]
         }
+        try count(rest.utf8.count)
         return .string(output + rest)
     }
 

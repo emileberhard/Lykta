@@ -119,6 +119,19 @@ struct TemplateTests {
         }
     }
 
+    @Test func stopsFillingOnceTheOutputOutgrowsALayout() throws {
+        let data = JSONValue.object(["text": .string(String(repeating: "x", count: 900_000)), "list": .array(Array(repeating: .number(1), count: 900))])
+        let overflow = LayoutError("the filled layout is over \(Layout.maximumBytes) bytes")
+        #expect(throws: overflow) {
+            try JSONValue.string(String(repeating: "{{text}}", count: 10_000)).filled(with: data)
+        }
+        #expect(throws: overflow) {
+            try JSONValue.array(Array(repeating: .string("{{list}}"), count: 10_000)).filled(with: data)
+        }
+        let fits = JSONValue.object(["text": .string(String(repeating: "x", count: Layout.maximumBytes))])
+        #expect(try JSONValue.string("{{text}}").filled(with: fits) != .null)
+    }
+
     @Test func togglesReadTheirStateFromTheirDataPath() throws {
         let data = try json(#"{"items": [{"name": "Milk", "done": true}]}"#)
         let template = try json(#"[{"each": "items", "as": "item", "do": {"toggle": "item.done", "label": "{{item.name}}"}}]"#)
