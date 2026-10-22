@@ -55,6 +55,9 @@ final class Model {
                 }
             }
         }
+        if case .failed = phase {
+            phase = .connecting
+        }
         runTask?.cancel()
         runTask = Task { await run() }
     }
