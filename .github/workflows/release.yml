@@ -74,4 +74,4 @@ jobs:
       - name: Publish the tag message as the release notes
         run: |
           tag=$(gh api "repos/$GH_REPO/git/ref/tags/$VERSION" --jq .object.sha)
-          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message | gh release create "$VERSION" --verify-tag --notes-file -
+          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message | gh release create "$VERSION" --verify-tag --title "$VERSION" --notes-file -
