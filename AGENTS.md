@@ -17,6 +17,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
+| `AppStore` | The App Store screenshot fixture activities and slide composer |
 
 ## Invariants
 
@@ -85,7 +86,20 @@ Store Connect picks the build number. The GitHub release is
 titled with the bare version, and its notes are the annotated tag's message
 verbatim: a Markdown list of user-visible changes since the previous version,
 one short sentence per item, with no heading or intro line. Submitting to App
-Review stays manual.
+Review stays manual, and App Store versions use manual release, so the
+maintainer decides when an approved version goes live.
+
+The App Store screenshots are four 1206 × 2622 slides, the required 6.3-inch
+iPhone size. Capture them from a Debug build on an iPhone 18 Pro simulator:
+tap Copy Agent Setup, start the fixture activities with
+`LYKTA_URL=… LYKTA_TOKEN=… python3 AppStore/activities.py --quiet`, and capture
+with `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
+Island is missing without a mask. Name the captures `1-lock`, `2-compact`,
+`3-expanded` and `4-app`, compose them with
+`swift AppStore/compose.swift <captures> <slides>`, which also holds the
+captions, and flatten each slide with
+`magick <slide> -background black -alpha remove -alpha off PNG24:<slide>`.
+Tap Reset in the app afterwards to delete the simulator from the gateway.
 
 Self-hosters build the gateway image from a tagged commit and the app from
 Xcode with their own `Config/Local.xcconfig`. Gateway state lives in SQLite,
