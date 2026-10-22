@@ -123,8 +123,7 @@ private struct CompactIsland: View {
         .frame(height: Island.height)
         .modifier(Island(cornerRadius: Island.height / 2, keyline: keyline))
         .dynamicTypeSize(.large)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Compact Dynamic Island")
+        .presentation("Compact Dynamic Island")
     }
 }
 
@@ -151,8 +150,7 @@ private struct ExpandedIsland: View {
         .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 160, alignment: .top)
         .modifier(Island(cornerRadius: 44, keyline: keyline))
         .dynamicTypeSize(LockScreenCard.textSizes)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Expanded Dynamic Island")
+        .presentation("Expanded Dynamic Island")
     }
 }
 
@@ -173,8 +171,7 @@ private struct MinimalIsland: View {
             }
             .frame(maxWidth: .infinity)
             .dynamicTypeSize(.large)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Minimal Dynamic Island")
+            .presentation("Minimal Dynamic Island")
     }
 }
 
@@ -185,7 +182,6 @@ private struct IslandRegion: View {
         Root(node: node, activity: nil, isStale: false)
             .environment(\.colorScheme, .dark)
             .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 }
 
@@ -209,6 +205,17 @@ private struct Island: ViewModifier {
                             shape.strokeBorder(keyline?.opacity(0.6) ?? Color(.separator), lineWidth: 1)
                         }
                     }
+            }
+    }
+}
+
+private extension View {
+    func presentation(_ name: LocalizedStringKey) -> some View {
+        accessibilityElement(children: .combine)
+            .accessibilityRemoveTraits(.isButton)
+            .accessibilityLabel { label in
+                Text(name)
+                label
             }
     }
 }
