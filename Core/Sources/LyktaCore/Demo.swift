@@ -2,13 +2,14 @@ import Foundation
 
 public enum Demo {
     public static let title = "Lykta demo"
+    public static let duration = 300
 
     public static func data(start: Date) -> JSONValue {
         .object([
             "agent": .string("Demo agent"),
             "task": .string("Showing what Lykta can do"),
             "start": .number(start.timeIntervalSince1970),
-            "end": .number(start.timeIntervalSince1970 + 300),
+            "end": .number(start.timeIntervalSince1970 + Double(duration)),
         ])
     }
 

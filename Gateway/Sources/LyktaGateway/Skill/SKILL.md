@@ -25,6 +25,7 @@ from `a-z`, `0-9`, `-`, `_` and `.`.
 | `data` | Values for `{{path}}` placeholders in the layout. Replaces the previous data. |
 | `alert` | `{"title", "body", "sound": true}` lights up the screen and expands the Dynamic Island. Only `body` is required; up to 200 characters. Use it for moments that need attention. |
 | `staleAfter` | Seconds until the phone marks the activity as out of date. Each PUT renews it. |
+| `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
 | `relevance` | 0 to 100. The most relevant activity takes the Dynamic Island. |
 
 iOS budgets how many activities an app may start by push. Once the budget is
@@ -50,7 +51,8 @@ curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
 
 `DELETE /v1/activities/{name}` ends the activity with its last content. The
 system keeps it on the Lock Screen for up to four hours; `?dismissAfter=seconds`
-(0 to 14400) removes it sooner. Live Activities also end after eight hours.
+(0 to 14400) removes it sooner. An activity without `endAfter` that nobody
+ends stays until iOS ends it after eight hours.
 
 ## Status
 

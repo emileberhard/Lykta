@@ -12,6 +12,7 @@ struct ActivityRequest: Sendable {
     let data: JSONValue?
     let alert: Alert?
     let staleAfter: Int?
+    let endAfter: Int?
     let relevance: Double?
 }
 
@@ -102,6 +103,9 @@ actor Store {
         self.maximumDevices = maximumDevices
         self.maximumLiveActivities = maximumLiveActivities
         try db.execute(Self.schema)
+        if try db.query("SELECT 1 FROM pragma_table_info('activities') WHERE name = 'ends_at'").isEmpty {
+            try db.execute("ALTER TABLE activities ADD COLUMN ends_at INTEGER")
+        }
     }
 
     // MARK: Devices
@@ -199,6 +203,7 @@ actor Store {
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
+            let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
             let id: UUID
             if let current {
                 id = current.id
@@ -207,6 +212,9 @@ actor Store {
                         UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, relevance = ?,
                           alert = COALESCE(?, alert), revision = revision + 1 WHERE id = ?
                         """, title, Self.text(layout), Self.text(data), content, staleAfter, relevance, alert, id)
+                }
+                if request.endAfter != nil {
+                    try db.run("UPDATE activities SET ends_at = ? WHERE id = ?", endsAt, id)
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -218,9 +226,9 @@ actor Store {
                 }
                 id = UUID()
                 try db.run("""
-                    INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, relevance, alert,
-                      revision, delivery, created_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?)
-                    """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, relevance, alert, now)
+                    INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, ends_at, relevance, alert,
+                      revision, delivery, created_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?)
+                    """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
             }
             let activity = try self.activity(id)
             let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
@@ -232,6 +240,7 @@ actor Store {
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
                 "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+                "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
             ])
             return activity.status
         }
@@ -242,17 +251,8 @@ actor Store {
             guard let current = try liveActivity(device, name: name) else {
                 throw APIError(.notFound, "No live activity is named \(name).")
             }
-            try db.run("""
-                UPDATE activities SET phase = CASE WHEN phase = 'starting' AND in_flight = 0 THEN 'ended' ELSE 'ending' END,
-                  ended_at = CASE WHEN phase = 'starting' AND in_flight = 0 THEN ? END, dismiss_at = ?, retry_at = 0, failures = 0
-                  WHERE id = ?
-                """, now, dismissAfter.map { now + $0 }, current.id)
-            let ended = try activity(current.id)
-            try record("activity.end", device: device.id, activity: ended.id, [
-                "name": .string(name.rawValue), "phase": .string(ended.phase.rawValue),
-                "dismissAfter": dismissAfter.map { .number(Double($0)) } ?? .null,
-            ])
-            return ended.status
+            return try end(current, dismissAt: dismissAfter.map { now + $0 }, now: now,
+                           ["dismissAfter": dismissAfter.map { .number(Double($0)) } ?? .null]).status
         }
     }
 
@@ -344,6 +344,9 @@ actor Store {
 
     func claim(now: Int, limit: Int) throws -> [Job] {
         try db.transaction {
+            for row in try db.query("SELECT * FROM activities WHERE phase IN ('starting', 'live') AND ends_at <= ?", now) {
+                _ = try end(Activity(row), dismissAt: now, now: now, ["dismissAfter": .number(0), "scheduled": .bool(true)])
+            }
             let free = limit - (try count(db.query("SELECT count(*) AS n FROM activities WHERE in_flight = 1")))
             guard free > 0 else { return [] }
             let rows = try db.query("""
@@ -439,6 +442,18 @@ actor Store {
 
     // MARK: Helpers
 
+    private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {
+        try db.run("""
+            UPDATE activities SET phase = CASE WHEN phase = 'starting' AND in_flight = 0 THEN 'ended' ELSE 'ending' END,
+              ended_at = CASE WHEN phase = 'starting' AND in_flight = 0 THEN ? END, dismiss_at = ?, retry_at = 0, failures = 0
+              WHERE id = ?
+            """, now, dismissAt, activity.id)
+        let ended = try self.activity(activity.id)
+        try record("activity.end", device: ended.deviceID, activity: ended.id,
+                   detail.merging(["name": .string(ended.name.rawValue), "phase": .string(ended.phase.rawValue)]) { $1 })
+        return ended
+    }
+
     private func record(_ name: String, device: UUID, activity: UUID?, _ detail: [String: JSONValue]) throws {
         let now = Self.milliseconds(.now)
         let json = String(decoding: JSONValue.object(detail).json, as: UTF8.self)
@@ -514,6 +529,7 @@ actor Store {
           data TEXT NOT NULL,
           content TEXT NOT NULL,
           stale_after INTEGER,
+          ends_at INTEGER,
           relevance REAL,
           alert TEXT,
           dismiss_at INTEGER,

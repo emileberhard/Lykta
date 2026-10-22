@@ -112,6 +112,7 @@ struct Activity: Sendable {
     let data: String
     let content: String
     let staleAfter: Int?
+    let endsAt: Int?
     let relevance: Double?
     let alert: Alert?
     let dismissAt: Int?
@@ -134,6 +135,7 @@ struct Activity: Sendable {
         data = try row.string("data")
         content = try row.string("content")
         staleAfter = try row.optionalInteger("stale_after").map(Int.init)
+        endsAt = try row.optionalInteger("ends_at").map(Int.init)
         relevance = try row.optionalReal("relevance")
         alert = try row.optionalString("alert").map { try JSONDecoder().decode(Alert.self, from: Data($0.utf8)) }
         dismissAt = try row.optionalInteger("dismiss_at").map(Int.init)

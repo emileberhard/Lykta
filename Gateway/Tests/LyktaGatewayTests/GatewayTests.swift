@@ -31,7 +31,20 @@ struct GatewayTests {
         #expect(ended.state == "ending")
         try await deliver(at: now + 2)
         try await deliver(at: now + 302)
-        #expect(push.sent == ["createChannel", "start", "update 5", "end 10", "deleteChannel"])
+        #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed", "deleteChannel"])
+        #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
+    }
+
+    @Test func endsAndRemovesAnActivityAtItsDeadline() async throws {
+        guard case var .object(start) = Self.start else { return }
+        start["endAfter"] = .number(60)
+        try await put("build", .object(start))
+        try await deliver(at: now)
+        try await put("build", ["data": ["step": "Sign"]])
+        try await deliver(at: now + 58)
+        #expect(try await status("build").state == "live")
+        try await deliver(at: now + 62)
+        #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed"])
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
@@ -89,6 +102,7 @@ struct GatewayTests {
         Rejection(method: "PUT", target: "/v1/activities/Build", body: GatewayTests.start, status: 400, error: "invalid_name"),
         Rejection(method: "PUT", target: "/v1/activities/build", body: ["title": "Build", "layout": ["lockScreen": "a"]], status: 400, error: "invalid_layout"),
         Rejection(method: "PUT", target: "/v1/activities/build", body: ["title": "Build", "layout": GatewayTests.oversized], status: 413, error: "payload_too_large"),
+        Rejection(method: "PUT", target: "/v1/activities/build", body: ["endAfter": .number(28801)], status: 400, error: "invalid_request"),
         Rejection(method: "DELETE", target: "/v1/activities/build", body: [:], status: 404, error: "not_found"),
     ])
     func rejectsInvalidRequests(_ rejection: Rejection) async throws {
@@ -268,11 +282,20 @@ final class FakePush: PushService {
 
     func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         struct Sent: Decodable {
-            struct APS: Decodable { let event: String }
+            struct APS: Decodable {
+                let event: String
+                let timestamp: Int
+                let dismissal: Int?
+
+                enum CodingKeys: String, CodingKey {
+                    case event, timestamp, dismissal = "dismissal-date"
+                }
+            }
             let aps: APS
         }
-        let event = (try? JSONDecoder().decode(Sent.self, from: payload).aps.event) ?? "malformed"
-        try record(event, detail: " \(priority)")
+        let aps = try? JSONDecoder().decode(Sent.self, from: payload).aps
+        let dismissed = aps.flatMap { aps in aps.dismissal.map { $0 <= aps.timestamp } } == true
+        try record(aps?.event ?? "malformed", detail: " \(priority)" + (dismissed ? " dismissed" : ""))
         return nil
     }
 

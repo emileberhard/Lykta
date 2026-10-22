@@ -92,7 +92,7 @@ final class Model {
                 try await gateway.endActivity("demo", agentToken: credentials.agentToken)
             }
             try await gateway.putActivity("demo", title: Demo.title, layout: Demo.layout, data: Demo.data(start: .now),
-                                          agentToken: credentials.agentToken)
+                                          endAfter: Demo.duration, agentToken: credentials.agentToken)
         }
     }
 

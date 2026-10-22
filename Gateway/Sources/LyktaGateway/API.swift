@@ -115,10 +115,11 @@ struct API: Sendable {
             let data: JSONValue?
             let alert: Alert?
             let staleAfter: Int?
+            let endAfter: Int?
             let relevance: Double?
         }
         guard case let .object(fields) = try decode(body) as JSONValue else { throw invalid("Send a JSON object.") }
-        let allowed: Set = ["title", "layout", "data", "alert", "staleAfter", "relevance"]
+        let allowed: Set = ["title", "layout", "data", "alert", "staleAfter", "endAfter", "relevance"]
         if let key = fields.keys.first(where: { !allowed.contains($0) }) {
             throw invalid("Unknown key \"\(key)\"; expected \(allowed.sorted().joined(separator: ", ")).")
         }
@@ -128,9 +129,10 @@ struct API: Sendable {
             throw invalid("alert title must be at most 120 characters and body 1 to 200.")
         }
         guard request.staleAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("staleAfter must be 1 to 28800 seconds.") }
+        guard request.endAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("endAfter must be 1 to 28800 seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         return ActivityRequest(title: request.title, layout: request.layout, data: request.data, alert: request.alert,
-                               staleAfter: request.staleAfter, relevance: request.relevance)
+                               staleAfter: request.staleAfter, endAfter: request.endAfter, relevance: request.relevance)
     }
 
     private static func invalid(_ message: String) -> APIError {
