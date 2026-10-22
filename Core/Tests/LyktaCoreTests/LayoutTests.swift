@@ -54,7 +54,7 @@ struct LayoutTests {
     @Test func buttonsWithOneNameChangeTheDataAlike() {
         let json = layout(#"{"vstack": [{"button": "go", "label": "Go", "add": {"n": 1}}, {"button": "go", "label": "Go", "add": {"n": -1}}]}"#)
         #expect(error(in: json) == "buttons named go change the data differently")
-        #expect(error(in: layout(#"{"button": "go", "label": "Go", "set": {"a": 1}, "add": {"a.b": 1}}"#))
+        #expect(error(in: layout(#"{"button": "go", "label": "Go", "set": {"a": {"b": 100}, "a-": 0}, "add": {"a.b": 1}}"#))
             == #"lockScreen: "a" contains "a.b"; change each value once"#)
     }
 
@@ -164,11 +164,14 @@ struct TemplateTests {
     }
 
     @Test func buttonEffectsNameConcreteDataPaths() throws {
-        let data = try json(#"{"items": [{"count": 1}, {"count": 4}], "paused": 10}"#)
+        let data = try json(#"{"items": [{"count": 1}, {"count": 4}], "paused": 10, "pick": 0}"#)
         let template = try json(#"""
             [{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1, "items[item.count].count": {"since": "paused"}}}}]
             """#)
         #expect(throws: LayoutError(#"[0].do.add.items[item.count].count: data has no value at "items.4.count""#)) { try template.filled(with: data) }
+        #expect(throws: LayoutError(#"set.items.0.count: "items.0.count" is already changed by this button; change each value once"#)) {
+            try json(#"{"button": "go", "label": "Go", "set": {"items[pick].count": 10, "items.0.count": 20}}"#).filled(with: data)
+        }
         let each = try json(#"[{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1}, "set": {"paused": "{{item.count}}"}}}]"#)
         #expect(try each.filled(with: data) == json(#"""
             [{"button": "more", "label": "+", "add": {"items.0.count": 1}, "set": {"paused": 1}},
@@ -196,6 +199,7 @@ struct TemplateTests {
         let data = try json(#"{"items": [{"done": false}]}"#)
         #expect(try data.replacing("items.0.done", with: .bool(true)) == json(#"{"items": [{"done": true}]}"#))
         #expect(throws: LayoutError(#"data has no value at "items.1.done""#)) { try data.replacing("items.1.done", with: .bool(true)) }
+        #expect(throws: LayoutError(#"data has no value at "items.00.done""#)) { try data.replacing("items.00.done", with: .bool(true)) }
     }
 
     private func json(_ text: String) throws -> JSONValue {

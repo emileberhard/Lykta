@@ -1,14 +1,14 @@
 import Foundation
 
 public struct Effects: Equatable, Sendable {
-    public enum Change: Equatable, Sendable {
+    private enum Change: Equatable, Sendable {
         case set(JSONValue)
         case add(Double)
         case addSeconds(since: String)
         case now(plus: Double)
     }
 
-    public let changes: [String: Change]
+    private let changes: [String: Change]
 
     init(_ fields: Fields) throws {
         var changes: [String: Change] = [:]
@@ -32,8 +32,11 @@ public struct Effects: Equatable, Sendable {
         if let path = paths.first(where: { !(1...256).contains($0.utf8.count) || $0.contains("{{") }) {
             throw fields.invalid("\"\(path)\" is not a data path such as \"items.0.count\"")
         }
-        if let (outer, inner) = zip(paths, paths.dropFirst()).first(where: { $1.hasPrefix($0 + ".") }) {
-            throw fields.invalid("\"\(outer)\" contains \"\(inner)\"; change each value once")
+        for path in paths {
+            let parts = path.split(separator: ".", omittingEmptySubsequences: false)
+            if let outer = parts.indices.dropLast().map({ parts[...$0].joined(separator: ".") }).first(where: { changes[$0] != nil }) {
+                throw fields.invalid("\"\(outer)\" contains \"\(path)\"; change each value once")
+            }
         }
         guard add.values.allSatisfy(\.isFinite), now.values.allSatisfy(\.isFinite) else {
             throw fields.invalid("add and now take finite numbers")

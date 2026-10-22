@@ -11,7 +11,7 @@ extension JSONValue {
         for part in path.split(separator: ".", omittingEmptySubsequences: false) {
             switch value {
             case let .object(fields) where fields[String(part)] != nil: value = fields[String(part)]!
-            case let .array(items) where Int(part).map(items.indices.contains) == true: value = items[Int(part)!]
+            case let .array(items) where part.arrayIndex.map(items.indices.contains) == true: value = items[part.arrayIndex!]
             default: throw LayoutError("data has no value at \"\(path)\"")
             }
         }
@@ -28,12 +28,18 @@ extension JSONValue {
         case var .object(fields) where fields[String(part)] != nil:
             fields[String(part)] = try fields[String(part)]!.replacing(parts.dropFirst(), with: value, path: path)
             return .object(fields)
-        case var .array(items) where Int(part).map(items.indices.contains) == true:
-            items[Int(part)!] = try items[Int(part)!].replacing(parts.dropFirst(), with: value, path: path)
+        case var .array(items) where part.arrayIndex.map(items.indices.contains) == true:
+            items[part.arrayIndex!] = try items[part.arrayIndex!].replacing(parts.dropFirst(), with: value, path: path)
             return .array(items)
         default:
             throw LayoutError("data has no value at \"\(path)\"")
         }
+    }
+}
+
+private extension Substring {
+    var arrayIndex: Int? {
+        Int(self).flatMap { String($0) == self ? $0 : nil }
     }
 }
 
@@ -154,7 +160,9 @@ private struct Template {
             }
             let resolved = try locate(target, in: scope, for: at)
             _ = try value(at: resolved, for: at)
-            located[resolved] = change
+            guard located.updateValue(change, forKey: resolved) == nil else {
+                throw LayoutError("\(at): \"\(resolved)\" is already changed by this button; change each value once")
+            }
         }
         return located
     }
