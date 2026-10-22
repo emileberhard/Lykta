@@ -7,189 +7,170 @@
           "hstack": [
             {
               "zstack": [
+                {"shape": "roundedRectangle", "cornerRadius": 10.6, "fill": "white"},
                 {
-                  "shape": "roundedRectangle",
-                  "cornerRadius": 9.12,
-                  "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
-                },
-                {"symbol": "{{symbol}}", "modifiers": [{"font": 17.86}, {"foreground": "white"}]}
+                  "symbol": "{{symbol}}",
+                  "modifiers": [{"font": 21}, {"foreground": {"gradient": ["#1EA7FF", "#0753E6"], "direction": "diagonal"}}]
+                }
               ],
-              "modifiers": [{"frame": {"width": 38, "height": 38}}]
+              "modifiers": [{"frame": {"width": 44, "height": 44}}, {"shadow": {"color": "#00000033", "radius": 6, "y": 2}}]
             },
             {
               "vstack": [
-                {"text": "{{app}} {{version}}", "modifiers": [{"font": "headline"}]},
-                {"text": "App Review · {{platform}}", "modifiers": [{"font": "caption"}, {"foreground": "#8A9BB8"}]}
+                {"text": "{{app}} {{version}} for {{platform}}", "modifiers": [{"font": "caption"}, {"opacity": 0.85}]},
+                {
+                  "concat": [{"symbol": "{{stateSymbol}}"}, " {{state}}"],
+                  "modifiers": [{"font": "title2"}, {"fontWeight": "bold"}, {"contentTransition": "interpolate"}]
+                }
               ],
               "alignment": "leading",
-              "spacing": 1
+              "spacing": 0
             },
             {"spacer": true},
             {
               "vstack": [
+                {"text": "for", "modifiers": [{"font": "caption"}, {"opacity": 0.85}]},
                 {
-                  "text": "{{state}}",
+                  "date": "{{since}}",
+                  "style": "timer",
                   "modifiers": [
-                    {"font": "caption"},
-                    {"bold": true},
-                    {"padding": {"horizontal": 8, "vertical": 3}},
-                    {"background": "{{stateColor}}"},
-                    {"clip": "capsule"}
-                  ]
-                },
-                {
-                  "concat": ["for ", {"date": "{{since}}", "style": "timer"}],
-                  "modifiers": [
-                    {"font": "caption"},
+                    {"font": "headline"},
+                    {"fontWeight": "semibold"},
                     {"monospacedDigit": true},
-                    {"foreground": "#8A9BB8"},
                     {"multilineTextAlignment": "trailing"},
-                    {"frame": {"width": 80, "alignment": "trailing"}}
+                    {"frame": {"width": 76, "alignment": "trailing"}}
                   ]
                 }
               ],
               "alignment": "trailing",
-              "spacing": 4
-            }
-          ],
-          "spacing": 10
-        },
-        {
-          "zstack": [
-            {
-              "shape": "capsule",
-              "fill": "#26324A",
-              "modifiers": [{"frame": {"height": 2}}, {"padding": {"horizontal": 32, "top": 8}}]
-            },
-            {
-              "hstack": [
-                {
-                  "each": "stages",
-                  "as": "stage",
-                  "do": {
-                    "vstack": [
-                      {
-                        "symbol": "{{stage.symbol}}",
-                        "modifiers": [
-                          {"font": 16},
-                          {"foreground": "{{stage.color}}"},
-                          {"background": "#0B1220"},
-                          {"clip": "circle"}
-                        ]
-                      },
-                      {
-                        "if": "{{stage.current}}",
-                        "then": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"bold": true}]},
-                        "else": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"foreground": "#8A9BB8"}]}
-                      }
-                    ],
-                    "spacing": 5,
-                    "modifiers": [{"frame": {"maxWidth": "infinity"}}]
-                  }
-                }
-              ],
               "spacing": 0
             }
           ],
-          "alignment": "top"
+          "spacing": 12
         },
         {
-          "concat": [{"symbol": "hourglass"}, " Waited {{waited}} in the queue"],
-          "modifiers": [{"font": "caption2"}, {"foreground": "#8A9BB8"}]
+          "hstack": [
+            {
+              "each": "stages",
+              "as": "stage",
+              "do": {
+                "vstack": [
+                  {
+                    "hstack": [
+                      {"shape": "rectangle", "fill": "{{stage.in}}", "modifiers": [{"frame": {"height": 2}}]},
+                      {
+                        "symbol": "{{stage.symbol}}",
+                        "modifiers": [{"font": 15}, {"foreground": "{{stage.color}}"}, {"contentTransition": "symbolReplace"}]
+                      },
+                      {"shape": "rectangle", "fill": "{{stage.out}}", "modifiers": [{"frame": {"height": 2}}]}
+                    ],
+                    "spacing": 3
+                  },
+                  {
+                    "text": "{{stage.name}}",
+                    "modifiers": [
+                      {"font": 10},
+                      {"fontWeight": "{{stage.weight}}"},
+                      {"foreground": "{{stage.color}}"},
+                      {"lineLimit": 1}
+                    ]
+                  }
+                ],
+                "spacing": 4,
+                "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+              }
+            }
+          ],
+          "spacing": 0
         }
       ],
-      "alignment": "leading",
       "spacing": 14,
-      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+      "modifiers": [{"padding": 16}, {"foreground": "white"}, {"background": {"gradient": "{{tint}}", "direction": "diagonal"}}]
     },
     "compactLeading": {
       "zstack": [
-        {
-          "shape": "roundedRectangle",
-          "cornerRadius": 5.279999999999999,
-          "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
-        },
-        {"symbol": "{{symbol}}", "modifiers": [{"font": 10.34}, {"foreground": "white"}]}
+        {"shape": "roundedRectangle", "cornerRadius": 5.3, "fill": {"gradient": ["#1EA7FF", "#0753E6"], "direction": "diagonal"}},
+        {"symbol": "{{symbol}}", "modifiers": [{"font": 11}, {"foreground": "white"}]}
       ],
       "modifiers": [{"frame": {"width": 22, "height": 22}}, {"padding": {"leading": 2}}]
     },
-    "compactTrailing": {"text": "{{shortState}}", "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "{{stateColor}}"}]},
-    "minimal": {"symbol": "{{stateSymbol}}", "modifiers": [{"foreground": "{{stateColor}}"}]},
+    "compactTrailing": {
+      "text": "{{shortState}}",
+      "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "{{stateColor}}"}]
+    },
+    "minimal": {
+      "symbol": "{{stateSymbol}}",
+      "modifiers": [{"foreground": "{{stateColor}}"}, {"contentTransition": "symbolReplace"}]
+    },
     "expanded": {
       "leading": {
         "zstack": [
           {
             "shape": "roundedRectangle",
             "cornerRadius": 9.6,
-            "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
+            "fill": {"gradient": ["#1EA7FF", "#0753E6"], "direction": "diagonal"}
           },
-          {"symbol": "{{symbol}}", "modifiers": [{"font": 18.799999999999997}, {"foreground": "white"}]}
+          {"symbol": "{{symbol}}", "modifiers": [{"font": 19}, {"foreground": "white"}]}
         ],
-        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4, "top": 2}}]
       },
       "center": {
         "vstack": [
-          {"text": "{{app}} {{version}}", "modifiers": [{"font": "headline"}]},
-          {
-            "text": "{{state}}",
-            "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "{{stateColor}}"}]
-          }
+          {"text": "{{app}} {{version}}", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
+          {"text": "{{state}}", "modifiers": [{"font": "headline"}, {"foreground": "{{stateColor}}"}]}
         ],
-        "spacing": 2
+        "spacing": 0
       },
       "trailing": {
         "date": "{{since}}",
         "style": "timer",
         "modifiers": [
-          {"font": "headline"},
+          {"font": "subheadline"},
+          {"fontWeight": "semibold"},
           {"monospacedDigit": true},
           {"multilineTextAlignment": "trailing"},
           {"frame": {"width": 64, "alignment": "trailing"}},
-          {"padding": {"trailing": 4}}
+          {"padding": {"trailing": 4, "top": 8}}
         ]
       },
       "bottom": {
-        "zstack": [
+        "hstack": [
           {
-            "shape": "capsule",
-            "fill": "#26324A",
-            "modifiers": [{"frame": {"height": 2}}, {"padding": {"horizontal": 32, "top": 8}}]
-          },
-          {
-            "hstack": [
-              {
-                "each": "stages",
-                "as": "stage",
-                "do": {
-                  "vstack": [
+            "each": "stages",
+            "as": "stage",
+            "do": {
+              "vstack": [
+                {
+                  "hstack": [
+                    {"shape": "rectangle", "fill": "{{stage.in}}", "modifiers": [{"frame": {"height": 2}}]},
                     {
                       "symbol": "{{stage.symbol}}",
-                      "modifiers": [
-                        {"font": 16},
-                        {"foreground": "{{stage.color}}"},
-                        {"background": "#0B1220"},
-                        {"clip": "circle"}
-                      ]
+                      "modifiers": [{"font": 15}, {"foreground": "{{stage.color}}"}, {"contentTransition": "symbolReplace"}]
                     },
-                    {
-                      "if": "{{stage.current}}",
-                      "then": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"bold": true}]},
-                      "else": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"foreground": "secondary"}]}
-                    }
+                    {"shape": "rectangle", "fill": "{{stage.out}}", "modifiers": [{"frame": {"height": 2}}]}
                   ],
-                  "spacing": 5,
-                  "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+                  "spacing": 3
+                },
+                {
+                  "text": "{{stage.name}}",
+                  "modifiers": [
+                    {"font": 10},
+                    {"fontWeight": "{{stage.weight}}"},
+                    {"foreground": "{{stage.color}}"},
+                    {"lineLimit": 1}
+                  ]
                 }
-              }
-            ],
-            "spacing": 0
+              ],
+              "spacing": 4,
+              "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+            }
           }
         ],
-        "alignment": "top",
-        "modifiers": [{"padding": {"top": 8}}]
+        "spacing": 0,
+        "modifiers": [{"padding": {"top": 10}}]
       }
     },
-    "background": "#0B1220",
+    "background": "#0A6CF5",
     "keyline": "{{stateColor}}",
     "link": "https://appstoreconnect.apple.com/apps"
   },
@@ -198,18 +179,46 @@
     "version": "1.0",
     "platform": "iOS",
     "symbol": "lightbulb.max.fill",
-    "state": "In review",
+    "state": "In Review",
     "shortState": "Review",
-    "stateColor": "#0A84FF",
     "stateSymbol": "eye.fill",
+    "stateColor": "#5AB8FF",
+    "tint": ["#1EA7FF", "#0753E6"],
     "since": 1792995600,
-    "waited": "14 h",
     "stages": [
-      {"name": "Uploaded", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
-      {"name": "Processed", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
-      {"name": "Waiting", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
-      {"name": "In review", "symbol": "smallcircle.filled.circle.fill", "color": "#0A84FF", "current": true},
-      {"name": "Live", "symbol": "circle", "color": "#3A4660", "current": false}
+      {
+        "name": "Uploaded",
+        "symbol": "checkmark.circle.fill",
+        "color": "#FFFFFF",
+        "weight": "regular",
+        "in": "#FFFFFF00",
+        "out": "#FFFFFF"
+      },
+      {
+        "name": "Processed",
+        "symbol": "checkmark.circle.fill",
+        "color": "#FFFFFF",
+        "weight": "regular",
+        "in": "#FFFFFF",
+        "out": "#FFFFFF"
+      },
+      {
+        "name": "Waiting",
+        "symbol": "checkmark.circle.fill",
+        "color": "#FFFFFF",
+        "weight": "regular",
+        "in": "#FFFFFF",
+        "out": "#FFFFFF"
+      },
+      {
+        "name": "In Review",
+        "symbol": "smallcircle.filled.circle.fill",
+        "color": "#FFFFFF",
+        "weight": "bold",
+        "in": "#FFFFFF",
+        "out": "#FFFFFF59"
+      },
+      {"name": "Ready", "symbol": "circle", "color": "#FFFFFF8C", "weight": "regular", "in": "#FFFFFF59", "out": "#FFFFFF00"}
     ]
   },
   "staleAfter": 3600,
