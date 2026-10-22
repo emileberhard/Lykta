@@ -11,7 +11,7 @@ permissions:
 jobs:
   admit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 40
     permissions:
       actions: read
       contents: read
@@ -34,7 +34,7 @@ jobs:
         run: scripts/check-feature-table "$VERSION"
 
       - name: Wait for CI to pass on this commit
-        timeout-minutes: 10
+        timeout-minutes: 35
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
