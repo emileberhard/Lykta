@@ -10,12 +10,16 @@ public struct Drawing: Sendable {
 
     public struct Rect: Sendable, Equatable {
         public var x, y, width, height: Double
+
+        var isFinite: Bool { [x, y, width, height].allSatisfy(\.isFinite) }
     }
 
     public struct Transform: Sendable, Equatable {
         public static let identity = Transform(a: 1, b: 0, c: 0, d: 1, e: 0, f: 0)
 
         public var a, b, c, d, e, f: Double
+
+        var isFinite: Bool { [a, b, c, d, e, f].allSatisfy(\.isFinite) }
 
         func concatenating(_ inner: Transform) -> Transform {
             Transform(a: a * inner.a + c * inner.b, b: b * inner.a + d * inner.b,
@@ -91,6 +95,7 @@ public struct Drawing: Sendable {
         public enum Shape: Sendable {
             case path([Segment])
             case label(Label)
+            case group([Item])
         }
 
         public let shape: Shape
@@ -104,6 +109,7 @@ public struct Drawing: Sendable {
     public let viewBox: Rect
     public let size: (width: Double, height: Double)?
     public let items: [Item]
+    public let title: String?
 }
 
 extension Drawing {
@@ -130,6 +136,7 @@ extension Drawing {
         var delta = angle((x1 - cx1) / rx, (y1 - cy1) / ry, (-x1 - cx1) / rx, (-y1 - cy1) / ry)
         if !sweep, delta > 0 { delta -= 2 * .pi }
         if sweep, delta < 0 { delta += 2 * .pi }
+        guard delta.isFinite, center.x.isFinite, center.y.isFinite else { return [.line(end)] }
         let count = max(1, Int((abs(delta) / (.pi / 2)).rounded(.up)))
         let step = delta / Double(count), handle = 4 / 3 * tan(step / 4)
         func point(_ angle: Double) -> Point {

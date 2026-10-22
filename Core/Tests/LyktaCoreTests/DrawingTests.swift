@@ -17,6 +17,12 @@ struct DrawingTests {
             return
         }
         #expect(end == point(30, 10))
+        let tiny = try Drawing(svg: "<svg viewBox='0 0 9 9'><path d='M0 0A1e-200 1e-200 0 0 1 1 1'/></svg>")
+        guard case let .path(tinySegments) = tiny.items[0].shape else {
+            Issue.record("not a path")
+            return
+        }
+        #expect(tinySegments.last == .line(point(1, 1)))
     }
 
     @Test func pathLengthScalesDashesSoADotSitsAtAFraction() throws {
@@ -46,13 +52,37 @@ struct DrawingTests {
         #expect(gradient.stops.count == 2)
     }
 
+    @Test func ignoresIconMarkupThatDoesNotDrawAndKeepsGroupsWhole() throws {
+        let drawing = try Drawing(svg: """
+            <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' class='lucide' aria-hidden='true' data-slot='icon' \
+            fill='none' stroke='currentColor' stroke-dasharray='4px, 2'><title>Done</title><g opacity='.5'><path d='M20 6 9 17'/>\
+            <path d='M9 17l-5-5'/></g></svg>
+            """)
+        #expect(drawing.title == "Done")
+        guard case let .group(children) = drawing.items[0].shape else {
+            Issue.record("not a group")
+            return
+        }
+        #expect(drawing.items.count == 1 && drawing.items[0].opacity == 0.5)
+        #expect(children.count == 2 && children.allSatisfy { $0.opacity == 1 && $0.stroke?.dash == [4, 2] })
+    }
+
     @Test(arguments: [
         ("<svg><path d='M0 0'/></svg>", #"<svg>: give a viewBox, such as viewBox="0 0 24 24""#),
-        ("<svg viewBox='0 0 9 9'><g><path class='a' d='M0 0'/></g></svg>", "<path> #1: class is not supported here"),
+        ("<svg viewBox='0 0 9 9'><g><path clip-path='url(#a)' d='M0 0'/></g></svg>", "<path> #1: clip-path is not supported here"),
+        ("<svg viewBox='0 0 9 9'><svg/></svg>", "<svg> #2: only the root may be <svg>"),
+        ("<svg viewBox='0 0 9 9'><text stroke='red'>A</text></svg>", "<text> #1: stroke: text is filled, not stroked"),
+        ("<svg viewBox='0 0 9 9'><text fill='none'>A</text></svg>", "<text> #1: fill: text needs a fill"),
+        ("<svg viewBox='0 0 9 9'><filter id='a'><feGaussianBlur stdDeviation='1'/></filter><linearGradient id='a'/></svg>",
+         #"<linearGradient id="a">: another gradient or filter has this id"#),
+        ("<svg viewBox='0 0 9 9'><path d='M0 0H9' stroke='red' pathLength='1e-320'/></svg>", "<path> #1: pathLength: too small"),
+        ("<svg viewBox='0 0 9 9'><g transform='scale(1e200)'><g transform='scale(1e200)'/></g></svg>", "<g> #2: transform: scales beyond"),
         ("<svg viewBox='0 0 9 9'><use href='#a'/></svg>", "<use> is not supported; use svg, g, path"),
         ("<svg viewBox='0 0 9 9'><rect width='9' height='9' fill='url(#nope)'/></svg>", #"<rect> #1: fill: no gradient has id "nope""#),
         ("<svg viewBox='0 0 9 9'><path id='orbit' d='M0 0 L5'/></svg>", #"<path id="orbit">: d: L needs more numbers"#),
         ("<svg viewBox='0 0 9 9'><circle r='2'>", "<circle> is never closed"),
+        ("<svg viewBox='0 0 9 9'><rect width='9' height='9' fill='#ＦＦＦ'/></svg>", "<rect> #1: fill: expected none, currentColor"),
+        ("<svg viewBox='0 0 9 9'><path d='M0 0H100' stroke='red' stroke-dasharray='.01'/></svg>", "<path> #1: stroke-dasharray: the dashes are too short"),
     ])
     func rejectsWhatItCannotDrawWithTheElement(markup: String, message: String) {
         let error = #expect(throws: LayoutError.self) { try Drawing(svg: markup) }

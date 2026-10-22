@@ -6,8 +6,9 @@ extension Drawing {
         guard root.name == "svg" else { throw LayoutError("the root element is <\(root.name)>; expected <svg>") }
         do {
             var reader = try SVGReader(root: root)
-            try reader.visit(root, inheriting: SVGStyle(), transform: .identity, opacity: 1, blur: 0)
-            self.init(viewBox: reader.viewBox, size: reader.size, items: reader.items)
+            try reader.visit(root, inheriting: SVGStyle(), transform: .identity)
+            let title = root.children.first { $0.name == "title" }.map { $0.text.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            self.init(viewBox: reader.viewBox, size: reader.size, items: reader.items, title: title?.isEmpty == false ? title : nil)
         } catch let error as LayoutError {
             throw error
         } catch {
@@ -62,6 +63,7 @@ private struct SVGReader {
     private var gradients: [String: (gradient: Drawing.Gradient, usesBoundingBox: Bool)] = [:]
     private var blurs: [String: Double] = [:]
     private var segments = 0
+    private var drawn = 0
     private var counts: [String: Int] = [:]
 
     init(root: MarkupElement) throws {
@@ -86,22 +88,31 @@ private struct SVGReader {
         try define(root)
     }
 
-    mutating func visit(_ element: MarkupElement, inheriting inherited: SVGStyle, transform: Drawing.Transform,
-                        opacity: Double, blur: Double) throws {
+    mutating func visit(_ element: MarkupElement, inheriting inherited: SVGStyle, transform: Drawing.Transform) throws {
         counts[element.name, default: 0] += 1
         let label = element.attributes["id"].map { "<\(element.name) id=\"\($0)\">" } ?? "<\(element.name)> #\(counts[element.name]!)"
         switch element.name {
         case "svg" where counts["svg"] == 1, "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text":
             let context: (style: SVGStyle, transform: Drawing.Transform, opacity: Double, blur: Double)
             do {
-                context = try draw(element, inheriting: inherited, transform: transform, opacity: opacity, blur: blur)
+                context = try draw(element, inheriting: inherited, transform: transform)
             } catch let error as LayoutError {
                 throw LayoutError("\(label): \(error.description)")
             }
             guard ["svg", "g"].contains(element.name) else { return }
-            for child in element.children {
-                try visit(child, inheriting: context.style, transform: context.transform, opacity: context.opacity, blur: context.blur)
+            guard context.opacity < 1 || context.blur > 0 else {
+                for child in element.children { try visit(child, inheriting: context.style, transform: context.transform) }
+                return
             }
+            let outer = items
+            items = []
+            for child in element.children { try visit(child, inheriting: context.style, transform: .identity) }
+            let group = Drawing.Item(shape: .group(items), fill: nil, stroke: nil, opacity: context.opacity, blur: context.blur,
+                                     transform: context.transform)
+            items = outer
+            try append(group, segments: 0)
+        case "svg":
+            throw LayoutError("\(label): only the root may be <svg>; group with <g>")
         case "defs":
             if let child = element.children.first(where: { !["linearGradient", "radialGradient", "filter", "title", "desc"].contains($0.name) }) {
                 throw LayoutError("\(label): <defs> holds only gradients and filters, not <\(child.name)>")
@@ -113,8 +124,8 @@ private struct SVGReader {
         }
     }
 
-    private mutating func draw(_ element: MarkupElement, inheriting inherited: SVGStyle, transform: Drawing.Transform, opacity: Double,
-                               blur: Double) throws -> (style: SVGStyle, transform: Drawing.Transform, opacity: Double, blur: Double) {
+    private mutating func draw(_ element: MarkupElement, inheriting inherited: SVGStyle,
+                               transform: Drawing.Transform) throws -> (style: SVGStyle, transform: Drawing.Transform, opacity: Double, blur: Double) {
         let extra: Set<String> = switch element.name {
         case "svg": ["viewBox", "width", "height", "version"]
         case "g": []
@@ -123,10 +134,13 @@ private struct SVGReader {
         }
         let attributes = try Self.attributes(of: element, allowing: Self.presentation.union(extra))
         let style = try self.style(inherited, attributes)
-        var transform = transform, opacity = opacity, blur = blur
-        if let text = attributes["transform"] { transform = transform.concatenating(try Self.transform(text)) }
-        if let text = attributes["opacity"] { opacity *= try Self.fraction(text, "opacity") }
-        if let text = attributes["filter"] { blur = try self.blur(text) }
+        var transform = transform
+        if let text = attributes["transform"] {
+            transform = transform.concatenating(try Self.transform(text))
+            guard transform.isFinite else { throw LayoutError("transform: scales beyond what can be drawn") }
+        }
+        let opacity = try attributes["opacity"].map { try Self.fraction($0, "opacity") } ?? 1
+        let blur = try attributes["filter"].map { try self.blur($0) } ?? 0
         if !["svg", "g"].contains(element.name) {
             if let child = element.children.first(where: { !["title", "desc"].contains($0.name) }) {
                 throw LayoutError("<\(child.name)> is not supported inside <\(element.name)>\(element.name == "text" ? "; use one <text> per line" : "")")
@@ -141,25 +155,42 @@ private struct SVGReader {
                               transform: Drawing.Transform, opacity: Double, blur: Double) throws {
         let segments: [Drawing.Segment] = if case let .path(segments) = shape { segments } else { [] }
         let (length, bounds) = Drawing.measure(segments)
+        guard length.isFinite, bounds.isFinite else { throw LayoutError("the coordinates are too large to draw") }
         let fill = style.fill.map { Drawing.Fill(paint: paint($0, bounds), opacity: style.fillOpacity, evenOdd: style.evenOdd) }
         let pathLength = try attributes["pathLength"].map { try Self.number($0, "pathLength") }
         guard pathLength.map({ $0 > 0 }) != false else { throw LayoutError("pathLength: expected a positive number") }
         let scale = pathLength.map { length / $0 } ?? 1
+        guard scale.isFinite else { throw LayoutError("pathLength: too small for this shape") }
         var stroke: Drawing.Stroke?
+        var dashes = 0
         if let source = style.stroke, style.strokeWidth > 0, case .path = shape {
             var dash = style.dash.map { $0 * scale }
             if dash.count.isMultiple(of: 2) == false { dash += dash }
             let period = dash.reduce(0, +)
             let phase = period > 0 ? (style.dashOffset * scale).truncatingRemainder(dividingBy: period) : 0
+            guard period.isFinite, phase.isFinite else { throw LayoutError("stroke-dasharray: the dashes are too long to draw") }
+            if period > 0 {
+                let count = (length / period * Double(dash.count / 2)).rounded(.up)
+                guard count <= Double(Drawing.maximumSegments) else {
+                    throw LayoutError("stroke-dasharray: the dashes are too short; a shape draws at most \(Drawing.maximumSegments) dashes")
+                }
+                dashes = Int(count)
+            }
             stroke = Drawing.Stroke(paint: paint(source, bounds), opacity: style.strokeOpacity, width: style.strokeWidth, cap: style.cap,
                                     join: style.join, miterLimit: style.miterLimit, dash: period > 0 ? dash : [],
                                     dashPhase: phase < 0 ? phase + period : phase)
         }
         guard fill != nil || stroke != nil else { return }
-        self.segments += segments.count
-        items.append(Drawing.Item(shape: shape, fill: fill, stroke: stroke, opacity: opacity, blur: blur, transform: transform))
-        guard items.count <= Drawing.maximumItems else { throw LayoutError("the svg draws more than \(Drawing.maximumItems) shapes") }
-        guard self.segments <= Drawing.maximumSegments else { throw LayoutError("the svg has more than \(Drawing.maximumSegments) path segments") }
+        try append(Drawing.Item(shape: shape, fill: fill, stroke: stroke, opacity: opacity, blur: blur, transform: transform),
+                   segments: segments.count + dashes)
+    }
+
+    private mutating func append(_ item: Drawing.Item, segments: Int) throws {
+        items.append(item)
+        drawn += 1
+        self.segments += segments
+        guard drawn <= Drawing.maximumItems else { throw LayoutError("the svg draws more than \(Drawing.maximumItems) shapes and groups") }
+        guard self.segments <= Drawing.maximumSegments else { throw LayoutError("the svg has more than \(Drawing.maximumSegments) path segments and dashes") }
     }
 
     private func paint(_ source: SVGStyle.Source, _ bounds: Drawing.Rect) -> Drawing.Paint {
@@ -232,7 +263,9 @@ private struct SVGReader {
     private func label(_ element: MarkupElement, _ attributes: [String: String], _ style: SVGStyle) throws -> Drawing.Item.Shape? {
         let text = element.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !text.isEmpty else { return nil }
-        if case .gradient = style.fill { throw LayoutError("fill: text takes a color or currentColor") }
+        if let stroke = attributes["stroke"], stroke != "none" { throw LayoutError("stroke: text is filled, not stroked") }
+        guard let fill = style.fill else { throw LayoutError("fill: text needs a fill; it is not stroked") }
+        if case .gradient = fill { throw LayoutError("fill: text takes a color or currentColor") }
         let position = Drawing.Point(x: try attributes["x"].map { try length($0, "x", .horizontal) } ?? 0,
                                      y: try attributes["y"].map { try length($0, "y", .vertical) } ?? 0)
         return .label(Drawing.Label(text: text, position: position, size: style.fontSize, weight: style.weight, design: style.design,
@@ -263,11 +296,12 @@ private struct SVGReader {
                     style.dash = []
                     continue
                 }
-                guard let dash = NumberScanner.numbers(value), !dash.isEmpty, dash.allSatisfy({ $0 >= 0 }) else {
+                let dash = try value.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map { try length(String($0), key, .diagonal) }
+                guard !dash.isEmpty, dash.allSatisfy({ $0 >= 0 }) else {
                     throw LayoutError("stroke-dasharray: expected none or lengths that are not negative")
                 }
                 style.dash = dash
-            case "stroke-dashoffset": style.dashOffset = try Self.number(value, key)
+            case "stroke-dashoffset": style.dashOffset = try length(value, key, .diagonal)
             case "font-size":
                 style.fontSize = try Self.number(value, key)
                 guard (1...1000).contains(style.fontSize) else { throw LayoutError("font-size: expected 1 to 1000") }
@@ -335,6 +369,7 @@ private struct SVGReader {
     private mutating func define(_ element: MarkupElement) throws {
         if ["linearGradient", "radialGradient", "filter"].contains(element.name) {
             guard let id = element.attributes["id"], !id.isEmpty else { throw LayoutError("<\(element.name)> needs an id to be used") }
+            guard gradients[id] == nil, blurs[id] == nil else { throw LayoutError("<\(element.name) id=\"\(id)\">: another gradient or filter has this id") }
             do {
                 if element.name == "filter" { blurs[id] = try Self.filter(element) } else { gradients[id] = try gradient(element) }
             } catch let error as LayoutError {
@@ -392,7 +427,9 @@ private struct SVGReader {
     }
 
     private static func attributes(of element: MarkupElement, allowing allowed: Set<String>) throws -> [String: String] {
-        var attributes = element.attributes.filter { !$0.key.hasPrefix("xmlns") }
+        var attributes = element.attributes.filter { name, _ in
+            !(name.hasPrefix("xmlns") || name.hasPrefix("aria-") || name.hasPrefix("data-") || ["class", "role", "focusable", "xml:space"].contains(name))
+        }
         if let style = attributes.removeValue(forKey: "style") {
             for declaration in style.split(separator: ";") where !declaration.allSatisfy(\.isWhitespace) {
                 let parts = declaration.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }

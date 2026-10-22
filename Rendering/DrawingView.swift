@@ -12,11 +12,15 @@ struct DrawingView: View {
             context.scaleBy(x: scale, y: scale)
             for item in drawing.items { item.draw(in: context, scale: scale) }
         }
-        if let size = drawing.size {
-            canvas.frame(width: size.width, height: size.height)
-        } else {
-            FittedLayout(viewBox: CGSize(width: box.width, height: box.height)) { canvas }
+        Group {
+            if let size = drawing.size {
+                canvas.frame(width: size.width, height: size.height)
+            } else {
+                FittedLayout(viewBox: CGSize(width: box.width, height: box.height)) { canvas }
+            }
         }
+        .accessibilityLabel(drawing.title ?? "")
+        .accessibilityHidden(drawing.title == nil)
     }
 }
 
@@ -44,23 +48,20 @@ private extension Drawing.Item {
     func draw(in context: GraphicsContext, scale: Double) {
         var context = context
         context.concatenate(transform.value)
+        let scale = scale * abs(transform.a * transform.d - transform.b * transform.c).squareRoot()
         context.opacity = opacity
-        if blur > 0 {
-            context.addFilter(.blur(radius: blur * scale * abs(transform.a * transform.d - transform.b * transform.c).squareRoot()))
-        }
+        if blur > 0 { context.addFilter(.blur(radius: blur * scale)) }
         switch shape {
+        case let .group(items):
+            context.drawLayer { layer in
+                for item in items { item.draw(in: layer, scale: scale) }
+            }
         case let .path(segments):
             let path = Path(segments)
-            if let fill {
-                let style = FillStyle(eoFill: fill.evenOdd)
-                paint(fill.paint, opacity: fill.opacity, in: context, region: (path, style)) { $0.fill(path, with: $1, style: style) }
-            }
-            if let stroke {
-                let style = StrokeStyle(lineWidth: stroke.width, lineCap: stroke.cap.value, lineJoin: stroke.join.value,
-                                        miterLimit: stroke.miterLimit, dash: stroke.dash.map { CGFloat($0) }, dashPhase: stroke.dashPhase)
-                paint(stroke.paint, opacity: stroke.opacity, in: context, region: (path.strokedPath(style), FillStyle())) {
-                    $0.stroke(path, with: $1, style: style)
-                }
+            if opacity < 1, fill != nil, stroke != nil {
+                context.drawLayer { layer in draw(path, in: layer) }
+            } else {
+                draw(path, in: context)
             }
         case let .label(label):
             guard let fill else { return }
@@ -84,6 +85,20 @@ private extension Drawing.Item {
         }
     }
 
+    private func draw(_ path: Path, in context: GraphicsContext) {
+        if let fill {
+            let style = FillStyle(eoFill: fill.evenOdd)
+            paint(fill.paint, opacity: fill.opacity, in: context, region: (path, style)) { $0.fill(path, with: $1, style: style) }
+        }
+        if let stroke {
+            let style = StrokeStyle(lineWidth: stroke.width, lineCap: stroke.cap.value, lineJoin: stroke.join.value,
+                                    miterLimit: stroke.miterLimit, dash: stroke.dash.map { CGFloat($0) }, dashPhase: stroke.dashPhase)
+            paint(stroke.paint, opacity: stroke.opacity, in: context, region: (path.strokedPath(style), FillStyle())) {
+                $0.stroke(path, with: $1, style: style)
+            }
+        }
+    }
+
     private func paint(_ paint: Drawing.Paint, opacity: Double, in context: GraphicsContext, region: @autoclosure () -> (Path, FillStyle),
                        draw: (inout GraphicsContext, GraphicsContext.Shading) -> Void) {
         var context = context
@@ -94,16 +109,19 @@ private extension Drawing.Item {
         case let .gradient(gradient):
             let (path, style) = region()
             context.clip(to: path, style: style)
+            var area = path.boundingRect
             if let box = gradient.boundingBox {
                 guard box.width > 0, box.height > 0 else { return }
-                context.concatenate(CGAffineTransform(a: box.width, b: 0, c: 0, d: box.height, tx: box.x, ty: box.y))
+                let units = CGAffineTransform(a: box.width, b: 0, c: 0, d: box.height, tx: box.x, ty: box.y)
+                context.concatenate(units)
+                area = area.applying(units.inverted())
             }
             let stops = Gradient(stops: gradient.stops.map { Gradient.Stop(color: $0.color.value.opacity($0.opacity), location: $0.offset) })
             let shading: GraphicsContext.Shading = switch gradient.shape {
             case let .linear(from, to): .linearGradient(stops, startPoint: from.value, endPoint: to.value)
             case let .radial(center, radius): .radialGradient(stops, center: center.value, startRadius: 0, endRadius: radius)
             }
-            context.fill(Path(CGRect(x: -1000, y: -1000, width: 2000, height: 2000)), with: shading)
+            context.fill(Path(area), with: shading)
         }
     }
 }

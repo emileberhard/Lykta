@@ -162,10 +162,10 @@ The gateway rejects what the phone cannot draw and names the element.
 | `g` | Groups children; its presentation attributes and `transform` apply to them |
 | `path` | `d` with every command, absolute and relative: `M L H V C S Q T A Z` |
 | `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` | Their geometry: `x`, `y`, `width`, `height`, `rx`, `ry`, `cx`, `cy`, `r`, `x1`, `y1`, `x2`, `y2`, `points` |
-| `text` | One line at `x`, `y`, styled with `font-size`, `font-weight`, `font-family` (`serif`, `monospace` or `ui-rounded`; others fall back to the system font), `text-anchor`, `dominant-baseline` |
+| `text` | One filled line at `x`, `y`, styled with `font-size`, `font-weight`, `font-family` (`serif`, `monospace` or `ui-rounded`; others fall back to the system font), `text-anchor`, `dominant-baseline` |
 | `linearGradient`, `radialGradient` with `stop`s | `x1`, `y1`, `x2`, `y2`, `cx`, `cy`, `r`, `gradientUnits`; stops take `offset`, `stop-color`, `stop-opacity`. Use as `fill="url(#id)"` or `stroke="url(#id)"` |
 | `filter` with one `feGaussianBlur` | `stdDeviation`; `filter="url(#id)"` blurs a shape, for glows |
-| `defs`, `title`, `desc` | Hold definitions; not drawn |
+| `defs`, `title`, `desc` | Hold definitions; not drawn. The root's `title` is read to VoiceOver |
 
 Every drawn element and `g` takes `fill`, `fill-opacity`, `fill-rule`,
 `stroke`, `stroke-width`, `stroke-opacity`, `stroke-linecap`,
@@ -174,9 +174,13 @@ Every drawn element and `g` takes `fill`, `fill-opacity`, `fill-rule`,
 `scale`, `rotate`, `skewX`, `skewY`), `id`, the text styles, and the same
 properties in `style="…"`. Shapes also take `pathLength`. Lengths are numbers
 in `viewBox` units, optionally `px`, or percentages of the `viewBox`. Colors
-are layout colors plus `none` and `currentColor`. There is no `use`,
-`clipPath`, `mask`, `pattern`, `image`, `tspan` or CSS class. A drawing holds
-up to 512 shapes and 4096 path segments, and its markup counts toward the push
+are layout colors plus `none` and `currentColor`; names such as `green` are
+Apple's system colors, and CSS-only names such as `navy` are rejected, so use
+hex for exact brand colors. `class`, `aria-*`, `data-*`, `role` and
+`focusable` are ignored, so icon sets paste in as they are. There is no `use`,
+`clipPath`, `mask`, `pattern`, `image`, `tspan` or `<style>` sheet. A drawing holds
+up to 512 shapes and groups and 4096 path segments and dashes (an arc
+counts as up to four curves), and its markup counts toward the push
 limit; repeating a path costs little because pushes are compressed.
 
 ```json

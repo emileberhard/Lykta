@@ -95,7 +95,6 @@ private struct ShapeNodeView: View {
         case (nil, nil): outline
         }
     }
-
 }
 
 private struct ProgressNodeView: View {

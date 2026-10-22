@@ -328,7 +328,7 @@ public enum ColorValue: Decodable, Sendable {
             self = .named(name)
         } else if text.first == "#" {
             let hex = text.dropFirst()
-            guard [3, 4, 6, 8].contains(hex.count), hex.allSatisfy(\.isHexDigit) else { return nil }
+            guard [3, 4, 6, 8].contains(hex.count), hex.allSatisfy({ $0.isASCII && $0.isHexDigit }) else { return nil }
             let digits = hex.count > 4 ? Array(hex) : hex.flatMap { [$0, $0] }
             let channels = stride(from: 0, to: digits.count, by: 2).map { Double(Int(String(digits[$0...$0 + 1]), radix: 16)!) / 255 }
             self = .rgb(red: channels[0], green: channels[1], blue: channels[2], opacity: channels.count == 4 ? channels[3] : 1)
