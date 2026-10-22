@@ -27,9 +27,3 @@ struct Lights: View {
         .accessibilityHidden(true)
     }
 }
-
-private extension GraphicsContext.Shading {
-    static func color(red: Double, green: Double, blue: Double) -> Self {
-        .color(Color(red: red, green: green, blue: blue))
-    }
-}
