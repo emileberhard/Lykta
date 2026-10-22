@@ -103,6 +103,13 @@ struct TemplateTests {
         #expect(try JSONValue.string("{{done}} of {{ total }}: {{steps.0.name}}").filled(with: data) == .string("3 of 5: Build"))
     }
 
+    @Test func valuesInsertedIntoSVGMarkupAreEscaped() throws {
+        let data = try json(#"{"team": "R&D <'x'>", "icon": "<svg/>"}"#)
+        #expect(try json(#"{"svg": "<text>{{team}}</text>", "text": "Team {{team}}"}"#).filled(with: data)
+            == json(#"{"svg": "<text>R&amp;D &lt;&apos;x&apos;&gt;</text>", "text": "Team R&D <'x'>"}"#))
+        #expect(try json(#"{"svg": "{{icon}}"}"#).filled(with: data) == json(#"{"svg": "<svg/>"}"#))
+    }
+
     @Test func missingAndCompoundValuesAreErrors() {
         #expect(throws: LayoutError(#"lockScreen: data has no value at "steps.1.name""#)) {
             try JSONValue.object(["lockScreen": .string("{{steps.1.name}}")]).filled(with: data)

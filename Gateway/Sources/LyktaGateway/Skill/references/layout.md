@@ -148,7 +148,9 @@ The gateway rejects what the phone cannot draw and names the element.
   keeps the `viewBox` proportions.
 - **Color.** `fill` defaults to black, as in SVG. `currentColor` takes the
   node's `foreground`, so one icon follows the layout's colors.
-- **Data.** `{{placeholders}}` work inside the markup like any text.
+- **Data.** `{{placeholders}}` work inside the markup, and their values are
+  escaped, so a name such as `R&D` is safe. A placeholder that is the whole
+  markup, `"svg": "{{icon}}"`, inserts SVG from the data as is.
 - **Progress along a path.** With `pathLength="1"`, dash lengths are fractions
   of the path. `stroke-dasharray="{{progress}} 2"` draws the part travelled,
   and `stroke-dasharray="0 2" stroke-dashoffset="-{{progress}}"` with

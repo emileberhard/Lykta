@@ -105,7 +105,7 @@ private struct Template {
             if output.isEmpty, open.lowerBound == rest.startIndex, close.upperBound == rest.endIndex { return value }
             output += rest[..<open.lowerBound]
             switch value {
-            case let .string(string): output += string
+            case let .string(string): output += path == "svg" || path.hasSuffix(".svg") ? Self.escaped(string) : string
             case let .number(number): output += number.textValue
             case let .bool(bool): output += String(bool)
             case .null: throw LayoutError("\(path): data \"\(key)\" is null and cannot be inserted into text")
@@ -114,6 +114,11 @@ private struct Template {
             rest = rest[close.upperBound...]
         }
         return .string(output + rest)
+    }
+
+    private static func escaped(_ text: String) -> String {
+        text.replacing("&", with: "&amp;").replacing("<", with: "&lt;").replacing(">", with: "&gt;")
+            .replacing("\"", with: "&quot;").replacing("'", with: "&apos;")
     }
 
     private func value(at key: String, for path: String) throws(LayoutError) -> JSONValue {
