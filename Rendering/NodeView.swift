@@ -151,16 +151,19 @@ private struct ButtonNodeView: View {
     @Environment(\.activityID) private var activity
 
     var body: some View {
+        switch style {
+        case .automatic: button
+        case .plain: button.buttonStyle(.plain)
+        case .bordered: button.buttonStyle(.bordered)
+        case .borderedProminent: button.buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder private var button: some View {
         if let activity {
-            let button = Button(intent: ButtonIntent(activity: activity, button: name)) { NodeView(label) }
-            switch style {
-            case .automatic: button
-            case .plain: button.buttonStyle(.plain)
-            case .bordered: button.buttonStyle(.bordered)
-            case .borderedProminent: button.buttonStyle(.borderedProminent)
-            }
+            Button(intent: ButtonIntent(activity: activity, button: name)) { NodeView(label) }
         } else {
-            NodeView(label)
+            Button {} label: { NodeView(label) }
         }
     }
 }
@@ -173,15 +176,18 @@ private struct ToggleNodeView: View {
     @Environment(\.activityID) private var activity
 
     var body: some View {
+        switch style {
+        case .switch: toggle.toggleStyle(.switch)
+        case .button: toggle.toggleStyle(.button)
+        case .checkbox: toggle.toggleStyle(CheckboxToggleStyle())
+        }
+    }
+
+    @ViewBuilder private var toggle: some View {
         if let activity {
-            let toggle = Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
-            switch style {
-            case .switch: toggle.toggleStyle(.switch)
-            case .button: toggle.toggleStyle(.button)
-            case .checkbox: toggle.toggleStyle(CheckboxToggleStyle())
-            }
+            Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
         } else {
-            NodeView(label)
+            Toggle(isOn: .constant(isOn)) { NodeView(label) }
         }
     }
 }

@@ -4,7 +4,7 @@ import WidgetKit
 
 struct LockScreenView: View {
     let state: LyktaActivity.ContentState
-    let activity: UUID
+    let activity: UUID?
     let isStale: Bool
     @Environment(\.activityFamily) private var family
 
@@ -45,7 +45,7 @@ struct LockScreenView: View {
 
 struct Root: View {
     let node: Node?
-    let activity: UUID
+    let activity: UUID?
     let isStale: Bool
 
     var body: some View {
