@@ -1,0 +1,165 @@
+{
+  "title": "Pull requests waiting on you",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {"symbol": "arrow.triangle.pull", "modifiers": [{"font": "subheadline"}, {"bold": true}]},
+            {"text": "Pull requests", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+            {"spacer": true},
+            {
+              "text": "{{count}} need you",
+              "modifiers": [
+                {"font": "caption2"},
+                {"fontWeight": "semibold"},
+                {"foreground": "white"},
+                {"padding": {"horizontal": 7, "vertical": 3}},
+                {"background": "#1F6FEB"},
+                {"clip": "capsule"}
+              ]
+            }
+          ],
+          "spacing": 8
+        },
+        {
+          "vstack": [
+            {
+              "each": "prs",
+              "as": "pr",
+              "do": {
+                "link": "{{pr.url}}",
+                "label": {
+                  "hstack": [
+                    {
+                      "symbol": "{{pr.symbol}}",
+                      "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
+                    },
+                    {
+                      "text": "#{{pr.number}}",
+                      "modifiers": [{"font": "footnote"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+                    },
+                    {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
+                    {"spacer": 4},
+                    {
+                      "text": "{{pr.status}}",
+                      "modifiers": [
+                        {"font": "caption2"},
+                        {"fontWeight": "semibold"},
+                        {"foreground": "{{pr.color}}"},
+                        {"padding": {"horizontal": 7, "vertical": 3}},
+                        {"background": "{{pr.tint}}"},
+                        {"clip": "capsule"}
+                      ]
+                    },
+                    {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
+                  ],
+                  "spacing": 7
+                }
+              }
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 9
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 11,
+      "modifiers": [{"padding": 16}, {"foreground": "#E6EDF3"}]
+    },
+    "compactLeading": {"symbol": "arrow.triangle.pull", "modifiers": [{"bold": true}, {"foreground": "#58A6FF"}]},
+    "compactTrailing": {
+      "text": "{{count}}",
+      "modifiers": [{"bold": true}, {"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#58A6FF"}]
+    },
+    "minimal": {"text": "{{count}}", "modifiers": [{"bold": true}, {"monospacedDigit": true}, {"foreground": "#58A6FF"}]},
+    "expanded": {
+      "leading": {
+        "symbol": "arrow.triangle.pull",
+        "modifiers": [{"font": "title3"}, {"bold": true}, {"foreground": "#58A6FF"}, {"padding": {"leading": 6}}]
+      },
+      "center": {
+        "text": "{{count}} pull requests need you",
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+      },
+      "bottom": {
+        "vstack": [
+          {
+            "each": "prs",
+            "as": "pr",
+            "do": {
+              "link": "{{pr.url}}",
+              "label": {
+                "hstack": [
+                  {
+                    "symbol": "{{pr.symbol}}",
+                    "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
+                  },
+                  {
+                    "text": "#{{pr.number}}",
+                    "modifiers": [{"font": "footnote"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+                  },
+                  {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
+                  {"spacer": 4},
+                  {
+                    "text": "{{pr.status}}",
+                    "modifiers": [
+                      {"font": "caption2"},
+                      {"fontWeight": "semibold"},
+                      {"foreground": "{{pr.color}}"},
+                      {"padding": {"horizontal": 7, "vertical": 3}},
+                      {"background": "{{pr.tint}}"},
+                      {"clip": "capsule"}
+                    ]
+                  },
+                  {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
+                ],
+                "spacing": 7
+              }
+            }
+          }
+        ],
+        "alignment": "leading",
+        "spacing": 8,
+        "modifiers": [{"padding": {"top": 4}}]
+      }
+    },
+    "background": "#0D1117",
+    "keyline": "#58A6FF",
+    "link": "https://github.com/pulls/review-requested"
+  },
+  "data": {
+    "count": 3,
+    "prs": [
+      {
+        "number": 482,
+        "title": "Drain relay on shutdown",
+        "status": "review",
+        "symbol": "eye.fill",
+        "color": "#58A6FF",
+        "tint": "#58A6FF26",
+        "url": "https://github.com/acme/relay/pull/482"
+      },
+      {
+        "number": 479,
+        "title": "Scheduled ends",
+        "status": "CI failed",
+        "symbol": "xmark.circle.fill",
+        "color": "#F85149",
+        "tint": "#F8514926",
+        "url": "https://github.com/acme/gateway/pull/479"
+      },
+      {
+        "number": 471,
+        "title": "Faster release path",
+        "status": "changes",
+        "symbol": "exclamationmark.bubble.fill",
+        "color": "#D29922",
+        "tint": "#D2992226",
+        "url": "https://github.com/acme/app/pull/471"
+      }
+    ]
+  },
+  "staleAfter": 3600,
+  "endAfter": 28800
+}

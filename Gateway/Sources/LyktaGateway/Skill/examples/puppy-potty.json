@@ -1,0 +1,145 @@
+{
+  "title": "Ollie's potty clock",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {"shape": "circle", "fill": {"gradient": ["#FFB45C", "#F28C28"], "direction": "diagonal"}},
+                {"symbol": "pawprint.fill", "modifiers": [{"font": 18.0}, {"foreground": "white"}]}
+              ],
+              "modifiers": [{"frame": {"width": 40, "height": 40}}]
+            },
+            {
+              "vstack": [
+                {"text": "{{dog}} · last outside", "modifiers": [{"font": "headline"}]},
+                {
+                  "text": "Potty training · aim for {{goal}}",
+                  "modifiers": [{"font": "caption"}, {"foreground": "#8A6A52"}]
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 1
+            },
+            {"spacer": true},
+            {
+              "date": "{{last}}",
+              "style": "timer",
+              "modifiers": [
+                {"font": 28},
+                {"bold": true},
+                {"fontDesign": "rounded"},
+                {"monospacedDigit": true},
+                {"multilineTextAlignment": "trailing"},
+                {"frame": {"width": 116, "alignment": "trailing"}}
+              ]
+            }
+          ],
+          "spacing": 10
+        },
+        {"progress": ["{{last}}", "{{due}}"], "modifiers": [{"tint": "#F28C28"}]},
+        {
+          "hstack": [
+            {
+              "concat": [{"symbol": "moon.zzz.fill"}, " Nap until ~", {"date": "{{napUntil}}"}],
+              "modifiers": [{"font": "caption"}, {"foreground": "#8A6A52"}]
+            },
+            {"spacer": true},
+            {
+              "button": "out",
+              "label": {
+                "concat": [{"symbol": "checkmark"}, " We just went out"],
+                "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "white"}]
+              },
+              "style": "borderedProminent",
+              "modifiers": [{"tint": "#F28C28"}]
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}, {"foreground": "#3B2414"}]
+    },
+    "compactLeading": {"symbol": "pawprint.fill", "modifiers": [{"foreground": "#F28C28"}]},
+    "compactTrailing": {
+      "date": "{{last}}",
+      "style": "timer",
+      "modifiers": [
+        {"monospacedDigit": true},
+        {"foreground": "#F2A65A"},
+        {"multilineTextAlignment": "trailing"},
+        {"frame": {"width": 44}}
+      ]
+    },
+    "minimal": {
+      "zstack": [
+        {
+          "progress": ["{{last}}", "{{due}}"],
+          "style": "circular",
+          "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 24, "height": 24}}]
+        },
+        {"symbol": "pawprint.fill", "modifiers": [{"font": 9}, {"foreground": "#F28C28"}]}
+      ]
+    },
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {"shape": "circle", "fill": {"gradient": ["#FFB45C", "#F28C28"], "direction": "diagonal"}},
+          {"symbol": "pawprint.fill", "modifiers": [{"font": 18.0}, {"foreground": "white"}]}
+        ],
+        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "{{dog}} · last outside", "modifiers": [{"font": "headline"}]},
+          {"text": "aim for {{goal}}", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]}
+        ],
+        "spacing": 1
+      },
+      "trailing": {
+        "date": "{{last}}",
+        "style": "timer",
+        "modifiers": [
+          {"font": "headline"},
+          {"fontDesign": "rounded"},
+          {"monospacedDigit": true},
+          {"multilineTextAlignment": "trailing"},
+          {"frame": {"width": 72, "alignment": "trailing"}},
+          {"padding": {"trailing": 4}}
+        ]
+      },
+      "bottom": {
+        "vstack": [
+          {"progress": ["{{last}}", "{{due}}"], "modifiers": [{"tint": "#F28C28"}]},
+          {
+            "hstack": [
+              {
+                "concat": [{"symbol": "moon.zzz.fill"}, " Nap until ~", {"date": "{{napUntil}}"}],
+                "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
+              },
+              {"spacer": true},
+              {
+                "button": "out",
+                "label": {
+                  "concat": [{"symbol": "checkmark"}, " We just went out"],
+                  "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "white"}]
+                },
+                "style": "borderedProminent",
+                "modifiers": [{"tint": "#F28C28"}]
+              }
+            ]
+          }
+        ],
+        "spacing": 8
+      }
+    },
+    "background": "#FFF6EC",
+    "keyline": "#F28C28"
+  },
+  "data": {"dog": "Ollie", "goal": "2 h", "last": 1792995680, "due": 1793002880, "napUntil": 1793002400},
+  "staleAfter": 28800,
+  "endAfter": 28800
+}

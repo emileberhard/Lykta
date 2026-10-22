@@ -1,0 +1,329 @@
+{
+  "title": "Release 4.2",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {"shape": "roundedRectangle", "cornerRadius": 5, "fill": "#1868DB"},
+                {"symbol": "square.stack.3d.up.fill", "modifiers": [{"font": 10}, {"foreground": "white"}]}
+              ],
+              "modifiers": [{"frame": {"width": 20, "height": 20}}]
+            },
+            {
+              "text": "{{project}} · Release {{version}}",
+              "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"lineLimit": 1}]
+            },
+            {"spacer": true},
+            {
+              "concat": ["Freeze in ", {"date": "{{freeze}}", "style": "timer"}],
+              "modifiers": [
+                {"font": "caption"},
+                {"monospacedDigit": true},
+                {"foreground": "#626F86"},
+                {"multilineTextAlignment": "trailing"},
+                {"frame": {"width": 104, "alignment": "trailing"}}
+              ]
+            }
+          ],
+          "spacing": 8
+        },
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {
+                  "chart": [
+                    {
+                      "sector": ["{{done}}", "{{review}}", "{{doing}}", "{{blocked}}"],
+                      "colors": ["#22A06B", "#8F7EE7", "#1D7AFC", "#E2483D"],
+                      "innerRadius": 0.7
+                    }
+                  ],
+                  "modifiers": [{"frame": {"width": 64, "height": 64}}]
+                },
+                {
+                  "vstack": [
+                    {
+                      "text": "{{done}}",
+                      "modifiers": [
+                        {"font": 20},
+                        {"bold": true},
+                        {"fontDesign": "rounded"},
+                        {"contentTransition": "numericText"}
+                      ]
+                    },
+                    {"text": "of {{total}}", "modifiers": [{"font": 10}, {"foreground": "#626F86"}]}
+                  ],
+                  "spacing": -2
+                }
+              ]
+            },
+            {
+              "vstack": [
+                {
+                  "grid": [
+                    [
+                      {
+                        "hstack": [
+                          {
+                            "shape": "circle",
+                            "fill": "#22A06B",
+                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
+                          },
+                          {
+                            "concat": [{"text": "{{done}}", "modifiers": [{"bold": true}]}, " done"],
+                            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                          }
+                        ],
+                        "spacing": 5
+                      },
+                      {
+                        "hstack": [
+                          {
+                            "shape": "circle",
+                            "fill": "#8F7EE7",
+                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
+                          },
+                          {
+                            "concat": [{"text": "{{review}}", "modifiers": [{"bold": true}]}, " in review"],
+                            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                          }
+                        ],
+                        "spacing": 5
+                      }
+                    ],
+                    [
+                      {
+                        "hstack": [
+                          {
+                            "shape": "circle",
+                            "fill": "#1D7AFC",
+                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
+                          },
+                          {
+                            "concat": [{"text": "{{doing}}", "modifiers": [{"bold": true}]}, " in progress"],
+                            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                          }
+                        ],
+                        "spacing": 5
+                      },
+                      {
+                        "hstack": [
+                          {
+                            "shape": "circle",
+                            "fill": "#E2483D",
+                            "modifiers": [{"frame": {"width": 7, "height": 7}}]
+                          },
+                          {
+                            "concat": [{"text": "{{blocked}}", "modifiers": [{"bold": true}]}, " blocked"],
+                            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                          }
+                        ],
+                        "spacing": 5
+                      }
+                    ]
+                  ],
+                  "alignment": "leading",
+                  "horizontalSpacing": 14,
+                  "verticalSpacing": 4
+                },
+                {
+                  "link": "{{blocker.url}}",
+                  "label": {
+                    "hstack": [
+                      {
+                        "symbol": "exclamationmark.octagon.fill",
+                        "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]
+                      },
+                      {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
+                      {
+                        "text": "{{blocker.summary}}",
+                        "modifiers": [{"font": "caption"}, {"foreground": "#44546F"}, {"lineLimit": 1}]
+                      },
+                      {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#44546F"}]}
+                    ],
+                    "spacing": 5
+                  }
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 10
+            }
+          ],
+          "spacing": 16
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 12,
+      "modifiers": [{"padding": 16}, {"foreground": "#172B4D"}]
+    },
+    "compactLeading": {
+      "chart": [
+        {
+          "sector": ["{{done}}", "{{review}}", "{{doing}}", "{{blocked}}"],
+          "colors": ["#22A06B", "#8F7EE7", "#1D7AFC", "#E2483D"],
+          "innerRadius": 0.55
+        }
+      ],
+      "modifiers": [{"frame": {"width": 20, "height": 20}}]
+    },
+    "compactTrailing": {
+      "text": "{{done}}/{{total}}",
+      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#4C9AFF"}]
+    },
+    "minimal": {
+      "chart": [
+        {
+          "sector": ["{{done}}", "{{review}}", "{{doing}}", "{{blocked}}"],
+          "colors": ["#22A06B", "#8F7EE7", "#1D7AFC", "#E2483D"],
+          "innerRadius": 0.55
+        }
+      ],
+      "modifiers": [{"frame": {"width": 22, "height": 22}}]
+    },
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {
+            "chart": [
+              {
+                "sector": ["{{done}}", "{{review}}", "{{doing}}", "{{blocked}}"],
+                "colors": ["#22A06B", "#8F7EE7", "#1D7AFC", "#E2483D"],
+                "innerRadius": 0.68
+              }
+            ],
+            "modifiers": [{"frame": {"width": 40, "height": 40}}]
+          },
+          {"text": "{{done}}", "modifiers": [{"font": 14}, {"bold": true}, {"fontDesign": "rounded"}]}
+        ],
+        "modifiers": [{"padding": {"leading": 4}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "Release {{version}}", "modifiers": [{"font": "headline"}]},
+          {
+            "concat": ["Freeze in ", {"date": "{{freeze}}", "style": "timer"}],
+            "modifiers": [
+              {"font": "caption"},
+              {"monospacedDigit": true},
+              {"foreground": "secondary"},
+              {"multilineTextAlignment": "center"},
+              {"frame": {"width": 120}}
+            ]
+          }
+        ],
+        "spacing": 2
+      },
+      "trailing": {
+        "text": "{{done}}/{{total}}",
+        "modifiers": [
+          {"font": "title3"},
+          {"bold": true},
+          {"monospacedDigit": true},
+          {"foreground": "#4C9AFF"},
+          {"padding": {"trailing": 4}}
+        ]
+      },
+      "bottom": {
+        "vstack": [
+          {
+            "grid": [
+              [
+                {
+                  "hstack": [
+                    {"shape": "circle", "fill": "#22A06B", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
+                    {
+                      "concat": [{"text": "{{done}}", "modifiers": [{"bold": true}]}, " done"],
+                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                    }
+                  ],
+                  "spacing": 5
+                },
+                {
+                  "hstack": [
+                    {"shape": "circle", "fill": "#8F7EE7", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
+                    {
+                      "concat": [{"text": "{{review}}", "modifiers": [{"bold": true}]}, " in review"],
+                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                    }
+                  ],
+                  "spacing": 5
+                }
+              ],
+              [
+                {
+                  "hstack": [
+                    {"shape": "circle", "fill": "#1D7AFC", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
+                    {
+                      "concat": [{"text": "{{doing}}", "modifiers": [{"bold": true}]}, " in progress"],
+                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                    }
+                  ],
+                  "spacing": 5
+                },
+                {
+                  "hstack": [
+                    {"shape": "circle", "fill": "#E2483D", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
+                    {
+                      "concat": [{"text": "{{blocked}}", "modifiers": [{"bold": true}]}, " blocked"],
+                      "modifiers": [{"font": "caption"}, {"monospacedDigit": true}]
+                    }
+                  ],
+                  "spacing": 5
+                }
+              ]
+            ],
+            "alignment": "leading",
+            "horizontalSpacing": 14,
+            "verticalSpacing": 4
+          },
+          {
+            "link": "{{blocker.url}}",
+            "label": {
+              "hstack": [
+                {
+                  "symbol": "exclamationmark.octagon.fill",
+                  "modifiers": [{"font": "caption"}, {"foreground": "#E2483D"}]
+                },
+                {"text": "{{blocker.key}}", "modifiers": [{"font": "caption"}, {"bold": true}]},
+                {
+                  "text": "{{blocker.summary}}",
+                  "modifiers": [{"font": "caption"}, {"foreground": "secondary"}, {"lineLimit": 1}]
+                },
+                {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]}
+              ],
+              "spacing": 5
+            }
+          }
+        ],
+        "alignment": "leading",
+        "spacing": 8,
+        "modifiers": [{"padding": {"top": 6}}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
+      }
+    },
+    "background": "#FFFFFF",
+    "keyline": "#1868DB",
+    "link": "{{board}}"
+  },
+  "data": {
+    "project": "APP",
+    "version": "4.2",
+    "done": 7,
+    "review": 2,
+    "doing": 2,
+    "blocked": 1,
+    "total": 12,
+    "freeze": 1793008040,
+    "blocker": {
+      "key": "APP-142",
+      "summary": "Payment sheet crashes on iPad",
+      "url": "https://example.atlassian.net/browse/APP-142"
+    },
+    "board": "https://example.atlassian.net/jira/software/projects/APP/boards/1"
+  },
+  "staleAfter": 1800,
+  "endAfter": 28800
+}

@@ -28,7 +28,20 @@ struct API: Sendable {
     private static let skill: [String: HTTPResponse] = [
         "skill/SKILL.md": PackageResources.SKILL_md,
         "skill/references/layout.md": PackageResources.layout_md,
-    ].mapValues { HTTPResponse(status: 200, contentType: "text/markdown; charset=utf-8", body: $0) }
+    ].mapValues { HTTPResponse(status: 200, contentType: "text/markdown; charset=utf-8", body: $0) }.merging([
+        "skill/examples/agent-question.json": PackageResources.agent_question_json,
+        "skill/examples/app-review.json": PackageResources.app_review_json,
+        "skill/examples/homelab.json": PackageResources.homelab_json,
+        "skill/examples/jira-release.json": PackageResources.jira_release_json,
+        "skill/examples/movie-night.json": PackageResources.movie_night_json,
+        "skill/examples/orion-return.json": PackageResources.orion_return_json,
+        "skill/examples/pr-inbox.json": PackageResources.pr_inbox_json,
+        "skill/examples/printer.json": PackageResources.printer_json,
+        "skill/examples/puppy-potty.json": PackageResources.puppy_potty_json,
+        "skill/examples/recipe-steps.json": PackageResources.recipe_steps_json,
+        "skill/examples/shopping-list.json": PackageResources.shopping_list_json,
+        "skill/examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
+    ].mapValues { HTTPResponse(status: 200, contentType: "application/json", body: $0) }) { $1 }
 
     private func route(_ request: HTTPRequest, now: Int) async throws -> HTTPResponse {
         let path = request.path

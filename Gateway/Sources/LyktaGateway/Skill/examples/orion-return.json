@@ -1,0 +1,189 @@
+{
+  "title": "Orion is coming home",
+  "layout": {
+    "lockScreen": {
+      "hstack": [
+        {
+          "zstack": [
+            {
+              "shape": "circle",
+              "stroke": "#1C2740",
+              "lineWidth": 4,
+              "lineCap": "round",
+              "trim": [0, 0.75],
+              "modifiers": [{"rotation": 135}]
+            },
+            {
+              "shape": "circle",
+              "stroke": {"gradient": ["#FF9F0A", "#5AC8FA"], "direction": "horizontal"},
+              "lineWidth": 4,
+              "lineCap": "round",
+              "trim": [0, "{{arc}}"],
+              "modifiers": [{"rotation": 135}]
+            },
+            {
+              "symbol": "globe.americas.fill",
+              "modifiers": [{"font": 26.400000000000002}, {"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 66, "height": 66}}]
+        },
+        {
+          "vstack": [
+            {
+              "hstack": [
+                {"text": "Orion · coming home", "modifiers": [{"font": "headline"}]},
+                {"spacer": true},
+                {
+                  "text": "Day {{day}}",
+                  "modifiers": [
+                    {"font": "caption2"},
+                    {"fontWeight": "semibold"},
+                    {"foreground": "#5AC8FA"},
+                    {"padding": {"horizontal": 7, "vertical": 3}},
+                    {"background": "#5AC8FA26"},
+                    {"clip": "capsule"}
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "{{distance}} km out · {{speed}} km/h",
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#8E9BB5"}]
+            },
+            {
+              "hstack": [
+                {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "#8E9BB5"}]},
+                {"spacer": true},
+                {
+                  "date": "{{entry}}",
+                  "style": "timer",
+                  "modifiers": [
+                    {"font": "title2"},
+                    {"bold": true},
+                    {"fontDesign": "rounded"},
+                    {"monospacedDigit": true},
+                    {"multilineTextAlignment": "trailing"}
+                  ]
+                }
+              ],
+              "alignment": "lastTextBaseline"
+            },
+            {
+              "concat": [{"symbol": "water.waves"}, " Splashdown ~", {"date": "{{splashdown}}"}, " · {{site}}"],
+              "modifiers": [{"font": "caption2"}, {"foreground": "#8E9BB5"}]
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 3
+        }
+      ],
+      "spacing": 16,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {
+      "symbol": "globe.americas.fill",
+      "modifiers": [{"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+    },
+    "compactTrailing": {
+      "date": "{{entry}}",
+      "style": "timer",
+      "modifiers": [
+        {"monospacedDigit": true},
+        {"foreground": "#5AC8FA"},
+        {"multilineTextAlignment": "trailing"},
+        {"frame": {"width": 52}}
+      ]
+    },
+    "minimal": {
+      "zstack": [
+        {"shape": "circle", "stroke": "#1C2740", "lineWidth": 3},
+        {
+          "shape": "circle",
+          "stroke": "#5AC8FA",
+          "lineWidth": 3,
+          "lineCap": "round",
+          "trim": [0, "{{fraction}}"],
+          "modifiers": [{"rotation": -90}]
+        }
+      ],
+      "modifiers": [{"frame": {"width": 22, "height": 22}}]
+    },
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {
+            "shape": "circle",
+            "stroke": "#1C2740",
+            "lineWidth": 3,
+            "lineCap": "round",
+            "trim": [0, 0.75],
+            "modifiers": [{"rotation": 135}]
+          },
+          {
+            "shape": "circle",
+            "stroke": {"gradient": ["#FF9F0A", "#5AC8FA"], "direction": "horizontal"},
+            "lineWidth": 3,
+            "lineCap": "round",
+            "trim": [0, "{{arc}}"],
+            "modifiers": [{"rotation": 135}]
+          },
+          {
+            "symbol": "globe.americas.fill",
+            "modifiers": [{"font": 16.0}, {"symbolRenderingMode": "hierarchical"}, {"foreground": "#5AC8FA"}]
+          }
+        ],
+        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
+          {
+            "date": "{{entry}}",
+            "style": "timer",
+            "modifiers": [
+              {"font": 28},
+              {"bold": true},
+              {"fontDesign": "rounded"},
+              {"monospacedDigit": true},
+              {"multilineTextAlignment": "center"},
+              {"frame": {"width": 110}}
+            ]
+          }
+        ],
+        "spacing": 0
+      },
+      "trailing": {
+        "text": "Day {{day}}",
+        "modifiers": [
+          {"font": "caption2"},
+          {"fontWeight": "semibold"},
+          {"foreground": "#5AC8FA"},
+          {"padding": {"horizontal": 7, "vertical": 3}},
+          {"background": "#5AC8FA26"},
+          {"clip": "capsule"},
+          {"padding": {"trailing": 4}}
+        ]
+      },
+      "bottom": {
+        "concat": [{"symbol": "water.waves"}, " Splashdown ~", {"date": "{{splashdown}}"}, " · {{distance}} km out"],
+        "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
+      }
+    },
+    "background": "#03060E",
+    "keyline": "#5AC8FA",
+    "link": "https://www.nasa.gov/mission/artemis-ii/"
+  },
+  "data": {
+    "day": 9,
+    "distance": "41 000",
+    "speed": "24 600",
+    "site": "Pacific",
+    "entry": 1793002460,
+    "splashdown": 1793003900,
+    "arc": 0.56,
+    "fraction": 0.75
+  },
+  "staleAfter": 1800,
+  "endAfter": 14400
+}

@@ -125,3 +125,24 @@ Errors are JSON, and the message names the JSON path to fix:
 - `too_many_activities`: end an activity first.
 - `conflict`: the activity changed since the `ifRevision` you sent, or a tapped
   control no longer exists.
+
+## Examples
+
+Each example is a complete PUT body to adapt. Fetch one from the skill's own
+address, such as `examples/homelab.json` next to this file. Their times are
+Unix seconds around 1793000000; replace them with real ones from `date +%s`.
+
+| Example | Shows |
+| --- | --- |
+| [agent-question](examples/agent-question.json) | An agent waiting on a decision, answered with buttons |
+| [app-review](examples/app-review.json) | App Store review stages for a build, from data-driven symbols and colors |
+| [homelab](examples/homelab.json) | Server graphs as line charts, each linking to its dashboard |
+| [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
+| [movie-night](examples/movie-night.json) | A pausable film timer with a lights toggle and remote buttons |
+| [orion-return](examples/orion-return.json) | A spacecraft's return on a trimmed arc with a countdown |
+| [pr-inbox](examples/pr-inbox.json) | Pull requests as rows from a list, each opening GitHub |
+| [printer](examples/printer.json) | 3D print progress, a camera check and a pause button |
+| [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside, reset with a button |
+| [recipe-steps](examples/recipe-steps.json) | Recipe steps that slide in on Next and Back, with a ring timer |
+| [shopping-list](examples/shopping-list.json) | A two-column checklist of toggles that works without an agent |
+| [solar-eclipse](examples/solar-eclipse.json) | A countdown to totality with a drawn eclipse |

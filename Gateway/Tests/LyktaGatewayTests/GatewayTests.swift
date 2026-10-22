@@ -198,6 +198,21 @@ struct GatewayTests {
         }
     }
 
+    @Test func everyExampleIsServedListedAndStarts() async throws {
+        let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+        let skill = String(decoding: PackageResources.SKILL_md, as: UTF8.self)
+        #expect(!files.isEmpty)
+        for file in files {
+            let served = await api.handle(HTTPRequest(method: "GET", target: "/skill/examples/\(file)", headers: [:], body: []))
+            #expect(served.status == 200, "\(file)")
+            #expect(Data(served.body) == (try Data(contentsOf: directory.appending(path: file))), "\(file)")
+            #expect(skill.contains("examples/\(file)"), "\(file)")
+            try await put("example", try JSONDecoder().decode(JSONValue.self, from: Data(served.body)))
+            _ = try await send("DELETE", "/v1/activities/example")
+        }
+    }
+
     // MARK: Helpers
 
     static let start: JSONValue = [

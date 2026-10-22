@@ -1,0 +1,229 @@
+{
+  "title": "Printing a lantern shade",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "vstack": [
+                {
+                  "zstack": [
+                    {
+                      "shape": "rectangle",
+                      "fill": {"gradient": ["#4BE08B", "#00AE42"]},
+                      "modifiers": [{"frame": {"height": "{{printedHeight}}"}}]
+                    }
+                  ],
+                  "alignment": "bottom",
+                  "modifiers": [
+                    {"frame": {"width": 40, "height": 46, "alignment": "bottom"}},
+                    {"background": "#1A201D"},
+                    {"clip": 8},
+                    {
+                      "overlay": {
+                        "shape": "roundedRectangle",
+                        "cornerRadius": 8,
+                        "stroke": "#4A524D",
+                        "lineWidth": 1.5,
+                        "dash": [3, 3]
+                      }
+                    }
+                  ]
+                },
+                {"shape": "capsule", "fill": "#5A615D", "modifiers": [{"frame": {"width": 52, "height": 3}}]}
+              ],
+              "spacing": 1
+            },
+            {
+              "vstack": [
+                {
+                  "hstack": [
+                    {
+                      "text": "{{percent}}%",
+                      "modifiers": [
+                        {"font": 30},
+                        {"bold": true},
+                        {"fontDesign": "rounded"},
+                        {"monospacedDigit": true},
+                        {"contentTransition": "numericText"}
+                      ]
+                    },
+                    {
+                      "text": "{{object}}",
+                      "modifiers": [{"font": "subheadline"}, {"foreground": "#9AA39E"}, {"lineLimit": 1}]
+                    }
+                  ],
+                  "alignment": "firstTextBaseline",
+                  "spacing": 6
+                },
+                {
+                  "text": "{{printer}} · layer {{layer}} of {{layers}}",
+                  "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#9AA39E"}, {"lineLimit": 1}]
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 0
+            },
+            {"spacer": true},
+            {
+              "button": "pause",
+              "label": {"symbol": "pause.fill", "modifiers": [{"accessibilityLabel": "Pause print"}]},
+              "style": "bordered",
+              "modifiers": [{"tint": "#00AE42"}]
+            }
+          ],
+          "spacing": 14
+        },
+        {
+          "hstack": [
+            {"progress": "{{fraction}}", "modifiers": [{"tint": "#00AE42"}]},
+            {
+              "concat": ["done ~", {"date": "{{eta}}"}],
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#9AA39E"}, {"fixedSize": true}]
+            }
+          ],
+          "spacing": 10
+        },
+        {
+          "hstack": [
+            {
+              "if": "{{camera.ok}}",
+              "then": {"symbol": "checkmark.shield.fill", "modifiers": [{"foreground": "#30D158"}]},
+              "else": {"symbol": "exclamationmark.triangle.fill", "modifiers": [{"foreground": "#FF9F0A"}]}
+            },
+            {
+              "concat": ["Camera ", {"date": "{{camera.at}}", "style": "relative"}, " ago: {{camera.note}}"],
+              "modifiers": [{"lineLimit": 1}, {"foreground": "#C9D1CC"}]
+            }
+          ],
+          "spacing": 5,
+          "modifiers": [{"font": "caption"}]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {"symbol": "cube.transparent.fill", "modifiers": [{"foreground": "#00AE42"}]},
+    "compactTrailing": {
+      "text": "{{percent}}%",
+      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#4BE08B"}]
+    },
+    "minimal": {
+      "zstack": [
+        {
+          "progress": "{{fraction}}",
+          "style": "circular",
+          "modifiers": [{"tint": "#00AE42"}, {"frame": {"width": 24, "height": 24}}]
+        },
+        {"symbol": "cube.fill", "modifiers": [{"font": 9}, {"foreground": "#00AE42"}]}
+      ]
+    },
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {
+            "vstack": [
+              {
+                "zstack": [
+                  {
+                    "shape": "rectangle",
+                    "fill": {"gradient": ["#4BE08B", "#00AE42"]},
+                    "modifiers": [{"frame": {"height": "{{printedHeight}}"}}]
+                  }
+                ],
+                "alignment": "bottom",
+                "modifiers": [
+                  {"frame": {"width": 40, "height": 46, "alignment": "bottom"}},
+                  {"background": "#1A201D"},
+                  {"clip": 8},
+                  {
+                    "overlay": {
+                      "shape": "roundedRectangle",
+                      "cornerRadius": 8,
+                      "stroke": "#4A524D",
+                      "lineWidth": 1.5,
+                      "dash": [3, 3]
+                    }
+                  }
+                ]
+              },
+              {"shape": "capsule", "fill": "#5A615D", "modifiers": [{"frame": {"width": 52, "height": 3}}]}
+            ],
+            "spacing": 1
+          }
+        ],
+        "modifiers": [{"scale": 0.577}, {"frame": {"width": 30, "height": 28.8}}, {"padding": {"leading": 6, "top": 4}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "{{object}}", "modifiers": [{"font": "headline"}, {"lineLimit": 1}]},
+          {
+            "concat": ["Layer {{layer}} of {{layers}} · done ~", {"date": "{{eta}}"}],
+            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "secondary"}]
+          }
+        ],
+        "spacing": 1
+      },
+      "trailing": {
+        "text": "{{percent}}%",
+        "modifiers": [
+          {"font": "title2"},
+          {"bold": true},
+          {"fontDesign": "rounded"},
+          {"monospacedDigit": true},
+          {"foreground": "#4BE08B"},
+          {"padding": {"trailing": 6}}
+        ]
+      },
+      "bottom": {
+        "vstack": [
+          {"progress": "{{fraction}}", "modifiers": [{"tint": "#00AE42"}]},
+          {
+            "hstack": [
+              {
+                "hstack": [
+                  {
+                    "if": "{{camera.ok}}",
+                    "then": {"symbol": "checkmark.shield.fill", "modifiers": [{"foreground": "#30D158"}]},
+                    "else": {"symbol": "exclamationmark.triangle.fill", "modifiers": [{"foreground": "#FF9F0A"}]}
+                  },
+                  {
+                    "concat": ["Camera ", {"date": "{{camera.at}}", "style": "relative"}, " ago: {{camera.note}}"],
+                    "modifiers": [{"lineLimit": 1}, {"foreground": "secondary"}]
+                  }
+                ],
+                "spacing": 5,
+                "modifiers": [{"font": "caption"}]
+              },
+              {"spacer": true},
+              {
+                "button": "pause",
+                "label": {"symbol": "pause.fill", "modifiers": [{"accessibilityLabel": "Pause print"}]},
+                "style": "bordered",
+                "modifiers": [{"tint": "#00AE42"}]
+              }
+            ]
+          }
+        ],
+        "spacing": 8
+      }
+    },
+    "background": "#101312",
+    "keyline": "#00AE42"
+  },
+  "data": {
+    "printer": "A1 mini",
+    "object": "Lantern shade",
+    "percent": 46,
+    "fraction": 0.46,
+    "layer": 142,
+    "layers": 310,
+    "eta": 1793006720,
+    "printedHeight": 21,
+    "camera": {"ok": true, "at": 1792999870, "note": "clean, no spaghetti"}
+  },
+  "staleAfter": 900,
+  "endAfter": 28800
+}

@@ -1,0 +1,161 @@
+{
+  "title": "Total eclipse in Luxor",
+  "layout": {
+    "lockScreen": {
+      "hstack": [
+        {
+          "zstack": [
+            {
+              "shape": "circle",
+              "fill": {"gradient": ["#FFF6C2", "#FFC233", "#FF7A00"], "direction": "radial"},
+              "modifiers": [{"shadow": {"color": "#FF8A00", "radius": 14}}]
+            },
+            {
+              "shape": "circle",
+              "fill": "#000000",
+              "modifiers": [{"frame": {"width": 62, "height": 62}}, {"offset": "{{moonOffset}}"}]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 64, "height": 64}}, {"padding": {"horizontal": 4}}]
+        },
+        {
+          "vstack": [
+            {
+              "text": "Total eclipse · {{place}}",
+              "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "#FFD9A0"}]
+            },
+            {"text": "Totality in", "modifiers": [{"font": "caption"}, {"foreground": "#9A9A9A"}]},
+            {
+              "date": "{{totality}}",
+              "style": "timer",
+              "modifiers": [{"font": 34}, {"bold": true}, {"fontDesign": "rounded"}, {"monospacedDigit": true}]
+            },
+            {"progress": ["{{firstContact}}", "{{totality}}"], "modifiers": [{"tint": "#FFB020"}]},
+            {
+              "concat": [{"symbol": "eyeglasses"}, " off at ", {"date": "{{totality}}"}, " · {{duration}} of darkness"],
+              "modifiers": [{"font": "caption2"}, {"foreground": "#9A9A9A"}]
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 3
+        }
+      ],
+      "spacing": 16,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {
+      "zstack": [
+        {
+          "zstack": [
+            {
+              "shape": "circle",
+              "fill": {"gradient": ["#FFF6C2", "#FFC233", "#FF7A00"], "direction": "radial"},
+              "modifiers": [{"shadow": {"color": "#FF8A00", "radius": 5}}]
+            },
+            {
+              "shape": "circle",
+              "fill": "#000000",
+              "modifiers": [{"frame": {"width": 62, "height": 62}}, {"offset": "{{moonOffset}}"}]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 64, "height": 64}}]
+        }
+      ],
+      "modifiers": [{"scale": 0.344}, {"frame": {"width": 22, "height": 22.0}}]
+    },
+    "compactTrailing": {
+      "date": "{{totality}}",
+      "style": "timer",
+      "modifiers": [
+        {"monospacedDigit": true},
+        {"foreground": "#FFB020"},
+        {"multilineTextAlignment": "trailing"},
+        {"frame": {"width": 44}}
+      ]
+    },
+    "minimal": {
+      "zstack": [
+        {
+          "zstack": [
+            {
+              "shape": "circle",
+              "fill": {"gradient": ["#FFF6C2", "#FFC233", "#FF7A00"], "direction": "radial"},
+              "modifiers": [{"shadow": {"color": "#FF8A00", "radius": 5}}]
+            },
+            {
+              "shape": "circle",
+              "fill": "#000000",
+              "modifiers": [{"frame": {"width": 62, "height": 62}}, {"offset": "{{moonOffset}}"}]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 64, "height": 64}}]
+        }
+      ],
+      "modifiers": [{"scale": 0.344}, {"frame": {"width": 22, "height": 22.0}}]
+    },
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {
+            "zstack": [
+              {
+                "shape": "circle",
+                "fill": {"gradient": ["#FFF6C2", "#FFC233", "#FF7A00"], "direction": "radial"},
+                "modifiers": [{"shadow": {"color": "#FF8A00", "radius": 14}}]
+              },
+              {
+                "shape": "circle",
+                "fill": "#000000",
+                "modifiers": [{"frame": {"width": 62, "height": 62}}, {"offset": "{{moonOffset}}"}]
+              }
+            ],
+            "modifiers": [{"frame": {"width": 64, "height": 64}}]
+          }
+        ],
+        "modifiers": [{"scale": 0.562}, {"frame": {"width": 36, "height": 36.0}}, {"padding": {"leading": 6, "top": 2}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "Totality in", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
+          {
+            "date": "{{totality}}",
+            "style": "timer",
+            "modifiers": [
+              {"font": 30},
+              {"bold": true},
+              {"fontDesign": "rounded"},
+              {"monospacedDigit": true},
+              {"multilineTextAlignment": "center"},
+              {"frame": {"width": 110}}
+            ]
+          }
+        ],
+        "spacing": 0
+      },
+      "trailing": {
+        "text": "{{place}}",
+        "modifiers": [{"font": "caption"}, {"foreground": "#FFD9A0"}, {"padding": {"trailing": 6}}]
+      },
+      "bottom": {
+        "vstack": [
+          {"progress": ["{{firstContact}}", "{{totality}}"], "modifiers": [{"tint": "#FFB020"}]},
+          {
+            "concat": [{"symbol": "eyeglasses"}, " off at ", {"date": "{{totality}}"}, " · {{duration}} of darkness"],
+            "modifiers": [{"font": "caption2"}, {"foreground": "secondary"}]
+          }
+        ],
+        "spacing": 6
+      }
+    },
+    "background": "#000000",
+    "keyline": "#FF9F0A"
+  },
+  "data": {
+    "place": "Luxor",
+    "firstContact": 1792996400,
+    "totality": 1793001500,
+    "duration": "6 min 20 s",
+    "moonOffset": [15, -4]
+  },
+  "endAfter": 10800
+}

@@ -1,0 +1,205 @@
+{
+  "title": "nas.home",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {"symbol": "server.rack", "modifiers": [{"font": "subheadline"}, {"foreground": "#30D158"}]},
+            {
+              "text": "{{host}}",
+              "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "monospaced"}]
+            },
+            {"spacer": true},
+            {"shape": "circle", "fill": "#30D158", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
+            {
+              "text": "{{up}} of {{services}} up",
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+            }
+          ],
+          "spacing": 6
+        },
+        {
+          "hstack": [
+            {
+              "each": "metrics",
+              "as": "metric",
+              "do": {
+                "link": "{{metric.url}}",
+                "label": {
+                  "vstack": [
+                    {
+                      "hstack": [
+                        {
+                          "text": "{{metric.name}}",
+                          "modifiers": [{"font": "caption2"}, {"textCase": "uppercase"}, {"foreground": "#8B949E"}]
+                        },
+                        {"spacer": true},
+                        {
+                          "text": "{{metric.value}}",
+                          "modifiers": [
+                            {"font": "caption"},
+                            {"bold": true},
+                            {"monospacedDigit": true},
+                            {"contentTransition": "numericText"},
+                            {"foreground": "{{metric.color}}"}
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "chart": [
+                        {
+                          "area": "{{metric.series}}",
+                          "color": {"gradient": ["{{metric.fade}}", "#00000000"]},
+                          "interpolation": "monotone"
+                        },
+                        {
+                          "line": "{{metric.series}}",
+                          "color": "{{metric.color}}",
+                          "lineWidth": 1.5,
+                          "interpolation": "monotone"
+                        }
+                      ],
+                      "min": 0,
+                      "max": 100,
+                      "modifiers": [{"frame": {"height": 30}}]
+                    }
+                  ],
+                  "alignment": "leading",
+                  "spacing": 3,
+                  "modifiers": [{"padding": {"horizontal": 8, "vertical": 7}}, {"background": "#161B22"}, {"clip": 10}]
+                }
+              }
+            }
+          ],
+          "spacing": 8
+        },
+        {
+          "concat": [
+            {"symbol": "checkmark.circle.fill", "modifiers": [{"foreground": "#30D158"}]},
+            " Backup {{backup}} · tap a graph for Grafana"
+          ],
+          "modifiers": [{"font": "caption2"}, {"foreground": "#8B949E"}]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}, {"foreground": "#E6E6E6"}]
+    },
+    "compactLeading": {"symbol": "server.rack", "modifiers": [{"foreground": "#30D158"}]},
+    "compactTrailing": {
+      "text": "{{temp}}°",
+      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#FF9F0A"}]
+    },
+    "minimal": {"symbol": "server.rack", "modifiers": [{"foreground": "#30D158"}]},
+    "expanded": {
+      "leading": {
+        "symbol": "server.rack",
+        "modifiers": [{"font": "title3"}, {"foreground": "#30D158"}, {"padding": {"leading": 6}}]
+      },
+      "center": {
+        "text": "{{host}}",
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "monospaced"}]
+      },
+      "trailing": {
+        "text": "{{up}}/{{services}} up",
+        "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#30D158"}, {"padding": {"trailing": 6}}]
+      },
+      "bottom": {
+        "hstack": [
+          {
+            "each": "metrics",
+            "as": "metric",
+            "do": {
+              "link": "{{metric.url}}",
+              "label": {
+                "vstack": [
+                  {
+                    "hstack": [
+                      {
+                        "text": "{{metric.name}}",
+                        "modifiers": [{"font": "caption2"}, {"textCase": "uppercase"}, {"foreground": "#8B949E"}]
+                      },
+                      {"spacer": true},
+                      {
+                        "text": "{{metric.value}}",
+                        "modifiers": [
+                          {"font": "caption"},
+                          {"bold": true},
+                          {"monospacedDigit": true},
+                          {"contentTransition": "numericText"},
+                          {"foreground": "{{metric.color}}"}
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "chart": [
+                      {
+                        "area": "{{metric.series}}",
+                        "color": {"gradient": ["{{metric.fade}}", "#00000000"]},
+                        "interpolation": "monotone"
+                      },
+                      {
+                        "line": "{{metric.series}}",
+                        "color": "{{metric.color}}",
+                        "lineWidth": 1.5,
+                        "interpolation": "monotone"
+                      }
+                    ],
+                    "min": 0,
+                    "max": 100,
+                    "modifiers": [{"frame": {"height": 30}}]
+                  }
+                ],
+                "alignment": "leading",
+                "spacing": 3,
+                "modifiers": [{"padding": {"horizontal": 8, "vertical": 7}}, {"background": "#161B22"}, {"clip": 10}]
+              }
+            }
+          }
+        ],
+        "spacing": 8,
+        "modifiers": [{"padding": {"top": 4}}]
+      }
+    },
+    "background": "#0B0F14",
+    "keyline": "#30D158"
+  },
+  "data": {
+    "host": "nas.home",
+    "up": 14,
+    "services": 14,
+    "temp": 62,
+    "backup": "03:00 ✓",
+    "metrics": [
+      {
+        "name": "cpu",
+        "value": "23%",
+        "color": "#58A6FF",
+        "fade": "#58A6FF66",
+        "url": "https://grafana.example.com/d/node?viewPanel=1",
+        "series": [18, 22, 19, 25, 31, 28, 22, 20, 24, 35, 52, 48, 33, 27, 24, 21, 26, 30, 27, 23, 22, 25, 24, 23]
+      },
+      {
+        "name": "temp",
+        "value": "62°",
+        "color": "#FF9F0A",
+        "fade": "#FF9F0A66",
+        "url": "https://grafana.example.com/d/node?viewPanel=2",
+        "series": [54, 55, 55, 56, 58, 57, 56, 56, 57, 60, 66, 68, 65, 63, 62, 61, 61, 62, 62, 61, 61, 62, 62, 62]
+      },
+      {
+        "name": "disk",
+        "value": "71%",
+        "color": "#BF5AF2",
+        "fade": "#BF5AF266",
+        "url": "https://grafana.example.com/d/node?viewPanel=3",
+        "series": [64, 64, 65, 65, 65, 66, 66, 66, 67, 67, 67, 68, 68, 68, 69, 69, 69, 70, 70, 70, 70, 71, 71, 71]
+      }
+    ]
+  },
+  "staleAfter": 600,
+  "endAfter": 14400
+}

@@ -35,7 +35,9 @@ only send changes.
 In the app, Copy Agent Setup copies the gateway address, an agent token and a link
 to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
 the API, and its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
-covers every node and modifier.
+covers every node and modifier. Twelve [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
+show what an agent can build, from an App Review tracker to a shared shopping
+list.
 
 ## Self-host
 

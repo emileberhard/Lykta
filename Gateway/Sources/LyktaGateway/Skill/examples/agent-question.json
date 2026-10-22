@@ -1,0 +1,135 @@
+{
+  "title": "Codex needs a decision",
+  "alert": {"title": "Codex needs you", "body": "Migration failed on staging. What now?", "sound": true},
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {"shape": "circle", "fill": {"gradient": ["#C3A6FF", "#6E56CF"], "direction": "diagonal"}},
+                {"symbol": "sparkles", "modifiers": [{"font": 11.0}, {"foreground": "white"}]}
+              ],
+              "modifiers": [{"frame": {"width": 22, "height": 22}}]
+            },
+            {"text": "{{agent}} · {{project}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+            {"spacer": true},
+            {
+              "concat": ["waiting ", {"date": "{{asked}}", "style": "timer"}],
+              "modifiers": [
+                {"font": "caption"},
+                {"monospacedDigit": true},
+                {"foreground": "#A79FC4"},
+                {"multilineTextAlignment": "trailing"},
+                {"frame": {"width": 96, "alignment": "trailing"}}
+              ]
+            }
+          ],
+          "spacing": 8
+        },
+        {
+          "vstack": [
+            {"text": "{{question}}", "modifiers": [{"font": "headline"}, {"lineLimit": 2}]},
+            {"text": "{{context}}", "modifiers": [{"font": "caption"}, {"foreground": "#A79FC4"}, {"lineLimit": 1}]}
+          ],
+          "alignment": "leading",
+          "spacing": 2
+        },
+        {
+          "hstack": [
+            {
+              "each": "choices",
+              "as": "choice",
+              "do": {
+                "button": "{{choice.id}}",
+                "label": {
+                  "text": "{{choice.label}}",
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"frame": {"maxWidth": "infinity"}}]
+                },
+                "style": "{{choice.style}}",
+                "modifiers": [{"tint": "{{choice.tint}}"}]
+              }
+            }
+          ],
+          "spacing": 8
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {
+      "zstack": [
+        {"shape": "circle", "fill": {"gradient": ["#C3A6FF", "#6E56CF"], "direction": "diagonal"}},
+        {"symbol": "sparkles", "modifiers": [{"font": 10.0}, {"foreground": "white"}]}
+      ],
+      "modifiers": [{"frame": {"width": 20, "height": 20}}, {"padding": {"leading": 2}}]
+    },
+    "compactTrailing": {"text": "Decide", "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "#C3A6FF"}]},
+    "minimal": {"symbol": "questionmark.bubble.fill", "modifiers": [{"foreground": "#C3A6FF"}]},
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {"shape": "circle", "fill": {"gradient": ["#C3A6FF", "#6E56CF"], "direction": "diagonal"}},
+          {"symbol": "sparkles", "modifiers": [{"font": 15.0}, {"foreground": "white"}]}
+        ],
+        "modifiers": [{"frame": {"width": 30, "height": 30}}, {"padding": {"leading": 4}}]
+      },
+      "center": {"text": "{{agent}} · {{project}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+      "trailing": {
+        "date": "{{asked}}",
+        "style": "timer",
+        "modifiers": [
+          {"font": "caption"},
+          {"monospacedDigit": true},
+          {"foreground": "secondary"},
+          {"multilineTextAlignment": "trailing"},
+          {"frame": {"width": 48, "alignment": "trailing"}},
+          {"padding": {"trailing": 4}}
+        ]
+      },
+      "bottom": {
+        "vstack": [
+          {"text": "{{question}}", "modifiers": [{"font": "headline"}, {"lineLimit": 2}]},
+          {
+            "hstack": [
+              {
+                "each": "choices",
+                "as": "choice",
+                "do": {
+                  "button": "{{choice.id}}",
+                  "label": {
+                    "text": "{{choice.label}}",
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"frame": {"maxWidth": "infinity"}}]
+                  },
+                  "style": "{{choice.style}}",
+                  "modifiers": [{"tint": "{{choice.tint}}"}]
+                }
+              }
+            ],
+            "spacing": 8
+          }
+        ],
+        "alignment": "leading",
+        "spacing": 8
+      }
+    },
+    "background": "#14121F",
+    "keyline": "#B18CFF"
+  },
+  "data": {
+    "agent": "Codex",
+    "project": "surface",
+    "asked": 1792999740,
+    "question": "Migration failed on staging. What now?",
+    "context": "3 of 4 steps done · rollback is safe",
+    "choices": [
+      {"id": "retry", "label": "Retry", "style": "bordered", "tint": "#C3A6FF"},
+      {"id": "rollback", "label": "Roll back", "style": "borderedProminent", "tint": "#8B6CF0"},
+      {"id": "stop", "label": "Stop", "style": "bordered", "tint": "#FF6B6B"}
+    ]
+  },
+  "staleAfter": 3600,
+  "endAfter": 7200
+}

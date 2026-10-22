@@ -1,0 +1,181 @@
+{
+  "title": "Cooking shakshuka",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
+            {
+              "concat": [{"text": "{{dish}}", "modifiers": [{"fontWeight": "semibold"}]}, " · step {{n}} of {{steps}}"],
+              "modifiers": [{"font": "subheadline"}]
+            },
+            {"spacer": true},
+            {
+              "concat": [{"symbol": "person.2.fill"}, " {{serves}}"],
+              "modifiers": [{"font": "caption"}, {"foreground": "#B39B8E"}]
+            }
+          ],
+          "spacing": 6
+        },
+        {
+          "hstack": [
+            {
+              "text": "{{text}}",
+              "modifiers": [
+                {"font": "title3"},
+                {"fontWeight": "semibold"},
+                {"lineLimit": 3},
+                {"minimumScaleFactor": 0.8},
+                {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
+                {"transition": [{"push": "trailing"}, "opacity"]},
+                {"id": "{{n}}"}
+              ]
+            },
+            {
+              "if": "{{timer.on}}",
+              "then": {
+                "zstack": [
+                  {
+                    "progress": ["{{timer.start}}", "{{timer.end}}"],
+                    "style": "circular",
+                    "countsDown": true,
+                    "modifiers": [{"tint": "#FF6B3D"}]
+                  },
+                  {
+                    "date": "{{timer.end}}",
+                    "style": "timer",
+                    "modifiers": [
+                      {"font": 11.0},
+                      {"bold": true},
+                      {"monospacedDigit": true},
+                      {"multilineTextAlignment": "center"},
+                      {"frame": {"width": 37.5}}
+                    ]
+                  }
+                ],
+                "modifiers": [{"frame": {"width": 50, "height": 50}}]
+              }
+            }
+          ],
+          "spacing": 12,
+          "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
+        },
+        {
+          "hstack": [
+            {
+              "button": "back",
+              "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
+              "style": "bordered",
+              "modifiers": [{"tint": "#C9B2A6"}]
+            },
+            {"spacer": true},
+            {
+              "button": "next",
+              "label": {
+                "concat": ["Next step ", {"symbol": "chevron.right"}],
+                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+              },
+              "style": "borderedProminent",
+              "modifiers": [{"tint": "#FF6B3D"}]
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
+    "compactTrailing": {
+      "text": "{{n}}/{{steps}}",
+      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#FF8F6B"}]
+    },
+    "minimal": {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
+    "expanded": {
+      "leading": {
+        "symbol": "frying.pan.fill",
+        "modifiers": [{"font": "title3"}, {"foreground": "#FF6B3D"}, {"padding": {"leading": 6}}]
+      },
+      "center": {
+        "text": "{{dish}} · step {{n}} of {{steps}}",
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+      },
+      "trailing": {
+        "if": "{{timer.on}}",
+        "then": {
+          "zstack": [
+            {
+              "progress": ["{{timer.start}}", "{{timer.end}}"],
+              "style": "circular",
+              "countsDown": true,
+              "modifiers": [{"tint": "#FF6B3D"}]
+            },
+            {
+              "date": "{{timer.end}}",
+              "style": "timer",
+              "modifiers": [
+                {"font": 7.92},
+                {"bold": true},
+                {"monospacedDigit": true},
+                {"multilineTextAlignment": "center"},
+                {"frame": {"width": 27.0}}
+              ]
+            }
+          ],
+          "modifiers": [{"frame": {"width": 36, "height": 36}}]
+        },
+        "modifiers": [{"padding": {"trailing": 4}}]
+      },
+      "bottom": {
+        "vstack": [
+          {
+            "text": "{{text}}",
+            "modifiers": [
+              {"font": "callout"},
+              {"fontWeight": "semibold"},
+              {"lineLimit": 2},
+              {"fixedSize": "vertical"},
+              {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
+              {"transition": [{"push": "trailing"}, "opacity"]},
+              {"id": "{{n}}"}
+            ]
+          },
+          {
+            "hstack": [
+              {
+                "button": "back",
+                "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
+                "style": "bordered",
+                "modifiers": [{"tint": "#C9B2A6"}]
+              },
+              {"spacer": true},
+              {
+                "button": "next",
+                "label": {
+                  "concat": ["Next step ", {"symbol": "chevron.right"}],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                },
+                "style": "borderedProminent",
+                "modifiers": [{"tint": "#FF6B3D"}]
+              }
+            ]
+          }
+        ],
+        "spacing": 8,
+        "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
+      }
+    },
+    "background": "#1A0F0A",
+    "keyline": "#FF6B3D"
+  },
+  "data": {
+    "dish": "Shakshuka",
+    "n": 4,
+    "steps": 9,
+    "serves": 4,
+    "text": "Crack the eggs into the wells, then cover the pan",
+    "timer": {"on": true, "start": 1792999910, "end": 1793000270}
+  },
+  "endAfter": 7200
+}

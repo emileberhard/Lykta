@@ -1,0 +1,117 @@
+{
+  "title": "Shopping at ICA",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {"shape": "roundedRectangle", "cornerRadius": 5.5, "fill": "#E3000F"},
+                {"symbol": "cart.fill", "modifiers": [{"font": 11.0}, {"foreground": "white"}]}
+              ],
+              "modifiers": [{"frame": {"width": 22, "height": 22}}]
+            },
+            {"text": "{{store}} · our list", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+            {"spacer": true},
+            {
+              "concat": [{"symbol": "person.2.fill"}, " {{with}}"],
+              "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
+            }
+          ],
+          "spacing": 8
+        },
+        {
+          "grid": [
+            {
+              "each": "rows",
+              "as": "row",
+              "do": [
+                {
+                  "each": "row",
+                  "as": "item",
+                  "do": {
+                    "toggle": "item.done",
+                    "style": "checkbox",
+                    "modifiers": [{"tint": "#FF4D58"}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}],
+                    "label": {
+                      "if": "{{item.done}}",
+                      "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}, {"foreground": "secondary"}]},
+                      "else": "{{item.name}}"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "alignment": "leading",
+          "horizontalSpacing": 12,
+          "verticalSpacing": 5,
+          "modifiers": [{"font": "footnote"}]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 10,
+      "modifiers": [{"padding": 16}]
+    },
+    "compactLeading": {
+      "zstack": [
+        {"shape": "roundedRectangle", "cornerRadius": 5.0, "fill": "#E3000F"},
+        {"symbol": "cart.fill", "modifiers": [{"font": 10.0}, {"foreground": "white"}]}
+      ],
+      "modifiers": [{"frame": {"width": 20, "height": 20}}, {"padding": {"leading": 2}}]
+    },
+    "compactTrailing": {"text": "{{store}}", "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "#FF4D58"}]},
+    "minimal": {"symbol": "cart.fill", "modifiers": [{"foreground": "#FF4D58"}]},
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {"shape": "roundedRectangle", "cornerRadius": 6.5, "fill": "#E3000F"},
+          {"symbol": "cart.fill", "modifiers": [{"font": 13.0}, {"foreground": "white"}]}
+        ],
+        "modifiers": [{"frame": {"width": 26, "height": 26}}, {"padding": {"leading": 6}}]
+      },
+      "center": {"text": "{{store}} · our list", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+      "bottom": {
+        "grid": [
+          {
+            "each": "rows",
+            "as": "row",
+            "do": [
+              {
+                "each": "row",
+                "as": "item",
+                "do": {
+                  "toggle": "item.done",
+                  "style": "checkbox",
+                  "modifiers": [{"tint": "#FF4D58"}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}],
+                  "label": {
+                    "if": "{{item.done}}",
+                    "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}, {"foreground": "secondary"}]},
+                    "else": "{{item.name}}"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "alignment": "leading",
+        "horizontalSpacing": 12,
+        "verticalSpacing": 5,
+        "modifiers": [{"font": "footnote"}, {"padding": {"top": 4}}]
+      }
+    },
+    "keyline": "#E3000F"
+  },
+  "data": {
+    "store": "ICA",
+    "with": "Sam",
+    "rows": [
+      [{"name": "Oat milk", "done": true}, {"name": "Halloumi", "done": false}],
+      [{"name": "Bananas", "done": true}, {"name": "Puppy treats", "done": false}],
+      [{"name": "Coffee", "done": false}, {"name": "Tortillas", "done": true}],
+      [{"name": "Limes ×3", "done": false}, {"name": "Yoghurt", "done": false}]
+    ]
+  },
+  "endAfter": 7200
+}

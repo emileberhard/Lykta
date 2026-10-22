@@ -1,0 +1,217 @@
+{
+  "title": "Lykta 1.0 in App Review",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "zstack": [
+                {
+                  "shape": "roundedRectangle",
+                  "cornerRadius": 9.12,
+                  "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
+                },
+                {"symbol": "{{symbol}}", "modifiers": [{"font": 17.86}, {"foreground": "white"}]}
+              ],
+              "modifiers": [{"frame": {"width": 38, "height": 38}}]
+            },
+            {
+              "vstack": [
+                {"text": "{{app}} {{version}}", "modifiers": [{"font": "headline"}]},
+                {"text": "App Review · {{platform}}", "modifiers": [{"font": "caption"}, {"foreground": "#8A9BB8"}]}
+              ],
+              "alignment": "leading",
+              "spacing": 1
+            },
+            {"spacer": true},
+            {
+              "vstack": [
+                {
+                  "text": "{{state}}",
+                  "modifiers": [
+                    {"font": "caption"},
+                    {"bold": true},
+                    {"padding": {"horizontal": 8, "vertical": 3}},
+                    {"background": "{{stateColor}}"},
+                    {"clip": "capsule"}
+                  ]
+                },
+                {
+                  "concat": ["for ", {"date": "{{since}}", "style": "timer"}],
+                  "modifiers": [
+                    {"font": "caption"},
+                    {"monospacedDigit": true},
+                    {"foreground": "#8A9BB8"},
+                    {"multilineTextAlignment": "trailing"},
+                    {"frame": {"width": 80, "alignment": "trailing"}}
+                  ]
+                }
+              ],
+              "alignment": "trailing",
+              "spacing": 4
+            }
+          ],
+          "spacing": 10
+        },
+        {
+          "zstack": [
+            {
+              "shape": "capsule",
+              "fill": "#26324A",
+              "modifiers": [{"frame": {"height": 2}}, {"padding": {"horizontal": 32, "top": 8}}]
+            },
+            {
+              "hstack": [
+                {
+                  "each": "stages",
+                  "as": "stage",
+                  "do": {
+                    "vstack": [
+                      {
+                        "symbol": "{{stage.symbol}}",
+                        "modifiers": [
+                          {"font": 16},
+                          {"foreground": "{{stage.color}}"},
+                          {"background": "#0B1220"},
+                          {"clip": "circle"}
+                        ]
+                      },
+                      {
+                        "if": "{{stage.current}}",
+                        "then": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"bold": true}]},
+                        "else": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"foreground": "#8A9BB8"}]}
+                      }
+                    ],
+                    "spacing": 5,
+                    "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+                  }
+                }
+              ],
+              "spacing": 0
+            }
+          ],
+          "alignment": "top"
+        },
+        {
+          "concat": [{"symbol": "hourglass"}, " Waited {{waited}} in the queue"],
+          "modifiers": [{"font": "caption2"}, {"foreground": "#8A9BB8"}]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 14,
+      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+    },
+    "compactLeading": {
+      "zstack": [
+        {
+          "shape": "roundedRectangle",
+          "cornerRadius": 5.279999999999999,
+          "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
+        },
+        {"symbol": "{{symbol}}", "modifiers": [{"font": 10.34}, {"foreground": "white"}]}
+      ],
+      "modifiers": [{"frame": {"width": 22, "height": 22}}, {"padding": {"leading": 2}}]
+    },
+    "compactTrailing": {"text": "{{shortState}}", "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "{{stateColor}}"}]},
+    "minimal": {"symbol": "{{stateSymbol}}", "modifiers": [{"foreground": "{{stateColor}}"}]},
+    "expanded": {
+      "leading": {
+        "zstack": [
+          {
+            "shape": "roundedRectangle",
+            "cornerRadius": 9.6,
+            "fill": {"gradient": ["#2E9BFF", "#0055D4"], "direction": "diagonal"}
+          },
+          {"symbol": "{{symbol}}", "modifiers": [{"font": 18.799999999999997}, {"foreground": "white"}]}
+        ],
+        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+      },
+      "center": {
+        "vstack": [
+          {"text": "{{app}} {{version}}", "modifiers": [{"font": "headline"}]},
+          {
+            "text": "{{state}}",
+            "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "{{stateColor}}"}]
+          }
+        ],
+        "spacing": 2
+      },
+      "trailing": {
+        "date": "{{since}}",
+        "style": "timer",
+        "modifiers": [
+          {"font": "headline"},
+          {"monospacedDigit": true},
+          {"multilineTextAlignment": "trailing"},
+          {"frame": {"width": 64, "alignment": "trailing"}},
+          {"padding": {"trailing": 4}}
+        ]
+      },
+      "bottom": {
+        "zstack": [
+          {
+            "shape": "capsule",
+            "fill": "#26324A",
+            "modifiers": [{"frame": {"height": 2}}, {"padding": {"horizontal": 32, "top": 8}}]
+          },
+          {
+            "hstack": [
+              {
+                "each": "stages",
+                "as": "stage",
+                "do": {
+                  "vstack": [
+                    {
+                      "symbol": "{{stage.symbol}}",
+                      "modifiers": [
+                        {"font": 16},
+                        {"foreground": "{{stage.color}}"},
+                        {"background": "#0B1220"},
+                        {"clip": "circle"}
+                      ]
+                    },
+                    {
+                      "if": "{{stage.current}}",
+                      "then": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"bold": true}]},
+                      "else": {"text": "{{stage.name}}", "modifiers": [{"font": 10}, {"foreground": "secondary"}]}
+                    }
+                  ],
+                  "spacing": 5,
+                  "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+                }
+              }
+            ],
+            "spacing": 0
+          }
+        ],
+        "alignment": "top",
+        "modifiers": [{"padding": {"top": 8}}]
+      }
+    },
+    "background": "#0B1220",
+    "keyline": "{{stateColor}}",
+    "link": "https://appstoreconnect.apple.com/apps"
+  },
+  "data": {
+    "app": "Lykta",
+    "version": "1.0",
+    "platform": "iOS",
+    "symbol": "lightbulb.max.fill",
+    "state": "In review",
+    "shortState": "Review",
+    "stateColor": "#0A84FF",
+    "stateSymbol": "eye.fill",
+    "since": 1792995600,
+    "waited": "14 h",
+    "stages": [
+      {"name": "Uploaded", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
+      {"name": "Processed", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
+      {"name": "Waiting", "symbol": "checkmark.circle.fill", "color": "#30D158", "current": false},
+      {"name": "In review", "symbol": "smallcircle.filled.circle.fill", "color": "#0A84FF", "current": true},
+      {"name": "Live", "symbol": "circle", "color": "#3A4660", "current": false}
+    ]
+  },
+  "staleAfter": 3600,
+  "endAfter": 28800
+}

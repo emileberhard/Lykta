@@ -22,7 +22,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 ## Invariants
 
 - A layout change touches `Core`, `Rendering` and the skill's `layout.md`
-  together. Gateway tests compile every JSON example in `layout.md`.
+  together. Gateway tests compile every JSON example in `layout.md` and start
+  every activity in the skill's `examples`; `Widgets/ExamplePreviews.swift`
+  previews those in Xcode.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
 - The gateway is the only content writer. The app never calls

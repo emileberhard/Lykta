@@ -1,0 +1,241 @@
+{
+  "title": "Movie night",
+  "layout": {
+    "lockScreen": {
+      "zstack": [
+        {"shape": "rectangle", "fill": {"gradient": ["#4A2380", "#120A1F"], "direction": "radial"}},
+        {
+          "vstack": [
+            {
+              "hstack": [
+                {"symbol": "popcorn.fill", "modifiers": [{"symbolRenderingMode": "multicolor"}]},
+                {
+                  "text": "Movie night · {{room}}",
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                },
+                {"spacer": true},
+                {
+                  "if": "{{playing}}",
+                  "then": {
+                    "text": "Playing",
+                    "modifiers": [
+                      {"font": "caption2"},
+                      {"fontWeight": "semibold"},
+                      {"foreground": "#30D158"},
+                      {"padding": {"horizontal": 7, "vertical": 3}},
+                      {"background": "#30D15826"},
+                      {"clip": "capsule"}
+                    ]
+                  },
+                  "else": {
+                    "text": "Paused",
+                    "modifiers": [
+                      {"font": "caption2"},
+                      {"fontWeight": "semibold"},
+                      {"foreground": "#FF9F0A"},
+                      {"padding": {"horizontal": 7, "vertical": 3}},
+                      {"background": "#FF9F0A26"},
+                      {"clip": "capsule"}
+                    ]
+                  }
+                }
+              ],
+              "spacing": 8
+            },
+            {
+              "vstack": [
+                {"text": "{{film}}", "modifiers": [{"font": "headline"}, {"lineLimit": 1}]},
+                {
+                  "hstack": [
+                    {
+                      "progress": ["{{start}}", "{{end}}"],
+                      "pausedAt": "{{pausedAt}}",
+                      "modifiers": [{"tint": "white"}]
+                    },
+                    {
+                      "timer": ["{{start}}", "{{end}}"],
+                      "pausedAt": "{{pausedAt}}",
+                      "modifiers": [
+                        {"font": "caption"},
+                        {"monospacedDigit": true},
+                        {"foreground": "#B9A7D6"},
+                        {"multilineTextAlignment": "trailing"},
+                        {"frame": {"width": 54, "alignment": "trailing"}}
+                      ]
+                    }
+                  ],
+                  "spacing": 10
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 4
+            },
+            {
+              "hstack": [
+                {
+                  "toggle": "lights.on",
+                  "style": "button",
+                  "modifiers": [{"tint": "#FFD60A"}],
+                  "label": {
+                    "concat": [{"symbol": "lightbulb.fill"}, " {{lights.level}}%"],
+                    "modifiers": [{"font": "subheadline"}]
+                  }
+                },
+                {
+                  "button": "playpause",
+                  "style": "bordered",
+                  "modifiers": [{"tint": "white"}],
+                  "label": {
+                    "if": "{{playing}}",
+                    "then": {"concat": [{"symbol": "pause.fill"}, " Pause"]},
+                    "else": {"concat": [{"symbol": "play.fill"}, " Play"]},
+                    "modifiers": [{"font": "subheadline"}]
+                  }
+                },
+                {"spacer": true},
+                {
+                  "button": "popcorn",
+                  "style": "borderedProminent",
+                  "modifiers": [{"tint": "#FF453A"}],
+                  "label": {
+                    "concat": [{"symbol": "popcorn.fill"}, " Break"],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                  }
+                }
+              ],
+              "spacing": 8
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 10,
+          "modifiers": [{"padding": 16}, {"foreground": "white"}]
+        }
+      ]
+    },
+    "compactLeading": {"symbol": "popcorn.fill", "modifiers": [{"symbolRenderingMode": "multicolor"}]},
+    "compactTrailing": {
+      "timer": ["{{start}}", "{{end}}"],
+      "pausedAt": "{{pausedAt}}",
+      "modifiers": [
+        {"monospacedDigit": true},
+        {"foreground": "#C9B6FF"},
+        {"multilineTextAlignment": "trailing"},
+        {"frame": {"width": 56}}
+      ]
+    },
+    "minimal": {
+      "zstack": [
+        {
+          "progress": ["{{start}}", "{{end}}"],
+          "pausedAt": "{{pausedAt}}",
+          "style": "circular",
+          "modifiers": [{"tint": "#C9B6FF"}, {"frame": {"width": 24, "height": 24}}]
+        },
+        {"symbol": "popcorn.fill", "modifiers": [{"font": 9}, {"foreground": "#C9B6FF"}]}
+      ]
+    },
+    "expanded": {
+      "leading": {
+        "symbol": "popcorn.fill",
+        "modifiers": [{"font": "title3"}, {"symbolRenderingMode": "multicolor"}, {"padding": {"leading": 6}}]
+      },
+      "center": {"text": "{{film}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"lineLimit": 1}]},
+      "trailing": {
+        "if": "{{playing}}",
+        "then": {
+          "text": "Playing",
+          "modifiers": [
+            {"font": "caption2"},
+            {"fontWeight": "semibold"},
+            {"foreground": "#30D158"},
+            {"padding": {"horizontal": 7, "vertical": 3}},
+            {"background": "#30D15826"},
+            {"clip": "capsule"}
+          ]
+        },
+        "else": {
+          "text": "Paused",
+          "modifiers": [
+            {"font": "caption2"},
+            {"fontWeight": "semibold"},
+            {"foreground": "#FF9F0A"},
+            {"padding": {"horizontal": 7, "vertical": 3}},
+            {"background": "#FF9F0A26"},
+            {"clip": "capsule"}
+          ]
+        },
+        "modifiers": [{"padding": {"trailing": 6}}]
+      },
+      "bottom": {
+        "vstack": [
+          {
+            "hstack": [
+              {"progress": ["{{start}}", "{{end}}"], "pausedAt": "{{pausedAt}}", "modifiers": [{"tint": "white"}]},
+              {
+                "timer": ["{{start}}", "{{end}}"],
+                "pausedAt": "{{pausedAt}}",
+                "modifiers": [
+                  {"font": "caption"},
+                  {"monospacedDigit": true},
+                  {"foreground": "#B9A7D6"},
+                  {"multilineTextAlignment": "trailing"},
+                  {"frame": {"width": 54, "alignment": "trailing"}}
+                ]
+              }
+            ],
+            "spacing": 10
+          },
+          {
+            "hstack": [
+              {
+                "toggle": "lights.on",
+                "style": "button",
+                "modifiers": [{"tint": "#FFD60A"}],
+                "label": {
+                  "concat": [{"symbol": "lightbulb.fill"}, " {{lights.level}}%"],
+                  "modifiers": [{"font": "subheadline"}]
+                }
+              },
+              {
+                "button": "playpause",
+                "style": "bordered",
+                "modifiers": [{"tint": "white"}],
+                "label": {
+                  "if": "{{playing}}",
+                  "then": {"concat": [{"symbol": "pause.fill"}, " Pause"]},
+                  "else": {"concat": [{"symbol": "play.fill"}, " Play"]},
+                  "modifiers": [{"font": "subheadline"}]
+                }
+              },
+              {"spacer": true},
+              {
+                "button": "popcorn",
+                "style": "borderedProminent",
+                "modifiers": [{"tint": "#FF453A"}],
+                "label": {
+                  "concat": [{"symbol": "popcorn.fill"}, " Break"],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                }
+              }
+            ],
+            "spacing": 8
+          }
+        ],
+        "spacing": 10
+      }
+    },
+    "background": "#120A1F",
+    "keyline": "#9B6BFF"
+  },
+  "data": {
+    "room": "living room",
+    "film": "Dune: Part Two",
+    "playing": true,
+    "start": 1792996340,
+    "end": 1793004360,
+    "pausedAt": null,
+    "lights": {"on": true, "level": 15}
+  },
+  "staleAfter": 10800,
+  "endAfter": 14400
+}
