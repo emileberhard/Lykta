@@ -104,6 +104,7 @@ private struct Header: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 }
 
