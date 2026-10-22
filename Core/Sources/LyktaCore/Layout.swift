@@ -422,7 +422,8 @@ private struct ChartMark: Decodable {
         case .sector: ["colors", "innerRadius"]
         }
         try fields.allowOnly(allowed.union([kind.rawValue]))
-        fields.recordKeys(in: "chart.\(kind.rawValue)")
+        Mark.Kind.record(kind, at: fields.codingPath + [Key(stringValue: kind.rawValue)])
+        fields.recordKeys(in: "chart.\(kind.rawValue)", except: [kind.rawValue])
         let values: [Double] = if kind == .rule { [try fields.required(kind.rawValue)] } else { try fields.required(kind.rawValue) }
         guard (1...Node.Content.Chart.maximumValues).contains(values.count), values.allSatisfy(\.isFinite) else {
             throw fields.invalid("expected 1 to \(Node.Content.Chart.maximumValues) numbers", at: kind.rawValue)

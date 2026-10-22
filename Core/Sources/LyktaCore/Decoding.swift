@@ -35,9 +35,13 @@ extension Choice {
             let cases = Self.allCases.map(\.rawValue).joined(separator: ", ")
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "\"\(raw)\" is not one of \(cases)")
         }
-        let type = String(reflecting: Self.self)
-        FeatureLog.record("\(type.hasPrefix("LyktaCore.") ? String(type.dropFirst(10)) : type).\(raw)", at: container.codingPath)
+        Self.record(value, at: container.codingPath)
         self = value
+    }
+
+    static func record(_ value: Self, at path: [any CodingKey]) {
+        let type = String(reflecting: Self.self)
+        FeatureLog.record("\(type.hasPrefix("LyktaCore.") ? String(type.dropFirst(10)) : type).\(value.rawValue)", at: path)
     }
 }
 

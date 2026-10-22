@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
 
-concurrency: release
 
 jobs:
   admit:
@@ -53,6 +52,7 @@ jobs:
   testflight:
     runs-on: xcode-27
     environment: testflight
+    concurrency: testflight
     timeout-minutes: 60
     permissions:
       actions: read
@@ -90,11 +90,15 @@ jobs:
           LYKTA_GATEWAY_HOST: ${{ vars.LYKTA_GATEWAY_HOST }}
         run: |
           while :; do
-            running=$(curl -fsS --max-time 10 "https://$LYKTA_GATEWAY_HOST/v1/version" | plutil -extract version raw -o - -) || running=unknown
-            [[ $running == "$VERSION" ]] && exit 0
-            admit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "admit") | .conclusion')
-            [[ $admit == success || -z $admit || $admit == null ]] || { echo "::error::Release admission ended with $admit."; exit 1; }
-            echo "The gateway runs $running; waiting for $VERSION."
+            admit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "admit") | .conclusion // "pending"')
+            case $admit in
+              success)
+                running=$(curl -fsS --max-time 10 "https://$LYKTA_GATEWAY_HOST/v1/version" | plutil -extract version raw -o - -) || running=unknown
+                [[ $running =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $(printf '%s\n' "$VERSION" "$running" | sort -V | tail -1) == "$running" ]] && exit 0
+                echo "The gateway runs $running; waiting for $VERSION or newer." ;;
+              pending | "") echo "Waiting for release admission." ;;
+              *) echo "::error::Release admission ended with $admit."; exit 1 ;;
+            esac
             sleep 15
           done
 

@@ -124,26 +124,39 @@ extension Layout {
             "Paint.Level.quaternary", "Paint.Level.secondary", "Paint.Level.tertiary",
         ],
         "0.2.3": [
-            "link", "button", "toggle", "grid", "chart", "symbol.value", "number", "text.number", "if.bool", "layout.link.appURL",
-            "modifiers.transition", "modifiers.animation", "modifiers.id", "modifiers.overlay", "modifiers.blur", "modifiers.grayscale",
-            "modifiers.saturation", "modifiers.brightness", "modifiers.contentTransition.numericText",
-            "Modifier.ContentTransition.Name.symbolReplace", "Modifier.Transition", "Modifier.Animation",
-            "Node.Content.ButtonStyle", "Node.Content.ToggleStyle", "Node.Content.Chart",
+            "button", "button.label", "button.style", "chart", "chart.area.color", "chart.area.interpolation",
+            "chart.axes", "chart.bar.color", "chart.bar.colors", "chart.bar.cornerRadius", "chart.line.color",
+            "chart.line.interpolation", "chart.line.lineWidth", "chart.max", "chart.min", "chart.point.color",
+            "chart.point.colors", "chart.rule.color", "chart.rule.lineWidth", "chart.sector.colors",
+            "chart.sector.innerRadius", "grid", "grid.alignment", "grid.horizontalSpacing", "grid.verticalSpacing",
+            "if.bool", "layout.link.appURL", "link", "link.label", "modifiers.animation", "modifiers.animation.curve",
+            "modifiers.animation.delay", "modifiers.animation.duration", "modifiers.animation.value", "modifiers.blur",
+            "modifiers.brightness", "modifiers.contentTransition.numericText", "modifiers.grayscale", "modifiers.id",
+            "modifiers.overlay", "modifiers.saturation", "modifiers.transition", "modifiers.transition.move",
+            "modifiers.transition.push", "number", "symbol.value", "text.number", "toggle", "toggle.isOn",
+            "toggle.label", "toggle.style",
+            "Modifier.Animation.Curve.bouncy", "Modifier.Animation.Curve.default", "Modifier.Animation.Curve.easeIn",
+            "Modifier.Animation.Curve.easeInOut", "Modifier.Animation.Curve.easeOut",
+            "Modifier.Animation.Curve.linear", "Modifier.Animation.Curve.smooth", "Modifier.Animation.Curve.snappy",
+            "Modifier.Animation.Curve.spring", "Modifier.ContentTransition.Name.symbolReplace",
+            "Modifier.Transition.Edge.bottom", "Modifier.Transition.Edge.leading", "Modifier.Transition.Edge.top",
+            "Modifier.Transition.Edge.trailing", "Modifier.Transition.Name.identity",
+            "Modifier.Transition.Name.opacity", "Modifier.Transition.Name.scale", "Modifier.Transition.Name.slide",
+            "Node.Content.ButtonStyle.automatic", "Node.Content.ButtonStyle.bordered",
+            "Node.Content.ButtonStyle.borderedProminent", "Node.Content.ButtonStyle.plain",
+            "Node.Content.Chart.Mark.Interpolation.cardinal", "Node.Content.Chart.Mark.Interpolation.catmullRom",
+            "Node.Content.Chart.Mark.Interpolation.linear", "Node.Content.Chart.Mark.Interpolation.monotone",
+            "Node.Content.Chart.Mark.Interpolation.stepCenter", "Node.Content.Chart.Mark.Interpolation.stepEnd",
+            "Node.Content.Chart.Mark.Interpolation.stepStart", "Node.Content.Chart.Mark.Kind.area",
+            "Node.Content.Chart.Mark.Kind.bar", "Node.Content.Chart.Mark.Kind.line",
+            "Node.Content.Chart.Mark.Kind.point", "Node.Content.Chart.Mark.Kind.rule",
+            "Node.Content.Chart.Mark.Kind.sector", "Node.Content.ToggleStyle.button",
+            "Node.Content.ToggleStyle.checkbox", "Node.Content.ToggleStyle.switch",
         ],
         "0.2.4": [
-            "svg", "color.shortHex", "color.rgb",
+            "color.rgb", "color.shortHex", "svg",
         ],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
-
-    static func row(for feature: String) -> String? {
-        if introduced[feature] != nil { return feature }
-        var name = Substring(feature)
-        while let dot = name.lastIndex(of: ".") {
-            name = name[..<dot]
-            if let version = introduced[String(name)], version > baseline { return String(name) }
-        }
-        return nil
-    }
 }
 
 final class FeatureLog: Sendable {
@@ -162,7 +175,7 @@ final class FeatureLog: Sendable {
     var requirement: Layout.Requirement? {
         entries.withLock { entries in
             entries.reduce(nil) { (newest: Layout.Requirement?, entry) in
-                guard let version = Layout.row(for: entry.feature).flatMap({ Layout.introduced[$0] }),
+                guard let version = Layout.introduced[entry.feature],
                       version > (newest?.version ?? Layout.baseline) else { return newest }
                 return Layout.Requirement(version: version, feature: entry.feature, path: entry.path)
             }

@@ -299,7 +299,12 @@ public enum Paint: Decodable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
-            self = if let level = Level(rawValue: name) { .level(level) } else { .color(try ColorValue(from: decoder)) }
+            if let level = Level(rawValue: name) {
+                Level.record(level, at: decoder.codingPath)
+                self = .level(level)
+            } else {
+                self = .color(try ColorValue(from: decoder))
+            }
             return
         }
         let fields = try decoder.container(keyedBy: Key.self)
@@ -325,7 +330,9 @@ public enum ColorValue: Decodable, Sendable {
         guard let color = ColorValue(text) else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected \(Self.forms)")
         }
-        if text.hasPrefix("rgb") {
+        if case let .named(name) = color {
+            Name.record(name, at: container.codingPath)
+        } else if text.hasPrefix("rgb") {
             FeatureLog.record("color.rgb", at: container.codingPath)
         } else if text.hasPrefix("#"), text.count <= 5 {
             FeatureLog.record("color.shortHex", at: container.codingPath)

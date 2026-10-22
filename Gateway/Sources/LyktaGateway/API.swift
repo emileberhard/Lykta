@@ -86,7 +86,7 @@ struct API: Sendable {
             let deadline = ContinuousClock.now.advanced(by: .seconds(wait))
             while true {
                 let actions = try await store.actions(device, after: cursor, limit: 100)
-                if !actions.isEmpty || ContinuousClock.now >= deadline || shutdown.isRequested {
+                if !actions.isEmpty || ContinuousClock.now >= deadline || shutdown.isClosing {
                     return Self.json(200, ActionPage(actions: actions, cursor: actions.last?.seq ?? cursor))
                 }
                 try await Task.sleep(for: .milliseconds(250))

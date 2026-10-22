@@ -57,17 +57,19 @@ depth and modifiers keep rendering bounded.
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`
 records every feature a layout uses (node kinds, keys, enum cases and value
-forms such as a bare number) and looks each up in `Layout.introduced`, the
-release that first drew it. Every phone reports the newest row it was compiled
-with, so self-built apps are judged by their decoder rather than their marketing
-version; apps from before that report fall back to their version string. The
-gateway gates the filled content of every PUT, including data-only updates, and
-refuses with `app_update_required`, the feature, its JSON path and both
-versions, so the agent can resend without it or ask the user to update. Nothing
-the table misses fails silently: the phone already reports whether it could
-read each content fingerprint, and the activity's status shows that as
-`layoutReadable`. A decoder version is learned only when the app runs, so the
-refusal asks the user to update and open Lykta once.
+forms such as a bare number) and looks each up by exact name in
+`Layout.introduced`, the release that first drew it; the tests fail when the
+skill uses a feature without a row. Every phone reports the newest row it was
+compiled with, so self-built apps are judged by their decoder rather than their
+marketing version; apps from before that report fall back to their version
+string. The gateway gates the filled content of every PUT, including data-only
+updates, and refuses with `app_update_required`, naming the feature, its JSON
+path and both versions, so the agent can resend without it or ask the user to
+update. A decoder version is learned only when the app runs, so the refusal asks
+the user to update and open Lykta once. For anything the table still misses,
+the phone reports whether it could read each content it observes, and the
+activity's status shows that as `layoutReadable`; an update that arrives while
+the app is not running goes unobserved until it next runs.
 
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it

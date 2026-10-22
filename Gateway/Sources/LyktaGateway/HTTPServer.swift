@@ -70,8 +70,9 @@ final class HTTPServer: Sendable {
                 }
             }
         try await withThrowingDiscardingTaskGroup { group in
-            group.addTask {
+            group.addTask { [shutdown] in
                 try await work()
+                shutdown.startClosing()
                 try await server.channel.close()
             }
             try await withThrowingDiscardingTaskGroup { connections in

@@ -23,22 +23,21 @@ struct CompatibilityTests {
         "modifiers.brightness": #"{"text": "a", "modifiers": [{"brightness": 0.1}]}"#,
         "modifiers.contentTransition.numericText": #"{"text": "a", "modifiers": [{"contentTransition": {"numericText": 3}}]}"#,
         "Modifier.ContentTransition.Name.symbolReplace": #"{"text": "a", "modifiers": [{"contentTransition": "symbolReplace"}]}"#,
-        "Modifier.Transition": #"{"text": "a", "modifiers": [{"transition": "slide"}]}"#,
-        "Modifier.Animation": #"{"text": "a", "modifiers": [{"animation": {"curve": "spring", "value": 1}}]}"#,
-        "Node.Content.ButtonStyle": #"{"button": "ok", "label": "OK", "style": "bordered"}"#,
-        "Node.Content.ToggleStyle": #"{"toggle": "on", "isOn": true, "label": "On", "style": "checkbox"}"#,
-        "Node.Content.Chart": #"{"chart": [{"line": [1, 2], "interpolation": "monotone"}]}"#,
+        "Modifier.Transition.Name.slide": #"{"text": "a", "modifiers": [{"transition": "slide"}]}"#,
+        "Modifier.Animation.Curve.spring": #"{"text": "a", "modifiers": [{"animation": {"curve": "spring", "value": 1}}]}"#,
+        "Node.Content.ButtonStyle.bordered": #"{"button": "ok", "label": "OK", "style": "bordered"}"#,
+        "Node.Content.ToggleStyle.checkbox": #"{"toggle": "on", "isOn": true, "label": "On", "style": "checkbox"}"#,
+        "Node.Content.Chart.Mark.Interpolation.monotone": #"{"chart": [{"line": [1, 2], "interpolation": "monotone"}]}"#,
         "svg": #"{"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}"#,
         "color.shortHex": ##"{"text": "a", "modifiers": [{"foreground": "#abc"}]}"##,
         "color.rgb": #"{"text": "a", "modifiers": [{"foreground": "rgb(1, 2, 3)"}]}"#,
     ]
 
-    @Test func everyRowIsDetectedAtItsVersion() throws {
-        #expect(Set(Self.fixtures.keys).union(["layout.link.appURL"]) == Set(Layout.introduced.filter { $0.value > Layout.baseline }.keys))
-        for (row, lockScreen) in Self.fixtures {
+    @Test func detectsFeaturesAtTheirVersion() throws {
+        for (feature, lockScreen) in Self.fixtures {
             let layout = try Layout(json: Array(Self.layout(lockScreen).utf8))
-            #expect(layout.features.contains { Layout.row(for: $0) == row }, "\(row)")
-            #expect(layout.requirement?.version == Layout.introduced[row], "\(row)")
+            #expect(layout.features.contains(feature), "\(feature)")
+            #expect(layout.requirement?.version == Layout.introduced[feature], "\(feature)")
         }
         let appLink = try Layout(json: Array(Self.layout(#""a""#, extra: #", "link": "shortcuts://run""#).utf8))
         #expect(appLink.requirement == .init(version: Version(0, 2, 3), feature: "layout.link.appURL", path: "link"))
@@ -52,11 +51,14 @@ struct CompatibilityTests {
         #expect(Layout.version == Version(0, 2, 4))
     }
 
-    @Test func onlyNewerRowsCoverTheirSubtree() {
-        #expect(Layout.row(for: "chart.line.interpolation") == "chart")
-        #expect(Layout.row(for: "symbol") == "symbol")
-        #expect(Layout.row(for: "symbol.unreleasedKey") == nil)
-        #expect(Layout.row(for: "Modifier.Weight.unreleasedCase") == nil)
+    @Test func recordsEveryWayAValueIsNamed() throws {
+        let layout = try Layout(json: Array(Self.layout(#"""
+            {"vstack": [{"text": "a", "modifiers": [{"foreground": "red"}, {"background": "secondary"}]}, {"chart": [{"bar": [1], "color": "blue"}]}]}
+            """#).utf8))
+        #expect(Set(["ColorValue.Name.red", "Paint.Level.secondary", "Node.Content.Chart.Mark.Kind.bar", "chart.bar.color", "ColorValue.Name.blue"])
+            .isSubset(of: layout.features))
+        #expect(!layout.features.contains("chart.bar.bar"))
+        #expect(layout.features.allSatisfy { Layout.introduced[$0] != nil })
     }
 
     @Test func parsesVersions() {

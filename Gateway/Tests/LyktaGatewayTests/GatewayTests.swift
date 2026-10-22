@@ -135,13 +135,15 @@ struct GatewayTests {
         let orbit: JSONValue = ["title": "Orbit", "layout": Self.layout(["svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"])]
         try await reportVersion("0.2.2 (7)", layoutVersion: nil)
         #expect(try await refusal("orbit", orbit)
-            == "lockScreen.svg needs Lykta 0.2.4 or later, and this phone runs Lykta 0.2.2 (7). Ask the user to update Lykta and open it once, or send the layout without it.")
+            == "lockScreen.svg uses svg, which needs Lykta 0.2.4 or later, and this phone runs Lykta 0.2.2 (7). Ask the user to update Lykta and open it once, or send the layout without it.")
         try await put("build", Self.start)
-        #expect(try await refusal("build", ["data": ["step": .number(5)]])?.hasPrefix("lockScreen needs Lykta 0.2.3 or later") == true)
+        #expect(try await refusal("build", ["data": ["step": .number(5)]])?.hasPrefix("lockScreen uses number, which needs Lykta 0.2.3 or later") == true)
         try await reportVersion("1.0 (1)", layoutVersion: nil)
         #expect(try await refusal("orbit", orbit)?.contains("this phone's Lykta version (1.0 (1)) is unknown") == true)
         try await reportVersion("0.1.0 (1)", layoutVersion: Version(0, 2, 4))
         try await put("orbit", orbit)
+        try await reportVersion("0.1.0 (1)", layoutVersion: Version(0, 2, 3))
+        #expect(try await refusal("orbit", orbit)?.contains("and this phone's Lykta app draws layouts up to 0.2.3.") == true)
     }
 
     @Test func showsWhetherThePhoneCouldReadTheCurrentContent() async throws {
@@ -190,7 +192,7 @@ struct GatewayTests {
             }
             features.formUnion(try Layout(json: layout.json).features)
         }
-        let unversioned = features.filter { Layout.row(for: $0) == nil }
+        let unversioned = features.filter { Layout.introduced[$0] == nil }
         #expect(unversioned.isEmpty, "Add each new feature to Layout.introduced with the minor version that ships it: \(unversioned.sorted())")
     }
 
@@ -221,7 +223,7 @@ struct GatewayTests {
         let none: Actions = try await send("GET", "/v1/actions?after=\(pressed.cursor)").decoded()
         #expect(none.actions.isEmpty)
         #expect(none.cursor == pressed.cursor)
-        try await store.housekeep(now: now + 86_401)
+        try await store.housekeep(now: now + Store.actionRetention + 60)
         let expired: Actions = try await send("GET", "/v1/actions?after=0").decoded()
         #expect(expired.actions.isEmpty)
     }

@@ -27,10 +27,14 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   every activity in the skill's `examples`. Look at a layout change with
   `just render` before shipping it.
 - Every layout feature (node, key, enum case and value form the decoder
-  accepts) has a row in `Layout.introduced` with the release that first drew
-  it. A new feature gets a row with the next minor version; released rows never
-  change, and release admission enforces both. The oldest row is the 0.2.2
-  vocabulary and matches exactly; newer rows also cover their subtree. The
+  accepts) is recorded while decoding and has a row, by exact name, in
+  `Layout.introduced` with the release that first drew it. A new feature gets a
+  row with the next minor version; released rows never change, and release
+  admission enforces both. Decode enum values through `Choice` or record them
+  with `Choice.record`, and mark a new value form explicitly; a feature that is
+  never recorded is never gated. Enum type names are part of feature names, so
+  renaming one fails release admission. SVG markup counts as the single feature
+  `svg`; when the SVG subset grows, record its new elements and attributes. The
   gateway refuses a layout with `app_update_required` when the phone's reported
   layout version predates a feature in it; never let such a layout through.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,

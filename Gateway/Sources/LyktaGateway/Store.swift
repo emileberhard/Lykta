@@ -302,22 +302,24 @@ actor Store {
             throw APIError(.notFound, "No activity is named \(name).")
         }
         let activity = try Activity(row)
-        return ActivityDetail(status: try status(of: activity, observations: observations(device)), data: try decode(activity.data))
+        return ActivityDetail(status: try status(of: activity, observations: observations(device, of: [activity])), data: try decode(activity.data))
     }
 
     func list(_ device: Device) throws -> [ActivityStatus] {
-        let observations = try observations(device)
-        return try db.query("SELECT * FROM activities WHERE device_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", device.id)
-            .map { try status(of: Activity($0), observations: observations) }
+        let activities = try db.query("SELECT * FROM activities WHERE device_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", device.id)
+            .map(Activity.init)
+        let observations = try observations(device, of: activities)
+        return try activities.map { try status(of: $0, observations: observations) }
     }
 
-    private func observations(_ device: Device) throws -> [UUID: [String: Bool]] {
+    private func observations(_ device: Device, of activities: [Activity]) throws -> [UUID: [String: Bool]] {
         let rows = try db.query("""
             SELECT activity_id, json_extract(detail, '$.fingerprint') AS fingerprint, json_extract(detail, '$.layoutReadable') AS readable, max(seq)
-              FROM events WHERE device_id = ? AND source = 'app' AND activity_id IS NOT NULL
+              FROM events WHERE device_id = ? AND source = 'app' AND name IN ('activity.observed', 'activity.content')
+                AND activity_id IN (SELECT value FROM json_each(?))
                 AND json_type(detail, '$.fingerprint') = 'text' AND json_type(detail, '$.layoutReadable') IN ('true', 'false')
               GROUP BY activity_id, fingerprint
-            """, device.id)
+            """, device.id, String(decoding: try JSONEncoder().encode(activities.map(\.id.uuidString)), as: UTF8.self))
         var observations: [UUID: [String: Bool]] = [:]
         for row in rows {
             observations[try row.text("activity_id", as: UUID.init(uuidString:)), default: [:]][try row.string("fingerprint")] = try row.integer("readable") != 0
@@ -576,8 +578,14 @@ actor Store {
         guard let requirement = state.layout?.requirement else { return }
         let phone = device.layoutVersion ?? Version(leading: device.appVersion)
         if let phone, phone >= requirement.version { return }
-        let runs = phone == nil ? "this phone's Lykta version (\(device.appVersion)) is unknown" : "this phone runs Lykta \(device.appVersion)"
-        throw APIError(.appUpdateRequired, "\(requirement.path) needs Lykta \(requirement.version) or later, and \(runs). "
+        let draws = if let layoutVersion = device.layoutVersion {
+            "this phone's Lykta app draws layouts up to \(layoutVersion)"
+        } else if phone != nil {
+            "this phone runs Lykta \(device.appVersion)"
+        } else {
+            "this phone's Lykta version (\(device.appVersion)) is unknown"
+        }
+        throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
