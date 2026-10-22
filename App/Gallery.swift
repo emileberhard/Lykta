@@ -211,11 +211,29 @@ private struct Island: ViewModifier {
 }
 
 #if DEBUG
-#Preview("Examples") {
-    let model = Model.preview(.ready)
+private struct BundledExamples: PreviewModifier {
+    static func makeSharedContext() async -> Model {
+        let model = Model.preview(.ready)
+        await model.loadExamples()
+        return model
+    }
+
+    func body(content: Content, context: Model) -> some View {
+        content.environment(context)
+    }
+}
+
+#Preview("Examples", traits: .modifier(BundledExamples())) {
+    @Previewable @Environment(Model.self) var model
     NavigationStack {
         Gallery(model: model)
     }
-    .task { await model.loadExamples() }
+}
+
+#Preview("Example", traits: .modifier(BundledExamples())) {
+    @Previewable @Environment(Model.self) var model
+    NavigationStack {
+        ExampleView(example: model.examples.first { $0.id == "solar-eclipse" }!, model: model)
+    }
 }
 #endif
