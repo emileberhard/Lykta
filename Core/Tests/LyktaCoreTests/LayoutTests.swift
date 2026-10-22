@@ -18,6 +18,7 @@ struct LayoutTests {
         (#"{"chart": [{"sector": [1], "lineWidth": 2}]}"#, "lockScreen.chart[0].lineWidth: unknown key"),
         (#"{"text": "a", "modifiers": [{"animation": {"curve": "spring", "duration": 3, "value": 1}}]}"#, "lockScreen.modifiers[0].animation.duration: must be between 0.05 and 2.0"),
         (#"{"text": "a", "modifiers": [{"transition": [{"move": "top"}, ["opacity", "scale"]]}]}"#, "lockScreen.modifiers[0].transition"),
+        (#"{"svg": "<svg viewBox='0 0 9 9'><path d='M0 0' fill='tomato'/></svg>"}"#, "lockScreen.svg: <path> #1: fill: expected none, currentColor"),
     ])
     func rejectsInvalidNodesAtTheirPath(lockScreen: String, message: String) {
         #expect(error(in: layout(lockScreen)).hasPrefix(message))

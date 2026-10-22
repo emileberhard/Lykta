@@ -149,6 +149,7 @@ extension Node {
         case date(Date, style: DateStyle)
         case concat([Node])
         case shape(Shape)
+        case svg(Drawing)
         case hstack([Node], alignment: VerticalAlignment, spacing: Double?)
         case vstack([Node], alignment: HorizontalAlignment, spacing: Double?)
         case zstack([Node], alignment: Alignment)
@@ -242,7 +243,7 @@ extension Node {
         }
 
         static let fields: [String: Set<String>] = [
-            "text": [], "concat": [], "spacer": [], "divider": [],
+            "text": [], "concat": [], "spacer": [], "divider": [], "svg": [],
             "symbol": ["value"],
             "timer": ["countsDown", "pausedAt", "showsHours"],
             "date": ["style"],
@@ -295,6 +296,13 @@ extension Node {
                                     stroke: try fields.optional("stroke"), lineWidth: try fields.optional("lineWidth") ?? 1,
                                     lineCap: try fields.optional("lineCap") ?? .butt, dash: try fields.optional("dash") ?? [],
                                     trim: trim[0]...trim[1]))
+            case "svg":
+                let markup: String = try fields.required(kind)
+                do throws(LayoutError) {
+                    self = .svg(try Drawing(svg: markup))
+                } catch {
+                    throw fields.invalid(error.description, at: kind)
+                }
             case "hstack":
                 self = .hstack(try fields.required(kind), alignment: try fields.optional("alignment") ?? .center,
                                spacing: try fields.optional("spacing"))
@@ -372,7 +380,7 @@ extension Node {
             case let .conditional(_, then, otherwise): [then] + [otherwise].compactMap(\.self)
             case let .link(_, label), let .button(_, label, _), let .toggle(_, _, label, _): [label]
             case let .grid(rows, _, _, _): rows.flatMap(\.self)
-            case .text, .symbol, .timer, .date, .shape, .spacer, .divider, .progress, .chart: []
+            case .text, .symbol, .timer, .date, .shape, .svg, .spacer, .divider, .progress, .chart: []
             }
         }
     }

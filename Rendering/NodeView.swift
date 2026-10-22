@@ -23,6 +23,8 @@ struct NodeView: View {
             Image(systemName: name, variableValue: value)
         case let .shape(shape):
             ShapeNodeView(shape: shape)
+        case let .svg(drawing):
+            DrawingView(drawing: drawing)
         case let .hstack(children, alignment, spacing):
             HStack(alignment: alignment.value, spacing: spacing.map { CGFloat($0) }) { Children(nodes: children) }
         case let .vstack(children, alignment, spacing):
@@ -85,7 +87,7 @@ private struct ShapeNodeView: View {
 
     var body: some View {
         let outline = shape.kind.shape(cornerRadius: shape.cornerRadius).trim(from: shape.trim.lowerBound, to: shape.trim.upperBound)
-        let style = StrokeStyle(lineWidth: shape.lineWidth, lineCap: cap, dash: shape.dash.map { CGFloat($0) })
+        let style = StrokeStyle(lineWidth: shape.lineWidth, lineCap: shape.lineCap.value, dash: shape.dash.map { CGFloat($0) })
         switch (shape.fill, shape.stroke) {
         case let (fill?, stroke?): outline.fill(fill.style).stroke(stroke.style, style: style)
         case let (fill?, nil): outline.fill(fill.style)
@@ -94,13 +96,6 @@ private struct ShapeNodeView: View {
         }
     }
 
-    private var cap: CGLineCap {
-        switch shape.lineCap {
-        case .butt: .butt
-        case .round: .round
-        case .square: .square
-        }
-    }
 }
 
 private struct ProgressNodeView: View {
@@ -282,6 +277,16 @@ private extension Text {
         case let .tracking(tracking): self.tracking(tracking)
         case let .foreground(paints): foregroundStyle(paints[0].style)
         default: self
+        }
+    }
+}
+
+extension Node.Content.Shape.LineCap {
+    var value: CGLineCap {
+        switch self {
+        case .butt: .butt
+        case .round: .round
+        case .square: .square
         }
     }
 }

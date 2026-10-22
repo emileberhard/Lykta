@@ -41,6 +41,14 @@ limit. Fixed templates would limit what agents can show, an extension cannot
 run downloaded code, and images lose live timers and text quality. A new
 primitive needs an app update; until then the phone shows the activity's title.
 
+**Artwork is SVG drawn natively.** Agents write SVG fluently, so the `svg`
+node takes ordinary markup instead of a new drawing vocabulary. `LyktaCore`
+parses a bounded subset, without external references, scripts or CSS, into
+paths, paints and text, so the gateway rejects what the phone cannot draw;
+`Rendering` draws it with `Canvas`. HTML and JavaScript stay out because an
+extension cannot run web content or downloaded code, and pushes cannot carry
+images.
+
 **One decoder validates and renders.** The gateway and the phone compile the
 same `Layout` type, so a layout the gateway accepts renders on the phone, and
 agents get errors with JSON paths when they send it. Budgets on bytes, nodes,

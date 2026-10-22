@@ -52,6 +52,7 @@ below, its optional fields and an optional `modifiers` array.
 | `{"timer": [start, end]}` | `countsDown` (true), `pausedAt` (a date), `showsHours` (true). Counts on the phone without updates. |
 | `{"date": date}` | `style`: `time` (default), `date`, `relative`, `offset`, `timer`. A `timer` date in the past counts up. |
 | `{"concat": [parts]}` | One run of text from text, symbol, date and timer parts. Parts take only text modifiers. |
+| `{"svg": "<svg …>"}` | SVG markup drawn natively: icons, diagrams, artwork. See [drawings](#drawings). |
 | `{"shape": kind}` | `fill`, `stroke`, `lineWidth` (1), `lineCap` (`butt`, `round`, `square`), `dash` (lengths), `trim` (`[from, to]` within 0 to 1), `cornerRadius` (8, `roundedRectangle` only). Kinds: `rectangle`, `roundedRectangle`, `circle`, `ellipse`, `capsule`, `containerRelativeShape`. |
 | `{"hstack": [nodes]}` | `alignment`: `top`, `center`, `bottom`, `firstTextBaseline`, `lastTextBaseline`. `spacing`. |
 | `{"vstack": [nodes]}` | `alignment`: `leading`, `center`, `trailing`. `spacing`. |
@@ -134,6 +135,54 @@ object with one kind key holding 1 to 100 numbers:
 
 Charts hide their axes unless `axes` is true, so give them a `frame`. Bind a
 data list with `"line": "{{series}}"`.
+
+## Drawings
+
+`{"svg": markup}` draws ordinary SVG as native vector graphics, sharp at any
+size. Use it for icons, diagrams, maps, trajectories and artwork; use layout
+nodes for text the user reads and for anything that counts or can be tapped.
+The gateway rejects what the phone cannot draw and names the element.
+
+- **Size.** With `width` and `height` on the root, in points, the drawing has
+  that size, like an icon. Without them it fills the width it is offered and
+  keeps the `viewBox` proportions.
+- **Color.** `fill` defaults to black, as in SVG. `currentColor` takes the
+  node's `foreground`, so one icon follows the layout's colors.
+- **Data.** `{{placeholders}}` work inside the markup like any text.
+- **Progress along a path.** With `pathLength="1"`, dash lengths are fractions
+  of the path. `stroke-dasharray="{{progress}} 2"` draws the part travelled,
+  and `stroke-dasharray="0 2" stroke-dashoffset="-{{progress}}"` with
+  `stroke-linecap="round"` puts a dot, as wide as the stroke, at that point.
+
+| Element | Attributes |
+| --- | --- |
+| `svg` | `viewBox`, `width`, `height` |
+| `g` | Groups children; its presentation attributes and `transform` apply to them |
+| `path` | `d` with every command, absolute and relative: `M L H V C S Q T A Z` |
+| `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` | Their geometry: `x`, `y`, `width`, `height`, `rx`, `ry`, `cx`, `cy`, `r`, `x1`, `y1`, `x2`, `y2`, `points` |
+| `text` | One line at `x`, `y`, styled with `font-size`, `font-weight`, `font-family` (`serif`, `monospace` or `ui-rounded`; others fall back to the system font), `text-anchor`, `dominant-baseline` |
+| `linearGradient`, `radialGradient` with `stop`s | `x1`, `y1`, `x2`, `y2`, `cx`, `cy`, `r`, `gradientUnits`; stops take `offset`, `stop-color`, `stop-opacity`. Use as `fill="url(#id)"` or `stroke="url(#id)"` |
+| `filter` with one `feGaussianBlur` | `stdDeviation`; `filter="url(#id)"` blurs a shape, for glows |
+| `defs`, `title`, `desc` | Hold definitions; not drawn |
+
+Every drawn element and `g` takes `fill`, `fill-opacity`, `fill-rule`,
+`stroke`, `stroke-width`, `stroke-opacity`, `stroke-linecap`,
+`stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`,
+`stroke-dashoffset`, `opacity`, `filter`, `transform` (`matrix`, `translate`,
+`scale`, `rotate`, `skewX`, `skewY`), `id`, the text styles, and the same
+properties in `style="…"`. Shapes also take `pathLength`. Lengths are numbers
+in `viewBox` units, optionally `px`, or percentages of the `viewBox`. Colors
+are layout colors plus `none` and `currentColor`. There is no `use`,
+`clipPath`, `mask`, `pattern`, `image`, `tspan` or CSS class. A drawing holds
+up to 512 shapes and 4096 path segments, and its markup counts toward the push
+limit; repeating a path costs little because pushes are compressed.
+
+```json
+{
+  "svg": "<svg viewBox='0 0 200 60'><path d='M10 50C60 0 140 0 190 50' fill='none' stroke='currentColor' stroke-opacity='.3' stroke-width='2' stroke-dasharray='3 4'/><path d='M10 50C60 0 140 0 190 50' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><path d='M10 50C60 0 140 0 190 50' fill='none' stroke='currentColor' stroke-width='9' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>",
+  "modifiers": [{"foreground": "orange"}]
+}
+```
 
 ## Links, buttons and toggles
 

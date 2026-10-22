@@ -181,9 +181,9 @@ struct GatewayTests {
         let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
         let blocks = markdown.components(separatedBy: "```json\n").dropFirst().map { $0.components(separatedBy: "\n```")[0] }
         let snippetData: JSONValue = [
-            "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1),
+            "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1), "progress": .number(0.6),
         ]
-        #expect(blocks.count == 8)
+        #expect(blocks.count == 9)
         for block in blocks {
             guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: Data(block.utf8)) else {
                 Issue.record("not an object: \(block)")

@@ -9,6 +9,11 @@ Lykta shows a Live Activity on the user's iPhone. You send a JSON layout to the
 user's gateway; the gateway validates it and pushes it to the phone, where it
 renders natively. The Lykta app does not need to be open.
 
+A layout nests native views, such as text, SF Symbols, live timers, progress,
+charts, buttons and toggles, the way SwiftUI code would. For icons, diagrams
+and artwork, embed ordinary SVG markup in an `svg` node; the phone draws it as
+sharp vector graphics, and `{{placeholders}}` inside it update with the data.
+
 You need the gateway URL and agent token from the setup the user copied out of
 the Lykta app. Send the token as `Authorization: Bearer <token>`.
 
