@@ -240,9 +240,7 @@ extension Model.Phase {
 #if DEBUG
 #Preview("Live") {
     HomeView(model: .preview(.ready, activities: [
-        LiveActivity(id: "1", attributes: LyktaActivity(id: UUID(), name: "demo"), content: try! LyktaActivity.ContentState(title: Demo.title, layout: Demo.layout.filled(with: Demo.data(start: .now)).json),
-                     state: .active),
-        LiveActivity(id: "2", attributes: LyktaActivity(id: UUID(), name: "deploy"), content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
+        LiveActivity(id: "1", attributes: LyktaActivity(id: UUID(), name: "deploy"), content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
             {
               "lockScreen": {
                 "hstack": [

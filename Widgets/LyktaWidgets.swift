@@ -51,15 +51,3 @@ struct LyktaLiveActivity: Widget {
         .supplementalActivityFamilies([.small])
     }
 }
-
-#Preview("Lock Screen", as: .content, using: LyktaActivity(id: UUID(), name: "demo")) {
-    LyktaLiveActivity()
-} contentStates: {
-    try! LyktaActivity.ContentState(title: Demo.title, layout: Demo.layout.filled(with: Demo.data(start: .now)).json)
-}
-
-#Preview("Dynamic Island", as: .dynamicIsland(.expanded), using: LyktaActivity(id: UUID(), name: "demo")) {
-    LyktaLiveActivity()
-} contentStates: {
-    try! LyktaActivity.ContentState(title: Demo.title, layout: Demo.layout.filled(with: Demo.data(start: .now)).json)
-}

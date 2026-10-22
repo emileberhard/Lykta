@@ -15,4 +15,22 @@ struct ExampleTests {
             "later": .number(1_793_200_000), "year": .number(2026), "name": .string("1793000000"),
         ]))
     }
+
+    @Test func examplesSurviveTheWire() throws {
+        struct Body: Decodable {
+            let title: String
+            let layout: JSONValue
+            let data: JSONValue
+        }
+        let folder = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../../Gateway/Sources/LyktaGateway/Skill/examples")
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+        #expect(!files.isEmpty)
+        for file in files {
+            let body = try JSONDecoder().decode(Body.self, from: Data(contentsOf: file))
+            let state = try LyktaActivity.ContentState(title: body.title, layout: body.layout.filled(with: body.data.movingExampleTimes(to: .now)).json)
+            let decoded = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: JSONEncoder().encode(state))
+            #expect(decoded == state, "\(file.lastPathComponent)")
+            #expect(decoded.layout != nil, "\(file.lastPathComponent)")
+        }
+    }
 }

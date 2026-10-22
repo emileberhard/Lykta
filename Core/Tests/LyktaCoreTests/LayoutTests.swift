@@ -59,14 +59,6 @@ struct LayoutTests {
         #expect(error(in: layout(nested)) == "nodes nest deeper than 16 levels")
     }
 
-    @Test func demoSurvivesTheWire() throws {
-        let json = try Demo.layout.filled(with: Demo.data(start: Date(timeIntervalSince1970: 1_800_000_000))).json
-        let state = try LyktaActivity.ContentState(title: Demo.title, layout: json)
-        let decoded = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: JSONEncoder().encode(state))
-        #expect(decoded == state)
-        #expect(decoded.layout != nil)
-    }
-
     @Test func unreadableLayoutsFallBackToTheTitle() throws {
         let future = Data(try Deflate.compress(Array(layout(#"{"hologram": true}"#).utf8)))
         let wire = Data(#"{"title": "Build", "layout": "\#(future.base64EncodedString())"}"#.utf8)
