@@ -24,8 +24,9 @@ For each Live Activity:
 - each button press and toggle change, with its time, so your agents can act
   on it; these are kept for one day
 
-Your agents supply all activity content. Do not send content that you do not
-want stored on the gateway.
+Your agents supply all activity content, apart from the fixed examples you send
+from the app's gallery. Do not send content that you do not want stored on the
+gateway.
 
 ## Diagnostics
 

@@ -39,7 +39,8 @@ to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
 the API, and its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node and modifier. Twelve [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping
-list.
+list. The app shows each one on the Lock Screen and in the Dynamic Island, and
+sends any of them to your phone to try live.
 
 ## Self-host
 

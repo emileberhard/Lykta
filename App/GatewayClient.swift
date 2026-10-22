@@ -29,9 +29,8 @@ struct GatewayClient: Sendable {
         _ = try await send("DELETE", url.appending(path: "v1/device"), token: secret, body: nil)
     }
 
-    func putActivity(_ name: String, title: String, layout: JSONValue, data: JSONValue, endAfter: Int, agentToken: String) async throws {
-        let body = JSONValue.object(["title": .string(title), "layout": layout, "data": data, "endAfter": .number(Double(endAfter))])
-        _ = try await send("PUT", url.appending(path: "v1/activities/\(name)"), token: agentToken, body: body)
+    func putActivity(_ name: String, _ request: JSONValue, agentToken: String) async throws {
+        _ = try await send("PUT", url.appending(path: "v1/activities/\(name)"), token: agentToken, body: request)
     }
 
     func endActivity(_ name: String, agentToken: String) async throws {

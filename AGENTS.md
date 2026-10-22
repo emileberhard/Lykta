@@ -12,7 +12,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it |
 | `Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `App` | Registration, Keychain credentials, ActivityKit observation, device reports and the in-app Lock Screen cards |
+| `App` | Registration, Keychain credentials, ActivityKit observation, device reports, the in-app Lock Screen cards and the example gallery |
 | `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -39,6 +39,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   layout version predates a feature in it; never let such a layout through.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
+- The app bundles the skill's `examples` folder, and its gallery draws and
+  sends exactly those files, so every example must render in the app built
+  from the same commit. Example times stay within two days of 1793000000; the
+  gallery and `just render` move them to the present.
 - The gateway is the only content writer. The app never calls
   `Activity.request` or updates content; it ends an activity only when the
   gateway reports it ended, or on Reset.

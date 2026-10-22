@@ -71,6 +71,16 @@ the phone reports whether it could read each content it observes, and the
 activity's status shows that as `layoutReadable`; an update that arrives while
 the app is not running goes unobserved until it next runs.
 
+**The gallery bundles the skill's examples.** The Xcode project references the
+skill's `examples` folder, so the app shows the same files the gateway serves,
+drawn offline by `Rendering` before anything is sent. Fetching them from the
+gateway would need a connection and a listing endpoint, and could show layouts
+newer than the installed app draws. The Dynamic Island previews approximate the
+system's regions; only a phone shows the real presentation. Sending an example
+is an ordinary PUT with the agent token to one activity named `example`, so
+trying several updates one activity instead of spending the push-to-start
+budget, and the gateway stays the only content writer.
+
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it
 creates per activity, so the app never has to run to forward update tokens.

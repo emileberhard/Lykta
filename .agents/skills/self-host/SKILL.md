@@ -77,10 +77,11 @@ gateway needs the matching key.
 ## Verify
 
 1. `curl -fsS https://<host>/skill/SKILL.md` returns the agent skill.
-2. In the app, Send Demo shows the demo on the Lock Screen and in the Dynamic
-   Island.
-3. With the agent token from Copy Agent Setup, `GET /v1/activities/demo` reports
-   `"delivery": "accepted"`. Gateway logs go to stderr (`docker logs lykta`).
+2. In the app, open an example and tap Show on Lock Screen; it appears on the
+   Lock Screen and in the Dynamic Island.
+3. With the agent token from Copy Agent Setup, `GET /v1/activities/example`
+   reports `"delivery": "accepted"`. Gateway logs go to stderr
+   (`docker logs lykta`).
 
 ## Upgrade
 

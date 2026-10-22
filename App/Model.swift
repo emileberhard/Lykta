@@ -83,16 +83,16 @@ final class Model {
             """
     }
 
-    func sendDemo() async -> Bool {
+    func show(_ example: Example) async -> Bool {
         guard let gateway, let credentials else { return false }
-        record("app.demo")
-        let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == "demo" && $0.activityState == .active }
-        return await showingErrors("demo") {
+        record("app.example", ["example": .string(example.id)])
+        let name = Example.activityName
+        let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == name && $0.activityState == .active }
+        return await showingErrors("example") {
             if !isShowing {
-                try await gateway.endActivity("demo", agentToken: credentials.agentToken)
+                try await gateway.endActivity(name, agentToken: credentials.agentToken)
             }
-            try await gateway.putActivity("demo", title: Demo.title, layout: Demo.layout, data: Demo.data(start: .now),
-                                          endAfter: Demo.duration, agentToken: credentials.agentToken)
+            try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
         }
     }
 

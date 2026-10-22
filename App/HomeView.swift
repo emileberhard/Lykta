@@ -4,16 +4,27 @@ import UIKit
 
 struct HomeView: View {
     let model: Model
+    @State private var examples: [Example] = []
     @State private var isConfirmingReset = false
+    @Namespace private var transition
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
             List {
                 Header()
                 content
+                ExampleRows(examples: examples, transition: transition)
             }
             .listSectionSpacing(.compact)
+            .navigationLinkIndicatorVisibility(.hidden)
+            .navigationDestination(for: Example.ID.self) { id in
+                if let example = examples.first(where: { $0.id == id }) {
+                    ExampleView(example: example, model: model)
+                        .navigationTransition(.zoom(sourceID: id, in: transition))
+                }
+            }
             .safeAreaBar(edge: .bottom) {
                 if model.phase.isConfigured {
                     Actions(model: model)
@@ -37,6 +48,10 @@ struct HomeView: View {
             }
         }
         .onOpenURL { openURL($0) }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            examples = await Example.bundled(at: .now)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -55,17 +70,15 @@ struct HomeView: View {
             }
         case .ready:
             if !model.areActivitiesEnabled {
-                Section {
-                    Notice(Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor),
-                           action: "Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
-                }
+                Section { ActivitiesOffNotice() }
             }
             if let error = model.error {
                 Section { Problem(error) }
             }
             ForEach(model.activities) { activity in
                 Section {
-                    LockScreenCard(activity: activity)
+                    LockScreenCard(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
+                        .lockScreenRow(activity.content)
                 } footer: {
                     if let status = activity.status {
                         Text(status)
@@ -96,23 +109,38 @@ private struct Header: View {
     }
 }
 
-private struct LockScreenCard: View {
+struct LockScreenCard: View {
     private static let maximumHeight: CGFloat = 160
     private static let textSizes = DynamicTypeSize.large ... .xxxLarge
 
-    let activity: LiveActivity
+    let state: LyktaActivity.ContentState
+    let activity: UUID?
+    let isStale: Bool
 
     var body: some View {
-        LockScreenView(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
+        LockScreenView(state: state, activity: activity, isStale: isStale)
             .frame(maxWidth: .infinity, maxHeight: Self.maximumHeight)
             .clipped()
             .dynamicTypeSize(Self.textSizes)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(activity.content.layout?.background?.value)
     }
 }
 
-private struct Problem: View {
+extension View {
+    func lockScreenRow(_ state: LyktaActivity.ContentState) -> some View {
+        listRowInsets(EdgeInsets()).listRowBackground(state.layout?.background?.value)
+    }
+}
+
+struct ActivitiesOffNotice: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Notice(Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor),
+               action: "Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
+    }
+}
+
+struct Problem: View {
     let message: String
 
     init(_ message: String) {
@@ -170,55 +198,26 @@ private struct Actions: View {
     let model: Model
     @State private var copies = 0
     @State private var isShowingCopied = false
-    @State private var demos = 0
-    @State private var isSendingDemo = false
 
     var body: some View {
-        GlassEffectContainer {
-            VStack(spacing: 10) {
-                Button {
-                    model.copySetup()
-                    copies += 1
-                } label: {
-                    Label(isShowingCopied ? "Copied" : "Copy Agent Setup",
-                          systemImage: isShowingCopied ? "checkmark" : "doc.on.doc")
-                        .contentTransition(.symbolEffect(.replace))
-                        .foregroundStyle(Color(.systemBackground))
-                }
-                .buttonStyle(.glassProminent)
-                .tint(.primary)
-                .accessibilityShowsLargeContentViewer()
-
-                Button {
-                    Task {
-                        isSendingDemo = true
-                        if await model.sendDemo() { demos += 1 }
-                        isSendingDemo = false
-                    }
-                } label: {
-                    Label {
-                        Text(isSendingDemo ? "Sending…" : "Send Demo")
-                    } icon: {
-                        if isSendingDemo {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "sparkles")
-                                .symbolEffect(.bounce, value: demos)
-                        }
-                    }
-                }
-                .buttonStyle(.glass)
-                .disabled(isSendingDemo)
-                .accessibilityShowsLargeContentViewer()
-            }
-            .controlSize(.large)
-            .buttonSizing(.flexible)
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        Button {
+            model.copySetup()
+            copies += 1
+        } label: {
+            Label(isShowingCopied ? "Copied" : "Copy Agent Setup",
+                  systemImage: isShowingCopied ? "checkmark" : "doc.on.doc")
+                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(Color(.systemBackground))
         }
+        .buttonStyle(.glassProminent)
+        .tint(.primary)
+        .controlSize(.large)
+        .buttonSizing(.flexible)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityShowsLargeContentViewer()
         .padding(.horizontal)
         .disabled(!model.phase.isReady)
         .sensoryFeedback(.success, trigger: copies)
-        .sensoryFeedback(.success, trigger: demos)
         .task(id: copies) {
             guard copies > 0 else { return }
             withAnimation { isShowingCopied = true }
@@ -228,7 +227,7 @@ private struct Actions: View {
     }
 }
 
-private extension Model.Phase {
+extension Model.Phase {
     var isReady: Bool {
         if case .ready = self { true } else { false }
     }
