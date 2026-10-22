@@ -25,12 +25,16 @@
                     },
                     {"spacer": true},
                     {
-                      "concat": [
-                        {"symbol": "hourglass"},
-                        " ",
-                        {"date": "{{asked}}", "style": "timer", "modifiers": [{"monospacedDigit": true}]}
-                      ],
-                      "modifiers": [{"frame": {"width": 64, "alignment": "trailing"}}]
+                      "if": "{{answered}}",
+                      "then": {"concat": [{"symbol": "checkmark.circle.fill"}, " answered"]},
+                      "else": {
+                        "concat": [
+                          {"symbol": "hourglass"},
+                          " ",
+                          {"date": "{{asked}}", "style": "timer", "modifiers": [{"monospacedDigit": true}]}
+                        ],
+                        "modifiers": [{"frame": {"width": 64, "alignment": "trailing"}}]
+                      }
                     }
                   ],
                   "modifiers": [{"font": "caption"}, {"foreground": "#9C93B8"}, {"padding": {"horizontal": 4}}]
@@ -64,24 +68,51 @@
           "spacing": 8
         },
         {
-          "hstack": [
-            {"spacer": true},
-            {
-              "each": "choices",
-              "as": "choice",
-              "do": {
-                "button": "{{choice.id}}",
-                "label": {"text": "{{choice.label}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
-                "style": "{{choice.style}}",
-                "modifiers": [{"tint": "{{choice.tint}}"}]
+          "if": "{{answered}}",
+          "then": {
+            "hstack": [
+              {"spacer": true},
+              {"text": "{{agent}} is on it", "modifiers": [{"font": "caption"}, {"foreground": "#9C93B8"}]},
+              {
+                "concat": [{"symbol": "checkmark"}, " {{answer}}"],
+                "modifiers": [
+                  {"font": "subheadline"},
+                  {"fontWeight": "semibold"},
+                  {"padding": {"horizontal": 12, "vertical": 7}},
+                  {"background": {"gradient": ["#8E6CFF", "#6E56CF"], "direction": "diagonal"}},
+                  {"clip": 16}
+                ]
               }
-            }
-          ],
-          "spacing": 8
+            ],
+            "spacing": 8,
+            "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}]
+          },
+          "else": {
+            "hstack": [
+              {"spacer": true},
+              {
+                "each": "choices",
+                "as": "choice",
+                "do": {
+                  "button": "{{choice.id}}",
+                  "label": {"text": "{{choice.label}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+                  "style": "{{choice.style}}",
+                  "set": {"answered": true, "answer": "{{choice.label}}"},
+                  "modifiers": [{"tint": "{{choice.tint}}"}]
+                }
+              }
+            ],
+            "spacing": 8,
+            "modifiers": [{"transition": "opacity"}]
+          }
         }
       ],
       "spacing": 10,
-      "modifiers": [{"padding": {"horizontal": 14, "vertical": 14}}, {"foreground": "white"}]
+      "modifiers": [
+        {"padding": {"horizontal": 14, "vertical": 14}},
+        {"foreground": "white"},
+        {"animation": {"curve": "snappy", "value": "{{answered}}"}}
+      ]
     },
     "compactLeading": {
       "zstack": [
@@ -91,16 +122,24 @@
       "modifiers": [{"frame": {"width": 22, "height": 22}}, {"padding": {"leading": 2}}]
     },
     "compactTrailing": {
-      "date": "{{asked}}",
-      "style": "timer",
-      "modifiers": [
-        {"monospacedDigit": true},
-        {"multilineTextAlignment": "trailing"},
-        {"foreground": "#B9A2FF"},
-        {"frame": {"width": 44}}
-      ]
+      "if": "{{answered}}",
+      "then": {"symbol": "checkmark.circle.fill", "modifiers": [{"foreground": "#B9A2FF"}, {"padding": {"trailing": 2}}]},
+      "else": {
+        "date": "{{asked}}",
+        "style": "timer",
+        "modifiers": [
+          {"monospacedDigit": true},
+          {"multilineTextAlignment": "trailing"},
+          {"foreground": "#B9A2FF"},
+          {"frame": {"width": 44}}
+        ]
+      }
     },
-    "minimal": {"symbol": "bubble.left.and.exclamationmark.bubble.right.fill", "modifiers": [{"foreground": "#B9A2FF"}]},
+    "minimal": {
+      "if": "{{answered}}",
+      "then": {"symbol": "checkmark.bubble.fill", "modifiers": [{"foreground": "#B9A2FF"}]},
+      "else": {"symbol": "bubble.left.and.exclamationmark.bubble.right.fill", "modifiers": [{"foreground": "#B9A2FF"}]}
+    },
     "expanded": {
       "leading": {
         "zstack": [
@@ -114,16 +153,20 @@
         "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
       },
       "trailing": {
-        "date": "{{asked}}",
-        "style": "timer",
-        "modifiers": [
-          {"monospacedDigit": true},
-          {"multilineTextAlignment": "trailing"},
-          {"font": "caption"},
-          {"foreground": "#9C93B8"},
-          {"frame": {"width": 44, "alignment": "trailing"}},
-          {"padding": {"trailing": 4, "top": 2}}
-        ]
+        "if": "{{answered}}",
+        "then": {"symbol": "checkmark.circle.fill", "modifiers": [{"font": "title3"}, {"foreground": "#B9A2FF"}]},
+        "else": {
+          "date": "{{asked}}",
+          "style": "timer",
+          "modifiers": [
+            {"monospacedDigit": true},
+            {"multilineTextAlignment": "trailing"},
+            {"font": "caption"},
+            {"foreground": "#9C93B8"},
+            {"frame": {"width": 44, "alignment": "trailing"}}
+          ]
+        },
+        "modifiers": [{"padding": {"trailing": 4, "top": 2}}]
       },
       "bottom": {
         "vstack": [
@@ -132,23 +175,47 @@
             "modifiers": [{"font": "headline"}, {"lineLimit": 2}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
           },
           {
-            "hstack": [
-              {"spacer": true},
-              {
-                "each": "choices",
-                "as": "choice",
-                "do": {
-                  "button": "{{choice.id}}",
-                  "label": {"text": "{{choice.label}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
-                  "style": "{{choice.style}}",
-                  "modifiers": [{"tint": "{{choice.tint}}"}]
+            "if": "{{answered}}",
+            "then": {
+              "hstack": [
+                {"spacer": true},
+                {"text": "{{agent}} is on it", "modifiers": [{"font": "caption"}, {"foreground": "#9C93B8"}]},
+                {
+                  "concat": [{"symbol": "checkmark"}, " {{answer}}"],
+                  "modifiers": [
+                    {"font": "subheadline"},
+                    {"fontWeight": "semibold"},
+                    {"padding": {"horizontal": 12, "vertical": 7}},
+                    {"background": {"gradient": ["#8E6CFF", "#6E56CF"], "direction": "diagonal"}},
+                    {"clip": 16}
+                  ]
                 }
-              }
-            ],
-            "spacing": 8
+              ],
+              "spacing": 8,
+              "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}]
+            },
+            "else": {
+              "hstack": [
+                {"spacer": true},
+                {
+                  "each": "choices",
+                  "as": "choice",
+                  "do": {
+                    "button": "{{choice.id}}",
+                    "label": {"text": "{{choice.label}}", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+                    "style": "{{choice.style}}",
+                    "set": {"answered": true, "answer": "{{choice.label}}"},
+                    "modifiers": [{"tint": "{{choice.tint}}"}]
+                  }
+                }
+              ],
+              "spacing": 8,
+              "modifiers": [{"transition": "opacity"}]
+            }
           }
         ],
-        "spacing": 8
+        "spacing": 8,
+        "modifiers": [{"animation": {"curve": "snappy", "value": "{{answered}}"}}]
       }
     },
     "background": "#15121F",
@@ -160,6 +227,8 @@
     "asked": 1792999740,
     "question": "Migration failed on staging. What now?",
     "context": "step 4/4 add_index · lock timeout",
+    "answered": false,
+    "answer": "",
     "choices": [
       {"id": "retry", "label": "Retry", "style": "bordered", "tint": "#C9B2FF"},
       {"id": "rollback", "label": "Roll back", "style": "borderedProminent", "tint": "#7C5CF0"},

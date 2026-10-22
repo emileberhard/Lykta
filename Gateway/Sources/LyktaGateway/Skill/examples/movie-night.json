@@ -67,24 +67,40 @@
                   }
                 },
                 {
-                  "button": "playpause",
-                  "style": "bordered",
-                  "modifiers": [{"tint": "#FFF3DE"}],
-                  "label": {
-                    "if": "{{playing}}",
-                    "then": {"symbol": "pause.fill", "modifiers": [{"accessibilityLabel": "Pause"}]},
-                    "else": {"symbol": "play.fill", "modifiers": [{"accessibilityLabel": "Play"}]},
-                    "modifiers": [{"font": "subheadline"}]
+                  "if": "{{playing}}",
+                  "then": {
+                    "button": "pause",
+                    "style": "bordered",
+                    "set": {"playing": false},
+                    "now": {"pausedAt": 0},
+                    "modifiers": [{"tint": "#FFF3DE"}],
+                    "label": {"symbol": "pause.fill", "modifiers": [{"font": "subheadline"}, {"accessibilityLabel": "Pause"}]}
                   }
                 },
                 {"spacer": true},
                 {
-                  "button": "popcorn",
-                  "style": "borderedProminent",
-                  "modifiers": [{"tint": "#D7263D"}],
-                  "label": {
-                    "concat": [{"symbol": "popcorn.fill"}, " Break"],
-                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                  "if": "{{playing}}",
+                  "then": {
+                    "button": "break",
+                    "style": "borderedProminent",
+                    "set": {"playing": false, "lights.on": true, "lights.level": 60},
+                    "now": {"pausedAt": 0},
+                    "modifiers": [{"tint": "#D7263D"}],
+                    "label": {
+                      "concat": [{"symbol": "popcorn.fill"}, " Break"],
+                      "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                    }
+                  },
+                  "else": {
+                    "button": "resume",
+                    "style": "borderedProminent",
+                    "set": {"playing": true, "pausedAt": null, "lights.level": 15},
+                    "add": {"start": {"since": "pausedAt"}, "end": {"since": "pausedAt"}},
+                    "modifiers": [{"tint": "#D7263D"}],
+                    "label": {
+                      "concat": [{"symbol": "play.fill"}, " Resume"],
+                      "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                    }
                   }
                 }
               ],
@@ -190,24 +206,40 @@
                 }
               },
               {
-                "button": "playpause",
-                "style": "bordered",
-                "modifiers": [{"tint": "#FFF3DE"}],
-                "label": {
-                  "if": "{{playing}}",
-                  "then": {"symbol": "pause.fill", "modifiers": [{"accessibilityLabel": "Pause"}]},
-                  "else": {"symbol": "play.fill", "modifiers": [{"accessibilityLabel": "Play"}]},
-                  "modifiers": [{"font": "subheadline"}]
+                "if": "{{playing}}",
+                "then": {
+                  "button": "pause",
+                  "style": "bordered",
+                  "set": {"playing": false},
+                  "now": {"pausedAt": 0},
+                  "modifiers": [{"tint": "#FFF3DE"}],
+                  "label": {"symbol": "pause.fill", "modifiers": [{"font": "subheadline"}, {"accessibilityLabel": "Pause"}]}
                 }
               },
               {"spacer": true},
               {
-                "button": "popcorn",
-                "style": "borderedProminent",
-                "modifiers": [{"tint": "#D7263D"}],
-                "label": {
-                  "concat": [{"symbol": "popcorn.fill"}, " Break"],
-                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                "if": "{{playing}}",
+                "then": {
+                  "button": "break",
+                  "style": "borderedProminent",
+                  "set": {"playing": false, "lights.on": true, "lights.level": 60},
+                  "now": {"pausedAt": 0},
+                  "modifiers": [{"tint": "#D7263D"}],
+                  "label": {
+                    "concat": [{"symbol": "popcorn.fill"}, " Break"],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                  }
+                },
+                "else": {
+                  "button": "resume",
+                  "style": "borderedProminent",
+                  "set": {"playing": true, "pausedAt": null, "lights.level": 15},
+                  "add": {"start": {"since": "pausedAt"}, "end": {"since": "pausedAt"}},
+                  "modifiers": [{"tint": "#D7263D"}],
+                  "label": {
+                    "concat": [{"symbol": "play.fill"}, " Resume"],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                  }
                 }
               }
             ],

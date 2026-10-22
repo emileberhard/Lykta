@@ -33,7 +33,10 @@
                 {"frame": {"width": 176, "alignment": "leading"}}
               ]
             },
-            {"text": "Aim for {{goal}} between trips", "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}]},
+            {
+              "concat": ["Next trip by ", {"date": "{{due}}", "modifiers": [{"fontWeight": "semibold"}]}, " · {{trips}} today"],
+              "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}, {"contentTransition": {"numericText": "{{trips}}"}}]
+            },
             {"spacer": 8},
             {
               "button": "out",
@@ -42,6 +45,8 @@
                 "modifiers": [{"font": "subheadline"}, {"fontWeight": "bold"}, {"foreground": "white"}]
               },
               "style": "borderedProminent",
+              "now": {"last": 0, "due": "{{gap}}"},
+              "add": {"trips": 1},
               "modifiers": [{"tint": "#F28C28"}]
             }
           ],
@@ -121,7 +126,7 @@
       "bottom": {
         "hstack": [
           {
-            "concat": [{"symbol": "moon.zzz.fill"}, " Napping until ", {"date": "{{napUntil}}"}],
+            "concat": [{"symbol": "moon.zzz.fill"}, " Nap till ", {"date": "{{napUntil}}"}, " · {{trips}} trips"],
             "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}]
           },
           {"spacer": true},
@@ -132,6 +137,8 @@
               "modifiers": [{"font": "footnote"}, {"fontWeight": "bold"}, {"foreground": "white"}]
             },
             "style": "borderedProminent",
+            "now": {"last": 0, "due": "{{gap}}"},
+            "add": {"trips": 1},
             "modifiers": [{"tint": "#F28C28"}]
           }
         ],
@@ -183,7 +190,7 @@
     "background": "#E8F4F1",
     "keyline": "#F28C28"
   },
-  "data": {"dog": "Ollie", "goal": "2 h", "last": 1792995680, "due": 1793002880, "napUntil": 1793002400},
+  "data": {"dog": "Ollie", "gap": 7200, "trips": 4, "last": 1792995680, "due": 1793002880, "napUntil": 1793002400},
   "staleAfter": 28800,
   "endAfter": 28800
 }

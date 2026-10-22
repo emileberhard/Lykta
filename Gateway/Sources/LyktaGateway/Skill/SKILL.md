@@ -155,15 +155,15 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 
 | Example | Shows |
 | --- | --- |
-| [agent-question](examples/agent-question.json) | An agent's question in a chat bubble, answered with reply buttons |
+| [agent-question](examples/agent-question.json) | An agent's question in a chat bubble; a reply button records the answer and shows it as the user's reply |
 | [app-review](examples/app-review.json) | App Store review stages for a build, on a card colored by the review state |
 | [homelab](examples/homelab.json) | A server dashboard of a CPU chart and gauges, each linking to Grafana, that flags a missed heartbeat |
 | [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
-| [movie-night](examples/movie-night.json) | A pausable film timer between drawn curtains, with a lights toggle and remote buttons |
+| [movie-night](examples/movie-night.json) | A film timer between drawn curtains that pauses, takes a break with the lights up and resumes where it stopped |
 | [orion-return](examples/orion-return.json) | Artemis II's figure-eight path around the Moon and home, drawn in SVG with Orion placed by progress |
 | [pr-inbox](examples/pr-inbox.json) | Pull requests as rows from a list that slide in and out, each opening GitHub |
-| [printer](examples/printer.json) | A drawn printer whose print grows in the filament's color, with a camera check and a pause button |
-| [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside around a drawn puppy, reset with a button, with an Apple Watch view |
-| [recipe-steps](examples/recipe-steps.json) | Cookbook steps that slide in on Next and Back, with page dots and a ring timer |
+| [printer](examples/printer.json) | A drawn printer whose print grows in the filament's color, with a camera check and pause and resume buttons that move the finish time |
+| [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside around a drawn puppy; a button restarts the clock and counts the trip, with an Apple Watch view |
+| [recipe-steps](examples/recipe-steps.json) | Cookbook steps looked up by number that slide in on Next and Back, with a ring timer each timed step starts and stops |
 | [shopping-list](examples/shopping-list.json) | A checklist grouped by aisle that works without an agent and follows light and dark mode |
 | [solar-eclipse](examples/solar-eclipse.json) | A countdown to totality over the eclipse's phases, drawn in SVG with a glowing corona |

@@ -23,13 +23,29 @@
                 },
                 {"spacer": true},
                 {
-                  "button": "pause",
-                  "label": {
-                    "symbol": "pause.fill",
-                    "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
+                  "if": "{{paused}}",
+                  "then": {
+                    "button": "resume",
+                    "label": {
+                      "symbol": "play.fill",
+                      "modifiers": [{"foreground": "white"}, {"accessibilityLabel": "Resume print"}]
+                    },
+                    "style": "borderedProminent",
+                    "set": {"paused": false, "pausedAt": null},
+                    "add": {"eta": {"since": "pausedAt"}},
+                    "modifiers": [{"tint": "{{filament}}"}]
                   },
-                  "style": "bordered",
-                  "modifiers": [{"tint": "{{filament}}"}]
+                  "else": {
+                    "button": "pause",
+                    "label": {
+                      "symbol": "pause.fill",
+                      "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
+                    },
+                    "style": "bordered",
+                    "set": {"paused": true},
+                    "now": {"pausedAt": 0},
+                    "modifiers": [{"tint": "{{filament}}"}]
+                  }
                 }
               ],
               "alignment": "center"
@@ -43,8 +59,15 @@
               "hstack": [
                 {"progress": "{{fraction}}", "modifiers": [{"tint": "{{filament}}"}]},
                 {
-                  "concat": ["done ", {"date": "{{eta}}"}],
-                  "modifiers": [{"font": "caption"}, {"fontWeight": "semibold"}, {"fixedSize": true}]
+                  "if": "{{paused}}",
+                  "then": {
+                    "concat": [{"symbol": "pause.circle.fill"}, " paused"],
+                    "modifiers": [{"font": "caption"}, {"fontWeight": "semibold"}, {"foreground": "#E07A00"}, {"fixedSize": true}]
+                  },
+                  "else": {
+                    "concat": ["done ", {"date": "{{eta}}"}],
+                    "modifiers": [{"font": "caption"}, {"fontWeight": "semibold"}, {"fixedSize": true}]
+                  }
                 }
               ],
               "spacing": 8,
@@ -74,8 +97,12 @@
       "modifiers": [{"padding": {"leading": 4}}]
     },
     "compactTrailing": {
-      "text": "{{percent}}%",
-      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "{{filament}}"}]
+      "if": "{{paused}}",
+      "then": {"symbol": "pause.fill", "modifiers": [{"foreground": "#FF9F0A"}]},
+      "else": {
+        "text": "{{percent}}%",
+        "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "{{filament}}"}]
+      }
     },
     "minimal": {
       "progress": "{{fraction}}",
@@ -91,8 +118,15 @@
         "vstack": [
           {"text": "{{object}}", "modifiers": [{"font": "headline"}, {"lineLimit": 1}]},
           {
-            "concat": ["layer {{layer}} of {{layers}} · done ", {"date": "{{eta}}"}],
-            "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "secondary"}]
+            "if": "{{paused}}",
+            "then": {
+              "text": "layer {{layer}} of {{layers}} · paused",
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#FF9F0A"}]
+            },
+            "else": {
+              "concat": ["layer {{layer}} of {{layers}} · done ", {"date": "{{eta}}"}],
+              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "secondary"}]
+            }
           }
         ],
         "spacing": 1
@@ -127,13 +161,29 @@
               },
               {"spacer": true},
               {
-                "button": "pause",
-                "label": {
-                  "symbol": "pause.fill",
-                  "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
+                "if": "{{paused}}",
+                "then": {
+                  "button": "resume",
+                  "label": {
+                    "symbol": "play.fill",
+                    "modifiers": [{"foreground": "white"}, {"accessibilityLabel": "Resume print"}]
+                  },
+                  "style": "borderedProminent",
+                  "set": {"paused": false, "pausedAt": null},
+                  "add": {"eta": {"since": "pausedAt"}},
+                  "modifiers": [{"tint": "{{filament}}"}]
                 },
-                "style": "bordered",
-                "modifiers": [{"tint": "{{filament}}"}]
+                "else": {
+                  "button": "pause",
+                  "label": {
+                    "symbol": "pause.fill",
+                    "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
+                  },
+                  "style": "bordered",
+                  "set": {"paused": true},
+                  "now": {"pausedAt": 0},
+                  "modifiers": [{"tint": "{{filament}}"}]
+                }
               }
             ]
           }
@@ -156,6 +206,8 @@
     "height": 62,
     "printed": 28.4,
     "eta": 1793006720,
+    "paused": false,
+    "pausedAt": null,
     "camera": {"symbol": "web.camera.fill", "color": "#2DB55D", "at": 1792999870, "note": "clean, no spaghetti"}
   },
   "staleAfter": 900,

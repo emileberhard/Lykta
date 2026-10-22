@@ -18,19 +18,14 @@
             {"text": "serves {{serves}}", "modifiers": [{"font": "caption"}, {"italic": true}, {"foreground": "#8A7462"}]},
             {"spacer": true},
             {
-              "hstack": [
-                {
-                  "each": "pages",
-                  "as": "page",
-                  "do": {
-                    "shape": "capsule",
-                    "fill": "{{page.color}}",
-                    "modifiers": [{"frame": {"width": "{{page.width}}", "height": 6}}]
-                  }
-                }
-              ],
-              "spacing": 4,
-              "modifiers": [{"animation": {"curve": "snappy", "value": "{{n}}"}}]
+              "text": "{{step}} of {{of}}",
+              "modifiers": [{"font": "caption"}, {"italic": true}, {"monospacedDigit": true}, {"foreground": "#8A7462"}]
+            },
+            {
+              "gauge": "{{step}}",
+              "max": "{{of}}",
+              "style": "linearCapacity",
+              "modifiers": [{"tint": "#C8432B"}, {"frame": {"width": 54}}]
             }
           ],
           "spacing": 6,
@@ -39,19 +34,18 @@
         {
           "hstack": [
             {
-              "text": "{{n}}",
+              "text": "{{step}}",
               "modifiers": [
                 {"font": 50},
                 {"fontWeight": "bold"},
                 {"fontDesign": "serif"},
                 {"foreground": "#C8432B"},
-                {"transition": [{"push": "trailing"}, "opacity"]},
-                {"id": "{{n}}"},
+                {"contentTransition": {"numericText": "{{step}}"}},
                 {"frame": {"width": 34, "alignment": "leading"}}
               ]
             },
             {
-              "text": "{{text}}",
+              "text": "{{steps[step].text}}",
               "modifiers": [
                 {"font": "title3"},
                 {"fontWeight": "medium"},
@@ -60,7 +54,7 @@
                 {"minimumScaleFactor": 0.8},
                 {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
                 {"transition": [{"push": "trailing"}, "opacity"]},
-                {"id": "{{n}}"}
+                {"id": "{{step}}"}
               ]
             },
             {
@@ -85,33 +79,78 @@
                     ]
                   }
                 ],
-                "modifiers": [{"frame": {"width": 50, "height": 50}}]
+                "modifiers": [{"frame": {"width": 50, "height": 50}}, {"transition": [{"push": "trailing"}, "opacity"]}]
               }
             }
           ],
           "alignment": "center",
           "spacing": 10,
-          "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
+          "modifiers": [{"animation": {"curve": "smooth", "value": "{{step}}"}}, {"animation": {"curve": "bouncy", "value": "{{timer.end}}"}}]
         },
         {
           "hstack": [
             {
-              "button": "back",
-              "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
-              "style": "bordered",
-              "modifiers": [{"tint": "#8A7462"}]
+              "if": "{{steps[step].first}}",
+              "then": {
+                "concat": [{"symbol": "flame.fill"}, " Let's cook"],
+                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#8A7462"}]
+              },
+              "else": {
+                "button": "back",
+                "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
+                "style": "bordered",
+                "add": {"step": -1},
+                "modifiers": [{"tint": "#8A7462"}]
+              }
             },
             {"spacer": true},
             {
-              "button": "next",
-              "label": {
-                "concat": ["Next step ", {"symbol": "chevron.right"}],
-                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
+              "if": "{{timer.on}}",
+              "then": {
+                "button": "stop-timer",
+                "label": {
+                  "concat": [{"symbol": "stop.fill"}, " Stop"],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Stop the timer"}]
+                },
+                "style": "bordered",
+                "set": {"timer.on": false},
+                "modifiers": [{"tint": "#C8432B"}]
               },
-              "style": "borderedProminent",
-              "modifiers": [{"tint": "#C8432B"}]
+              "else": {
+                "if": "{{steps[step].timed}}",
+                "then": {
+                  "button": "start-timer",
+                  "label": {
+                    "concat": [{"symbol": "timer"}, " Start"],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Start the timer"}]
+                  },
+                  "style": "bordered",
+                  "set": {"timer.on": true},
+                  "now": {"timer.start": 0, "timer.end": "{{steps[step].seconds}}"},
+                  "modifiers": [{"tint": "#C8432B"}]
+                }
+              }
+            },
+            {
+              "if": "{{steps[step].last}}",
+              "then": {
+                "concat": [{"symbol": "fork.knife"}, " Enjoy"],
+                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#C8432B"}]
+              },
+              "else": {
+                "button": "next",
+                "label": {
+                  "concat": ["Next ", {"symbol": "chevron.right"}],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
+                },
+                "style": "borderedProminent",
+                "add": {"step": 1},
+                "modifiers": [{"tint": "#C8432B"}]
+              }
             }
-          ]
+          ],
+          "spacing": 8,
+          "modifiers": [{"animation": {"curve": "smooth", "value": "{{step}}"}}]
         }
       ],
       "alignment": "leading",
@@ -119,12 +158,13 @@
       "modifiers": [{"padding": {"horizontal": 16, "vertical": 13}}, {"foreground": "#3A2A1F"}]
     },
     "compactLeading": {
-      "text": "{{n}}",
+      "text": "{{step}}",
       "modifiers": [
         {"font": "subheadline"},
         {"fontWeight": "bold"},
         {"fontDesign": "serif"},
         {"foreground": "white"},
+        {"contentTransition": {"numericText": "{{step}}"}},
         {"frame": {"width": 22, "height": 22}},
         {"background": "#C8432B"},
         {"clip": "circle"},
@@ -143,7 +183,7 @@
           {"frame": {"width": 44}}
         ]
       },
-      "else": {"text": "of {{steps}}", "modifiers": [{"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
+      "else": {"text": "of {{of}}", "modifiers": [{"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
     },
     "minimal": {
       "if": "{{timer.on}}",
@@ -153,23 +193,22 @@
         "countsDown": true,
         "modifiers": [{"tint": "#FF7A5C"}, {"frame": {"width": 24, "height": 24}}]
       },
-      "else": {"text": "{{n}}", "modifiers": [{"fontWeight": "bold"}, {"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
+      "else": {"text": "{{step}}", "modifiers": [{"fontWeight": "bold"}, {"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
     },
     "expanded": {
       "leading": {
-        "text": "{{n}}",
+        "text": "{{step}}",
         "modifiers": [
           {"font": 34},
           {"fontWeight": "bold"},
           {"fontDesign": "serif"},
           {"foreground": "#FF7A5C"},
-          {"transition": [{"push": "trailing"}, "opacity"]},
-          {"id": "{{n}}"},
+          {"contentTransition": {"numericText": "{{step}}"}},
           {"padding": {"leading": 8}}
         ]
       },
       "center": {
-        "concat": [{"text": "{{dish}}", "modifiers": [{"fontWeight": "semibold"}]}, " · step {{n}} of {{steps}}"],
+        "concat": [{"text": "{{dish}}", "modifiers": [{"fontWeight": "semibold"}]}, " · step {{step}} of {{of}}"],
         "modifiers": [{"font": "subheadline"}, {"fontDesign": "serif"}]
       },
       "trailing": {
@@ -180,7 +219,7 @@
               "progress": ["{{timer.start}}", "{{timer.end}}"],
               "style": "circular",
               "countsDown": true,
-              "modifiers": [{"tint": "#C8432B"}]
+              "modifiers": [{"tint": "#FF7A5C"}]
             },
             {
               "date": "{{timer.end}}",
@@ -201,7 +240,7 @@
       "bottom": {
         "vstack": [
           {
-            "text": "{{text}}",
+            "text": "{{steps[step].text}}",
             "modifiers": [
               {"font": "callout"},
               {"fontDesign": "serif"},
@@ -209,32 +248,76 @@
               {"fixedSize": "vertical"},
               {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
               {"transition": [{"push": "trailing"}, "opacity"]},
-              {"id": "{{n}}"}
+              {"id": "{{step}}"}
             ]
           },
           {
             "hstack": [
               {
-                "button": "back",
-                "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
-                "style": "bordered",
-                "modifiers": [{"tint": "#C9B2A6"}]
+                "if": "{{steps[step].first}}",
+                "then": {
+                  "concat": [{"symbol": "flame.fill"}, " Let's cook"],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#C9B2A6"}]
+                },
+                "else": {
+                  "button": "back",
+                  "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
+                  "style": "bordered",
+                  "add": {"step": -1},
+                  "modifiers": [{"tint": "#C9B2A6"}]
+                }
               },
               {"spacer": true},
               {
-                "button": "next",
-                "label": {
-                  "concat": ["Next step ", {"symbol": "chevron.right"}],
-                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
+                "if": "{{timer.on}}",
+                "then": {
+                  "button": "stop-timer",
+                  "label": {
+                    "concat": [{"symbol": "stop.fill"}, " Stop"],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Stop the timer"}]
+                  },
+                  "style": "bordered",
+                  "set": {"timer.on": false},
+                  "modifiers": [{"tint": "#FF7A5C"}]
                 },
-                "style": "borderedProminent",
-                "modifiers": [{"tint": "#C8432B"}]
+                "else": {
+                  "if": "{{steps[step].timed}}",
+                  "then": {
+                    "button": "start-timer",
+                    "label": {
+                      "concat": [{"symbol": "timer"}, " Start"],
+                      "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Start the timer"}]
+                    },
+                    "style": "bordered",
+                    "set": {"timer.on": true},
+                    "now": {"timer.start": 0, "timer.end": "{{steps[step].seconds}}"},
+                    "modifiers": [{"tint": "#FF7A5C"}]
+                  }
+                }
+              },
+              {
+                "if": "{{steps[step].last}}",
+                "then": {
+                  "concat": [{"symbol": "fork.knife"}, " Enjoy"],
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]
+                },
+                "else": {
+                  "button": "next",
+                  "label": {
+                    "concat": ["Next ", {"symbol": "chevron.right"}],
+                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
+                  },
+                  "style": "borderedProminent",
+                  "add": {"step": 1},
+                  "modifiers": [{"tint": "#C8432B"}]
+                }
               }
-            ]
+            ],
+            "spacing": 8
           }
         ],
         "spacing": 8,
-        "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
+        "modifiers": [{"animation": {"curve": "smooth", "value": "{{step}}"}}]
       }
     },
     "background": "#FBF3E4",
@@ -243,21 +326,19 @@
   "data": {
     "dish": "Shakshuka",
     "serves": 4,
-    "n": 4,
-    "steps": 9,
-    "text": "Crack the eggs into the wells, then cover the pan",
-    "timer": {"on": true, "start": 1792999910, "end": 1793000270},
-    "pages": [
-      {"color": "#C8432B", "width": 6},
-      {"color": "#C8432B", "width": 6},
-      {"color": "#C8432B", "width": 6},
-      {"color": "#C8432B", "width": 16},
-      {"color": "#3A2A1F33", "width": 6},
-      {"color": "#3A2A1F33", "width": 6},
-      {"color": "#3A2A1F33", "width": 6},
-      {"color": "#3A2A1F33", "width": 6},
-      {"color": "#3A2A1F33", "width": 6}
-    ]
+    "step": 4,
+    "of": 8,
+    "steps": {
+      "1": {"text": "Warm the oil and soften the onion and pepper for 8 minutes", "first": true, "last": false, "timed": true, "seconds": 480},
+      "2": {"text": "Stir in the garlic, cumin and paprika for a minute", "first": false, "last": false, "timed": true, "seconds": 60},
+      "3": {"text": "Add the tomatoes and simmer for 10 minutes until thick", "first": false, "last": false, "timed": true, "seconds": 600},
+      "4": {"text": "Crack the eggs into the wells, then cover the pan for 6 minutes", "first": false, "last": false, "timed": true, "seconds": 360},
+      "5": {"text": "Crumble the feta between the eggs", "first": false, "last": false, "timed": false, "seconds": 0},
+      "6": {"text": "Warm the bread in the oven for 4 minutes", "first": false, "last": false, "timed": true, "seconds": 240},
+      "7": {"text": "Scatter over coriander and chilli flakes", "first": false, "last": false, "timed": false, "seconds": 0},
+      "8": {"text": "Bring the pan to the table and serve", "first": false, "last": true, "timed": false, "seconds": 0}
+    },
+    "timer": {"on": true, "start": 1792999910, "end": 1793000270}
   },
   "endAfter": 7200
 }
