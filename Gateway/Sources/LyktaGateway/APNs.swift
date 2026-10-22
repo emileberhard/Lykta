@@ -62,6 +62,7 @@ final class APNs: PushService {
         environments = Set(keys.keys)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 15
         session = URLSession(configuration: configuration)
     }
 

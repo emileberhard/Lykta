@@ -41,6 +41,34 @@ struct GatewayTests {
         #expect(unproven.status == 400)
     }
 
+    @Test func aPushFinishingAfterResetKeepsTheGatewayRunning() async throws {
+        try await put("build", Self.start)
+        let jobs = try await store.claim(now: now, limit: 4)
+        let reset = await api.handle(HTTPRequest(method: "DELETE", target: "/v1/device",
+                                                 headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
+        #expect(reset.status == 204)
+        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
+        for job in jobs {
+            try await store.finish(job, try await delivery.send(job, now: now), now: now)
+        }
+        #expect(push.sent == ["createChannel"])
+        #expect(try await store.channels().isEmpty)
+    }
+
+    @Test func aRestartingGatewayStartsNoNewRemoteStep() async throws {
+        try await put("build", Self.start)
+        let shutdown = Shutdown()
+        let delivery = Delivery(store: store, push: push, shutdown: shutdown)
+        let jobs = try await store.claim(now: now, limit: 4)
+        shutdown.request()
+        for job in jobs {
+            try await store.finish(job, try await delivery.send(job, now: now), now: now)
+        }
+        try await deliver(at: now + 2)
+        #expect(push.sent == ["createChannel", "start"])
+        #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
+    }
+
     @Test func startsCoalescesUpdatesAndEnds() async throws {
         try await put("build", Self.start)
         try await deliver(at: now)
@@ -379,7 +407,7 @@ struct GatewayTests {
     }
 
     private func deliver(at time: Int) async throws {
-        let delivery = Delivery(store: store, push: push)
+        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
         for job in try await store.claim(now: time, limit: 4) {
             try await store.finish(job, try await delivery.send(job, now: time), now: time)
         }

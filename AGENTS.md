@@ -153,6 +153,8 @@ Tap Reset in the app afterwards to delete the simulator from the gateway.
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own
 `Config/Local.xcconfig`. Gateway state lives in SQLite, so replacing the
-container is safe. On SIGTERM the gateway stops claiming pushes, finishes those
-in flight within APNs' 15-second timeout while still accepting requests, then
-closes its listener; give the container a stop grace period of 30 seconds.
+container is safe. On SIGTERM the gateway stops claiming pushes and starts no
+further request for a claimed one, finishes the requests in flight within
+APNs' 15-second timeout while still accepting API requests, then closes its
+listener after at most five more seconds; give the container a stop grace
+period of 30 seconds.

@@ -527,8 +527,9 @@ actor Store {
         }
     }
 
-    func setChannel(_ channel: String, for activityID: UUID) throws {
+    func setChannel(_ channel: String, for activityID: UUID) throws -> Bool {
         try db.run("UPDATE activities SET channel = ? WHERE id = ?", channel, activityID)
+        return try !db.query("SELECT 1 FROM activities WHERE id = ?", activityID).isEmpty
     }
 
     func channels() throws -> Set<String> {
@@ -544,6 +545,7 @@ actor Store {
         let id = job.activity.id
         let revision = job.activity.revision
         try db.transaction {
+            guard try !db.query("SELECT 1 FROM activities WHERE id = ?", id).isEmpty else { return }
             let (result, error): (String, String?) = switch outcome {
             case .accepted: ("accepted", nil)
             case let .retry(error, throttled): (throttled ? "throttled" : "retry", error)

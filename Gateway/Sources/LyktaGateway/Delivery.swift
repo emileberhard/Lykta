@@ -4,9 +4,10 @@ import LyktaCore
 struct Delivery: Sendable {
     let store: Store
     let push: any PushService
+    let shutdown: Shutdown
     var concurrency = 4
 
-    func run(until shutdown: Shutdown) async throws {
+    func run() async throws {
         try await store.recover()
         await removeOrphanedChannels()
         try await withThrowingDiscardingTaskGroup { group in
@@ -50,7 +51,10 @@ struct Delivery: Sendable {
                     } catch {
                         return Attempt(outcome: Self.outcome(of: error), detail: detail)
                     }
-                    try await store.setChannel(channel, for: activity.id)
+                    guard try await store.setChannel(channel, for: activity.id) else { return Attempt(outcome: .channelGone, detail: detail) }
+                    guard !shutdown.isRequested else {
+                        return Attempt(outcome: .retry("The gateway restarted before starting the activity.", throttled: false), detail: detail)
+                    }
                 }
                 detail["channel"] = .string(channel)
                 let payload = try activity.payload(.start, now: now, channel: channel, alert: activity.alert)
@@ -98,6 +102,7 @@ struct Delivery: Sendable {
                 let remote = try await push.channels(environment: environment)
                 let known = try await store.channels()
                 for channel in remote where !known.contains(channel) {
+                    guard !shutdown.isRequested else { return }
                     try await push.deleteChannel(channel, environment: environment)
                 }
             } catch {

@@ -61,7 +61,7 @@ enum Gateway {
             let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20, shutdown: shutdown) { await api.handle($0) }
             try await server.run {
                 log("Lykta gateway \(version?.description ?? "of unknown version") listening on \(host):\(port)")
-                try await Delivery(store: store, push: push).run(until: shutdown)
+                try await Delivery(store: store, push: push, shutdown: shutdown).run()
             }
             withExtendedLifetime(signals) { log("Lykta gateway stopped after draining") }
         } catch {
