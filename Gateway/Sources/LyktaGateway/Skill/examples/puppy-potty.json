@@ -2,76 +2,74 @@
   "title": "Ollie's potty clock",
   "layout": {
     "lockScreen": {
-      "vstack": [
+      "hstack": [
         {
-          "hstack": [
+          "zstack": [
             {
-              "zstack": [
-                {"shape": "circle", "fill": {"gradient": ["#FFB45C", "#F28C28"], "direction": "diagonal"}},
-                {"symbol": "pawprint.fill", "modifiers": [{"font": 18.0}, {"foreground": "white"}]}
-              ],
-              "modifiers": [{"frame": {"width": 40, "height": 40}}]
+              "progress": ["{{last}}", "{{due}}"],
+              "style": "circular",
+              "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 86, "height": 86}}]
             },
             {
-              "vstack": [
-                {"text": "{{dog}} · last outside", "modifiers": [{"font": "headline"}]},
-                {
-                  "text": "Potty training · aim for {{goal}}",
-                  "modifiers": [{"font": "caption"}, {"foreground": "#8A6A52"}]
-                }
-              ],
-              "alignment": "leading",
-              "spacing": 1
+              "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+              "modifiers": [{"frame": {"width": 62, "height": 62}}]
+            }
+          ]
+        },
+        {
+          "vstack": [
+            {
+              "text": "{{dog}} has been inside for",
+              "modifiers": [{"font": "caption"}, {"fontWeight": "semibold"}, {"foreground": "#6B6A55"}]
             },
-            {"spacer": true},
             {
               "date": "{{last}}",
               "style": "timer",
               "modifiers": [
-                {"font": 28},
-                {"bold": true},
+                {"font": 40},
+                {"fontWeight": "heavy"},
                 {"fontDesign": "rounded"},
                 {"monospacedDigit": true},
-                {"multilineTextAlignment": "trailing"},
-                {"frame": {"width": 116, "alignment": "trailing"}}
+                {"frame": {"width": 176, "alignment": "leading"}}
               ]
-            }
-          ],
-          "spacing": 10
-        },
-        {"progress": ["{{last}}", "{{due}}"], "modifiers": [{"tint": "#F28C28"}]},
-        {
-          "hstack": [
-            {
-              "concat": [{"symbol": "moon.zzz.fill"}, " Nap until ~", {"date": "{{napUntil}}"}],
-              "modifiers": [{"font": "caption"}, {"foreground": "#8A6A52"}]
             },
-            {"spacer": true},
+            {"text": "Aim for {{goal}} between trips", "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}]},
+            {"spacer": 8},
             {
               "button": "out",
               "label": {
-                "concat": [{"symbol": "checkmark"}, " We just went out"],
-                "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "white"}]
+                "concat": [{"symbol": "pawprint.fill"}, " We just went out"],
+                "modifiers": [{"font": "subheadline"}, {"fontWeight": "bold"}, {"foreground": "white"}]
               },
               "style": "borderedProminent",
               "modifiers": [{"tint": "#F28C28"}]
             }
-          ]
+          ],
+          "alignment": "leading",
+          "spacing": 0
         }
       ],
-      "alignment": "leading",
-      "spacing": 10,
-      "modifiers": [{"padding": 16}, {"foreground": "#3B2414"}]
+      "spacing": 16,
+      "modifiers": [
+        {"padding": {"horizontal": 16, "vertical": 14}},
+        {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
+        {"foreground": "#2E2A20"},
+        {"background": {"gradient": ["#E2F1FF", "#EEF7E4"], "direction": "vertical"}}
+      ]
     },
-    "compactLeading": {"symbol": "pawprint.fill", "modifiers": [{"foreground": "#F28C28"}]},
+    "compactLeading": {
+      "svg": "<svg width='24' height='24' viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+      "modifiers": [{"padding": {"leading": 2}}]
+    },
     "compactTrailing": {
       "date": "{{last}}",
       "style": "timer",
       "modifiers": [
         {"monospacedDigit": true},
-        {"foreground": "#F2A65A"},
+        {"fontDesign": "rounded"},
+        {"foreground": "#FFB15C"},
         {"multilineTextAlignment": "trailing"},
-        {"frame": {"width": 44}}
+        {"frame": {"width": 58}}
       ]
     },
     "minimal": {
@@ -81,62 +79,108 @@
           "style": "circular",
           "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 24, "height": 24}}]
         },
-        {"symbol": "pawprint.fill", "modifiers": [{"font": 9}, {"foreground": "#F28C28"}]}
+        {
+          "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+          "modifiers": [{"frame": {"width": 15, "height": 15}}]
+        }
       ]
     },
     "expanded": {
       "leading": {
         "zstack": [
-          {"shape": "circle", "fill": {"gradient": ["#FFB45C", "#F28C28"], "direction": "diagonal"}},
-          {"symbol": "pawprint.fill", "modifiers": [{"font": 18.0}, {"foreground": "white"}]}
+          {
+            "progress": ["{{last}}", "{{due}}"],
+            "style": "circular",
+            "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 44, "height": 44}}]
+          },
+          {
+            "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+            "modifiers": [{"frame": {"width": 32, "height": 32}}]
+          }
         ],
-        "modifiers": [{"frame": {"width": 40, "height": 40}}, {"padding": {"leading": 4}}]
+        "modifiers": [{"padding": {"leading": 4, "top": 4}}]
       },
       "center": {
         "vstack": [
-          {"text": "{{dog}} · last outside", "modifiers": [{"font": "headline"}]},
-          {"text": "aim for {{goal}}", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]}
-        ],
-        "spacing": 1
-      },
-      "trailing": {
-        "date": "{{last}}",
-        "style": "timer",
-        "modifiers": [
-          {"font": "headline"},
-          {"fontDesign": "rounded"},
-          {"monospacedDigit": true},
-          {"multilineTextAlignment": "trailing"},
-          {"frame": {"width": 72, "alignment": "trailing"}},
-          {"padding": {"trailing": 4}}
-        ]
-      },
-      "bottom": {
-        "vstack": [
-          {"progress": ["{{last}}", "{{due}}"], "modifiers": [{"tint": "#F28C28"}]},
+          {"text": "{{dog}} has been inside for", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},
           {
-            "hstack": [
-              {
-                "concat": [{"symbol": "moon.zzz.fill"}, " Nap until ~", {"date": "{{napUntil}}"}],
-                "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
-              },
-              {"spacer": true},
-              {
-                "button": "out",
-                "label": {
-                  "concat": [{"symbol": "checkmark"}, " We just went out"],
-                  "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "white"}]
-                },
-                "style": "borderedProminent",
-                "modifiers": [{"tint": "#F28C28"}]
-              }
+            "date": "{{last}}",
+            "style": "timer",
+            "modifiers": [
+              {"font": 28},
+              {"fontWeight": "heavy"},
+              {"fontDesign": "rounded"},
+              {"monospacedDigit": true},
+              {"multilineTextAlignment": "center"},
+              {"frame": {"width": 120, "alignment": "center"}}
             ]
           }
         ],
-        "spacing": 8
+        "spacing": 0
+      },
+      "bottom": {
+        "hstack": [
+          {
+            "concat": [{"symbol": "moon.zzz.fill"}, " Napping until ", {"date": "{{napUntil}}"}],
+            "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}]
+          },
+          {"spacer": true},
+          {
+            "button": "out",
+            "label": {
+              "concat": [{"symbol": "pawprint.fill"}, " We just went out"],
+              "modifiers": [{"font": "footnote"}, {"fontWeight": "bold"}, {"foreground": "white"}]
+            },
+            "style": "borderedProminent",
+            "modifiers": [{"tint": "#F28C28"}]
+          }
+        ],
+        "modifiers": [{"padding": {"top": 6}}]
       }
     },
-    "background": "#FFF6EC",
+    "small": {
+      "hstack": [
+        {
+          "zstack": [
+            {
+              "progress": ["{{last}}", "{{due}}"],
+              "style": "circular",
+              "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 44, "height": 44}}]
+            },
+            {
+              "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+              "modifiers": [{"frame": {"width": 32, "height": 32}}]
+            }
+          ]
+        },
+        {
+          "vstack": [
+            {
+              "date": "{{last}}",
+              "style": "timer",
+              "modifiers": [
+                {"font": 24},
+                {"fontWeight": "heavy"},
+                {"fontDesign": "rounded"},
+                {"monospacedDigit": true},
+                {"frame": {"width": 104, "alignment": "leading"}}
+              ]
+            },
+            {"text": "since {{dog}} went out", "modifiers": [{"font": "caption2"}, {"foreground": "#6B6A55"}]}
+          ],
+          "alignment": "leading",
+          "spacing": 0
+        }
+      ],
+      "spacing": 10,
+      "modifiers": [
+        {"padding": 12},
+        {"frame": {"maxWidth": "infinity", "maxHeight": "infinity", "alignment": "leading"}},
+        {"foreground": "#2E2A20"},
+        {"background": {"gradient": ["#E2F1FF", "#EEF7E4"], "direction": "vertical"}}
+      ]
+    },
+    "background": "#E8F4F1",
     "keyline": "#F28C28"
   },
   "data": {"dog": "Ollie", "goal": "2 h", "last": 1792995680, "due": 1793002880, "napUntil": 1793002400},
