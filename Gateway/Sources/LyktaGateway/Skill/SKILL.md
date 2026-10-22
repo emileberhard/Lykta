@@ -154,7 +154,7 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 | [movie-night](examples/movie-night.json) | A pausable film timer between drawn curtains, with a lights toggle and remote buttons |
 | [orion-return](examples/orion-return.json) | Artemis II's figure-eight path around the Moon and home, drawn in SVG with Orion placed by progress |
 | [pr-inbox](examples/pr-inbox.json) | Pull requests as rows from a list that slide in and out, each opening GitHub |
-| [printer](examples/printer.json) | 3D print progress, a camera check and a pause button |
+| [printer](examples/printer.json) | A drawn printer whose print grows in the filament's color, with a camera check and a pause button |
 | [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside, reset with a button |
 | [recipe-steps](examples/recipe-steps.json) | Recipe steps that slide in on Next and Back, with a ring timer |
 | [shopping-list](examples/shopping-list.json) | A two-column checklist of toggles that works without an agent |
