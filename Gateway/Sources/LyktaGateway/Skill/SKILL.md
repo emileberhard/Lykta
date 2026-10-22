@@ -149,7 +149,7 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 | --- | --- |
 | [agent-question](examples/agent-question.json) | An agent's question in a chat bubble, answered with reply buttons |
 | [app-review](examples/app-review.json) | App Store review stages for a build, on a card colored by the review state |
-| [homelab](examples/homelab.json) | Server graphs as line charts, each linking to its dashboard |
+| [homelab](examples/homelab.json) | A server dashboard of a CPU chart and gauges, each linking to Grafana, that flags a missed heartbeat |
 | [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
 | [movie-night](examples/movie-night.json) | A pausable film timer with a lights toggle and remote buttons |
 | [orion-return](examples/orion-return.json) | Artemis II's figure-eight path around the Moon and home, drawn in SVG with Orion placed by progress |

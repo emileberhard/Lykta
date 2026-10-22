@@ -5,200 +5,339 @@
       "vstack": [
         {
           "hstack": [
-            {"symbol": "server.rack", "modifiers": [{"font": "subheadline"}, {"foreground": "#30D158"}]},
             {
-              "text": "{{host}}",
-              "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "monospaced"}]
+              "shape": "circle",
+              "fill": "#3DDC84",
+              "modifiers": [{"frame": {"width": 7, "height": 7}}, {"shadow": {"color": "#3DDC84", "radius": 3}}]
             },
+            {"text": "{{host}}", "modifiers": [{"fontWeight": "bold"}]},
+            {"text": "up {{uptime}}", "modifiers": [{"foreground": "#6F9681"}]},
             {"spacer": true},
-            {"shape": "circle", "fill": "#30D158", "modifiers": [{"frame": {"width": 7, "height": 7}}]},
             {
-              "text": "{{up}} of {{services}} up",
-              "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+              "text": "{{up}}/{{services}} services",
+              "modifiers": [{"foreground": "#3DDC84"}, {"contentTransition": "numericText"}]
             }
           ],
-          "spacing": 6
+          "spacing": 6,
+          "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}]
         },
         {
           "hstack": [
             {
-              "each": "metrics",
-              "as": "metric",
-              "do": {
-                "link": "{{metric.url}}",
-                "label": {
-                  "vstack": [
-                    {
-                      "hstack": [
-                        {
-                          "text": "{{metric.name}}",
-                          "modifiers": [{"font": "caption2"}, {"textCase": "uppercase"}, {"foreground": "#8B949E"}]
-                        },
-                        {"spacer": true},
-                        {
-                          "text": "{{metric.value}}",
-                          "modifiers": [
-                            {"font": "caption"},
-                            {"bold": true},
-                            {"monospacedDigit": true},
-                            {"contentTransition": "numericText"},
-                            {"foreground": "{{metric.color}}"}
-                          ]
-                        }
-                      ]
+              "link": "{{cpu.url}}",
+              "label": {
+                "vstack": [
+                  {
+                    "hstack": [
+                      {"text": "cpu", "modifiers": [{"foreground": "#6F9681"}]},
+                      {"spacer": true},
+                      {
+                        "text": "{{cpu.value}}%",
+                        "modifiers": [
+                          {"bold": true},
+                          {"foreground": "#3DDC84"},
+                          {"contentTransition": {"numericText": "{{cpu.value}}"}}
+                        ]
+                      }
+                    ],
+                    "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}]
+                  },
+                  {
+                    "chart": [
+                      {"area": "{{cpu.series}}", "color": {"gradient": ["#3DDC8459", "#3DDC8400"]}, "interpolation": "monotone"},
+                      {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"},
+                      {"rule": 80, "color": "#FF5F5780", "lineWidth": 1}
+                    ],
+                    "min": 0,
+                    "max": 100
+                  }
+                ],
+                "alignment": "leading",
+                "spacing": 2,
+                "modifiers": [
+                  {"padding": {"horizontal": 8, "vertical": 6}},
+                  {"frame": {"maxWidth": "infinity", "minHeight": 58, "maxHeight": 58}},
+                  {"background": "#0C1A12"},
+                  {"clip": 10},
+                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                ]
+              }
+            },
+            {
+              "link": "{{temp.url}}",
+              "label": {
+                "vstack": [
+                  {
+                    "gauge": "{{temp.value}}",
+                    "min": "{{temp.min}}",
+                    "max": "{{temp.max}}",
+                    "style": "circular",
+                    "currentValueLabel": {
+                      "text": "{{temp.label}}",
+                      "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                     },
-                    {
-                      "chart": [
-                        {
-                          "area": "{{metric.series}}",
-                          "color": {"gradient": ["{{metric.fade}}", "#00000000"]},
-                          "interpolation": "monotone"
-                        },
-                        {
-                          "line": "{{metric.series}}",
-                          "color": "{{metric.color}}",
-                          "lineWidth": 1.5,
-                          "interpolation": "monotone"
-                        }
-                      ],
-                      "min": 0,
-                      "max": 100,
-                      "modifiers": [{"frame": {"height": 30}}]
-                    }
-                  ],
-                  "alignment": "leading",
-                  "spacing": 3,
-                  "modifiers": [{"padding": {"horizontal": 8, "vertical": 7}}, {"background": "#161B22"}, {"clip": 10}]
-                }
+                    "modifiers": [
+                      {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
+                      {"scale": 0.72},
+                      {"frame": {"width": 42, "height": 40}}
+                    ]
+                  },
+                  {"text": "temp", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
+                ],
+                "spacing": 1,
+                "modifiers": [
+                  {"padding": {"horizontal": 8, "vertical": 6}},
+                  {"frame": {"width": 64, "height": 58}},
+                  {"background": "#0C1A12"},
+                  {"clip": 10},
+                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                ]
+              }
+            },
+            {
+              "link": "{{disk.url}}",
+              "label": {
+                "vstack": [
+                  {
+                    "gauge": "{{disk.value}}",
+                    "min": "{{disk.min}}",
+                    "max": "{{disk.max}}",
+                    "style": "circularCapacity",
+                    "currentValueLabel": {
+                      "text": "{{disk.label}}",
+                      "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                    },
+                    "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.72}, {"frame": {"width": 42, "height": 40}}]
+                  },
+                  {"text": "disk", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
+                ],
+                "spacing": 1,
+                "modifiers": [
+                  {"padding": {"horizontal": 8, "vertical": 6}},
+                  {"frame": {"width": 64, "height": 58}},
+                  {"background": "#0C1A12"},
+                  {"clip": 10},
+                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                ]
               }
             }
           ],
           "spacing": 8
         },
         {
-          "concat": [
-            {"symbol": "checkmark.circle.fill", "modifiers": [{"foreground": "#30D158"}]},
-            " Backup {{backup}} · tap a graph for Grafana"
-          ],
-          "modifiers": [{"font": "caption2"}, {"foreground": "#8B949E"}]
+          "if": "stale",
+          "then": {
+            "concat": [{"symbol": "exclamationmark.triangle.fill"}, " no heartbeat · last report ", {"date": "{{reported}}"}],
+            "modifiers": [{"foreground": "#FFB547"}]
+          },
+          "else": {
+            "concat": [{"text": "✓", "modifiers": [{"foreground": "#3DDC84"}]}, " backup {{backup}} · load {{load}}"],
+            "modifiers": [{"foreground": "#6F9681"}]
+          },
+          "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"lineLimit": 1}]
         }
       ],
       "alignment": "leading",
-      "spacing": 10,
-      "modifiers": [{"padding": 16}, {"foreground": "#E6E6E6"}]
+      "spacing": 9,
+      "modifiers": [{"padding": {"horizontal": 14, "vertical": 13}}, {"foreground": "#D7F5E3"}]
     },
-    "compactLeading": {"symbol": "server.rack", "modifiers": [{"foreground": "#30D158"}]},
+    "compactLeading": {"symbol": "server.rack", "modifiers": [{"foreground": "#3DDC84"}]},
     "compactTrailing": {
-      "text": "{{temp}}°",
-      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#FF9F0A"}]
+      "hstack": [
+        {
+          "chart": [{"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"}],
+          "min": 0,
+          "max": 100,
+          "modifiers": [{"frame": {"width": 26, "height": 14}}]
+        },
+        {
+          "text": "{{cpu.value}}%",
+          "modifiers": [{"fontDesign": "monospaced"}, {"foreground": "#3DDC84"}, {"contentTransition": "numericText"}]
+        }
+      ],
+      "spacing": 4
     },
-    "minimal": {"symbol": "server.rack", "modifiers": [{"foreground": "#30D158"}]},
+    "minimal": {
+      "chart": [{"area": "{{cpu.series}}", "color": {"gradient": ["#3DDC84", "#3DDC8426"]}, "interpolation": "monotone"}],
+      "min": 0,
+      "max": 100,
+      "modifiers": [
+        {"padding": {"top": 6}},
+        {"frame": {"width": 24, "height": 24}},
+        {"background": "#0C1A12"},
+        {"clip": "circle"},
+        {"overlay": {"shape": "circle", "stroke": "#1C3A28", "lineWidth": 1}}
+      ]
+    },
     "expanded": {
       "leading": {
         "symbol": "server.rack",
-        "modifiers": [{"font": "title3"}, {"foreground": "#30D158"}, {"padding": {"leading": 6}}]
+        "modifiers": [{"font": "title3"}, {"foreground": "#3DDC84"}, {"padding": {"leading": 6, "top": 4}}]
       },
       "center": {
-        "text": "{{host}}",
+        "text": "{{host}} · up {{uptime}}",
         "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "monospaced"}]
       },
       "trailing": {
-        "text": "{{up}}/{{services}} up",
-        "modifiers": [{"font": "caption"}, {"monospacedDigit": true}, {"foreground": "#30D158"}, {"padding": {"trailing": 6}}]
+        "text": "{{up}}/{{services}}",
+        "modifiers": [
+          {"font": "subheadline"},
+          {"fontDesign": "monospaced"},
+          {"foreground": "#3DDC84"},
+          {"padding": {"trailing": 6, "top": 4}}
+        ]
       },
       "bottom": {
-        "hstack": [
+        "vstack": [
           {
-            "each": "metrics",
-            "as": "metric",
-            "do": {
-              "link": "{{metric.url}}",
-              "label": {
-                "vstack": [
-                  {
-                    "hstack": [
-                      {
-                        "text": "{{metric.name}}",
-                        "modifiers": [{"font": "caption2"}, {"textCase": "uppercase"}, {"foreground": "#8B949E"}]
+            "hstack": [
+              {
+                "link": "{{cpu.url}}",
+                "label": {
+                  "vstack": [
+                    {
+                      "hstack": [
+                        {"text": "cpu", "modifiers": [{"foreground": "#6F9681"}]},
+                        {"spacer": true},
+                        {
+                          "text": "{{cpu.value}}%",
+                          "modifiers": [
+                            {"bold": true},
+                            {"foreground": "#3DDC84"},
+                            {"contentTransition": {"numericText": "{{cpu.value}}"}}
+                          ]
+                        }
+                      ],
+                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}]
+                    },
+                    {
+                      "chart": [
+                        {
+                          "area": "{{cpu.series}}",
+                          "color": {"gradient": ["#3DDC8459", "#3DDC8400"]},
+                          "interpolation": "monotone"
+                        },
+                        {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"},
+                        {"rule": 80, "color": "#FF5F5780", "lineWidth": 1}
+                      ],
+                      "min": 0,
+                      "max": 100
+                    }
+                  ],
+                  "alignment": "leading",
+                  "spacing": 2,
+                  "modifiers": [
+                    {"padding": {"horizontal": 8, "vertical": 6}},
+                    {"frame": {"maxWidth": "infinity", "minHeight": 58, "maxHeight": 58}},
+                    {"background": "#0C1A12"},
+                    {"clip": 10},
+                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                  ]
+                }
+              },
+              {
+                "link": "{{temp.url}}",
+                "label": {
+                  "vstack": [
+                    {
+                      "gauge": "{{temp.value}}",
+                      "min": "{{temp.min}}",
+                      "max": "{{temp.max}}",
+                      "style": "circular",
+                      "currentValueLabel": {
+                        "text": "{{temp.label}}",
+                        "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                       },
-                      {"spacer": true},
-                      {
-                        "text": "{{metric.value}}",
-                        "modifiers": [
-                          {"font": "caption"},
-                          {"bold": true},
-                          {"monospacedDigit": true},
-                          {"contentTransition": "numericText"},
-                          {"foreground": "{{metric.color}}"}
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "chart": [
-                      {
-                        "area": "{{metric.series}}",
-                        "color": {"gradient": ["{{metric.fade}}", "#00000000"]},
-                        "interpolation": "monotone"
+                      "modifiers": [
+                        {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
+                        {"scale": 0.72},
+                        {"frame": {"width": 42, "height": 40}}
+                      ]
+                    },
+                    {
+                      "text": "temp",
+                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
+                    }
+                  ],
+                  "spacing": 1,
+                  "modifiers": [
+                    {"padding": {"horizontal": 8, "vertical": 6}},
+                    {"frame": {"width": 64, "height": 58}},
+                    {"background": "#0C1A12"},
+                    {"clip": 10},
+                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                  ]
+                }
+              },
+              {
+                "link": "{{disk.url}}",
+                "label": {
+                  "vstack": [
+                    {
+                      "gauge": "{{disk.value}}",
+                      "min": "{{disk.min}}",
+                      "max": "{{disk.max}}",
+                      "style": "circularCapacity",
+                      "currentValueLabel": {
+                        "text": "{{disk.label}}",
+                        "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                       },
-                      {
-                        "line": "{{metric.series}}",
-                        "color": "{{metric.color}}",
-                        "lineWidth": 1.5,
-                        "interpolation": "monotone"
-                      }
-                    ],
-                    "min": 0,
-                    "max": 100,
-                    "modifiers": [{"frame": {"height": 30}}]
-                  }
-                ],
-                "alignment": "leading",
-                "spacing": 3,
-                "modifiers": [{"padding": {"horizontal": 8, "vertical": 7}}, {"background": "#161B22"}, {"clip": 10}]
+                      "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.72}, {"frame": {"width": 42, "height": 40}}]
+                    },
+                    {
+                      "text": "disk",
+                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
+                    }
+                  ],
+                  "spacing": 1,
+                  "modifiers": [
+                    {"padding": {"horizontal": 8, "vertical": 6}},
+                    {"frame": {"width": 64, "height": 58}},
+                    {"background": "#0C1A12"},
+                    {"clip": 10},
+                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+                  ]
+                }
               }
-            }
+            ],
+            "spacing": 8
+          },
+          {
+            "if": "stale",
+            "then": {
+              "concat": [{"symbol": "exclamationmark.triangle.fill"}, " no heartbeat · last report ", {"date": "{{reported}}"}],
+              "modifiers": [{"foreground": "#FFB547"}]
+            },
+            "else": {
+              "concat": [{"text": "✓", "modifiers": [{"foreground": "#3DDC84"}]}, " backup {{backup}} · load {{load}}"],
+              "modifiers": [{"foreground": "#6F9681"}]
+            },
+            "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"lineLimit": 1}, {"padding": {"leading": 12}}]
           }
         ],
-        "spacing": 8,
+        "alignment": "leading",
+        "spacing": 6,
         "modifiers": [{"padding": {"top": 4}}]
       }
     },
-    "background": "#0B0F14",
-    "keyline": "#30D158"
+    "background": "#06100A",
+    "keyline": "#3DDC84"
   },
   "data": {
     "host": "nas.home",
+    "uptime": "41d",
     "up": 14,
     "services": 14,
-    "temp": 62,
-    "backup": "03:00 ✓",
-    "metrics": [
-      {
-        "name": "cpu",
-        "value": "23%",
-        "color": "#58A6FF",
-        "fade": "#58A6FF66",
-        "url": "https://grafana.example.com/d/node?viewPanel=1",
-        "series": [18, 22, 19, 25, 31, 28, 22, 20, 24, 35, 52, 48, 33, 27, 24, 21, 26, 30, 27, 23, 22, 25, 24, 23]
-      },
-      {
-        "name": "temp",
-        "value": "62°",
-        "color": "#FF9F0A",
-        "fade": "#FF9F0A66",
-        "url": "https://grafana.example.com/d/node?viewPanel=2",
-        "series": [54, 55, 55, 56, 58, 57, 56, 56, 57, 60, 66, 68, 65, 63, 62, 61, 61, 62, 62, 61, 61, 62, 62, 62]
-      },
-      {
-        "name": "disk",
-        "value": "71%",
-        "color": "#BF5AF2",
-        "fade": "#BF5AF266",
-        "url": "https://grafana.example.com/d/node?viewPanel=3",
-        "series": [64, 64, 65, 65, 65, 66, 66, 66, 67, 67, 67, 68, 68, 68, 69, 69, 69, 70, 70, 70, 70, 71, 71, 71]
-      }
-    ]
+    "backup": "03:00",
+    "load": "0.42 0.38 0.31",
+    "reported": 1792999880,
+    "cpu": {
+      "value": 23,
+      "url": "https://grafana.example.com/d/node?viewPanel=1",
+      "series": [18, 22, 19, 25, 31, 28, 22, 20, 24, 35, 52, 48, 33, 27, 24, 21, 26, 30, 27, 23, 22, 25, 24, 23]
+    },
+    "temp": {"value": 62, "min": 30, "max": 90, "label": "62°", "url": "https://grafana.example.com/d/node?viewPanel=2"},
+    "disk": {"value": 0.71, "min": 0, "max": 1, "label": "71%", "url": "https://grafana.example.com/d/node?viewPanel=3"}
   },
   "staleAfter": 600,
   "endAfter": 14400
