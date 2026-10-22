@@ -15,6 +15,7 @@ public struct Layout: Decodable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: Key.self)
             try fields.allowOnly(["leading", "trailing", "center", "bottom"])
+            fields.recordKeys(in: "expanded")
             leading = try fields.optional("leading")
             trailing = try fields.optional("trailing")
             center = try fields.optional("center")
@@ -31,6 +32,8 @@ public struct Layout: Decodable, Sendable {
     public let background: ColorValue?
     public let keyline: ColorValue?
     public let link: URL?
+    public private(set) var requirement: Requirement?
+    private(set) var features: [String] = []
 
     public init(json: [UInt8]) throws(LayoutError) {
         guard json.count <= Self.maximumBytes else {
@@ -38,8 +41,9 @@ public struct Layout: Decodable, Sendable {
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom(Self.date)
+        let log = FeatureLog()
         do {
-            self = try decoder.decode(Layout.self, from: Data(json))
+            self = try FeatureLog.$current.withValue(log) { try decoder.decode(Layout.self, from: Data(json)) }
         } catch let error as DecodingError {
             throw LayoutError(error)
         } catch {
@@ -47,6 +51,8 @@ public struct Layout: Decodable, Sendable {
         }
         var budget = (nodes: 0, modifiers: 0)
         for root in roots { try Self.admit(root, depth: 1, budget: &budget) }
+        requirement = log.requirement
+        features = log.features
     }
 
     public var buttons: Set<String> {
@@ -66,6 +72,7 @@ public struct Layout: Decodable, Sendable {
         let fields = try decoder.container(keyedBy: Key.self)
         try fields.allowOnly(["lockScreen", "compactLeading", "compactTrailing", "minimal", "expanded", "small",
                               "background", "keyline", "link"])
+        fields.recordKeys(in: "layout")
         lockScreen = try fields.required("lockScreen")
         compactLeading = try fields.required("compactLeading")
         compactTrailing = try fields.required("compactTrailing")
@@ -75,6 +82,7 @@ public struct Layout: Decodable, Sendable {
         background = try fields.optional("background")
         keyline = try fields.optional("keyline")
         link = try fields.link("link")
+        if let link, link.scheme?.lowercased() != "https" { fields.record("layout.link.appURL", at: "link") }
     }
 
     private static func admit(_ node: Node, depth: Int, budget: inout (nodes: Int, modifiers: Int)) throws(LayoutError) {
@@ -103,6 +111,7 @@ public struct Node: Decodable, Sendable {
     public init(from decoder: any Decoder) throws {
         if let container = try? decoder.singleValueContainer(),
            let text = (try? container.decode(String.self)) ?? (try? container.decode(Double.self))?.textValue {
+            if (try? container.decode(String.self)) == nil { FeatureLog.record("number", at: decoder.codingPath) }
             content = .text(text)
             modifiers = []
             return
@@ -114,6 +123,8 @@ public struct Node: Decodable, Sendable {
             throw fields.invalid("a node is a string or an object with one of \(Content.fields.keys.sorted().joined(separator: ", "))")
         }
         try fields.allowOnly(allowed.union([kind, "modifiers"]))
+        fields.record(kind, at: kind)
+        fields.recordKeys(in: kind, except: [kind, "modifiers"])
         modifiers = try fields.optional("modifiers") ?? []
         content = try Content(kind, fields)
     }
@@ -184,7 +195,12 @@ extension Node {
 
             public init(from decoder: any Decoder) throws {
                 let container = try decoder.singleValueContainer()
-                self = if let value = try? container.decode(Bool.self) { .value(value) } else { .environment(try container.decode(Environment.self)) }
+                if let value = try? container.decode(Bool.self) {
+                    FeatureLog.record("if.bool", at: container.codingPath)
+                    self = .value(value)
+                } else {
+                    self = .environment(try container.decode(Environment.self))
+                }
             }
         }
 
@@ -267,6 +283,7 @@ extension Node {
             case "text":
                 let text = (try? fields.required(kind) as String) ?? (try? fields.required(kind) as Double)?.textValue
                 guard let text else { throw fields.invalid("expected text or a number", at: kind) }
+                if (try? fields.required(kind) as String) == nil { fields.record("text.number", at: kind) }
                 self = .text(text)
             case "symbol":
                 let value: Double? = try fields.optional("value")
@@ -405,6 +422,7 @@ private struct ChartMark: Decodable {
         case .sector: ["colors", "innerRadius"]
         }
         try fields.allowOnly(allowed.union([kind.rawValue]))
+        fields.recordKeys(in: "chart.\(kind.rawValue)")
         let values: [Double] = if kind == .rule { [try fields.required(kind.rawValue)] } else { try fields.required(kind.rawValue) }
         guard (1...Node.Content.Chart.maximumValues).contains(values.count), values.allSatisfy(\.isFinite) else {
             throw fields.invalid("expected 1 to \(Node.Content.Chart.maximumValues) numbers", at: kind.rawValue)

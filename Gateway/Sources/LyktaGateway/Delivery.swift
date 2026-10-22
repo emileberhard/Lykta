@@ -6,11 +6,12 @@ struct Delivery: Sendable {
     let push: any PushService
     var concurrency = 4
 
-    func run() async throws {
+    func run(until shutdown: Shutdown) async throws {
         try await store.recover()
         await removeOrphanedChannels()
         try await withThrowingDiscardingTaskGroup { group in
             for tick in 0... {
+                guard !shutdown.isRequested else { return }
                 let now = Int(Date().timeIntervalSince1970)
                 if tick % 240 == 0 { try await store.housekeep(now: now) }
                 for job in try await store.claim(now: now, limit: concurrency) {

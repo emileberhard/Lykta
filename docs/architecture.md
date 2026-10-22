@@ -54,6 +54,21 @@ same `Layout` type, so a layout the gateway accepts renders on the phone, and
 agents get errors with JSON paths when they send it. Budgets on bytes, nodes,
 depth and modifiers keep rendering bounded.
 
+**Older phones get what they can draw.** The gateway deploys before each app
+release, so it often runs a newer decoder than a phone. While decoding, `Core`
+records every feature a layout uses (node kinds, keys, enum cases and value
+forms such as a bare number) and looks each up in `Layout.introduced`, the
+release that first drew it. Every phone reports the newest row it was compiled
+with, so self-built apps are judged by their decoder rather than their marketing
+version; apps from before that report fall back to their version string. The
+gateway gates the filled content of every PUT, including data-only updates, and
+refuses with `app_update_required`, the feature, its JSON path and both
+versions, so the agent can resend without it or ask the user to update. Nothing
+the table misses fails silently: the phone already reports whether it could
+read each content fingerprint, and the activity's status shows that as
+`layoutReadable`. A decoder version is learned only when the app runs, so the
+refusal asks the user to update and open Lykta once.
+
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it
 creates per activity, so the app never has to run to forward update tokens.
@@ -122,6 +137,11 @@ device limit; operators keep the gateway on a private network.
   installed apps and pushes depend on.
 - The meaning of existing layout keys, which agents' saved layouts rely on.
   Adding keys is cheap.
+- Released rows of `Layout.introduced`, which gate every phone that reported
+  them, and the `layoutVersion` field and activity observations (with
+  `layoutReadable` and the content fingerprint) that phones send.
+- `GET /v1/version`, which the release workflow waits on before uploading an
+  app build.
 - The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
   including the action report that installed apps send.
 - The `GET /v1/actions` cursor and record format, which agents poll.

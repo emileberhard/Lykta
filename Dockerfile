@@ -3,8 +3,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev 
 WORKDIR /src
 COPY Core Core
 COPY Gateway Gateway
+ARG JOBS
 RUN --mount=type=cache,target=/src/Gateway/.build \
-    swift build --package-path Gateway --configuration release --static-swift-stdlib --force-resolved-versions --product LyktaGateway \
+    swift build --package-path Gateway --configuration release --static-swift-stdlib --force-resolved-versions --product LyktaGateway ${JOBS:+--jobs $JOBS} \
     && cp Gateway/.build/release/LyktaGateway /usr/local/bin/lykta-gateway
 
 FROM ubuntu:noble@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
@@ -14,6 +15,9 @@ COPY --from=build /usr/local/bin/lykta-gateway /usr/local/bin/lykta-gateway
 USER lykta
 WORKDIR /data
 ENV LYKTA_HOST=0.0.0.0 LYKTA_DATABASE=/data/lykta.sqlite
+ARG LYKTA_VERSION
+ENV LYKTA_VERSION=${LYKTA_VERSION}
+LABEL org.opencontainers.image.version=${LYKTA_VERSION}
 EXPOSE 8080
 VOLUME /data
 ENTRYPOINT ["lykta-gateway"]

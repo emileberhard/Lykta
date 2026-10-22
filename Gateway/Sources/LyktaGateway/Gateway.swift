@@ -22,10 +22,18 @@ enum Gateway {
                 try await printEvents(Store(path: try value("LYKTA_DATABASE", default: "lykta.sqlite"), maximumDevices: 1, maximumLiveActivities: 1),
                                 arguments: Array(arguments.dropFirst()))
                 return
+            case "backup":
+                guard arguments.count == 2 else { throw ConfigurationError("Usage: lykta-gateway backup PATH") }
+                try Store.backup(try value("LYKTA_DATABASE", default: "lykta.sqlite"), to: arguments[1])
+                return
             case nil:
                 break
             default:
-                throw ConfigurationError("Usage: lykta-gateway [events [--device UUID] [--limit N]]")
+                throw ConfigurationError("Usage: lykta-gateway [events [--device UUID] [--limit N] | backup PATH]")
+            }
+            let version = try settings["LYKTA_VERSION"].flatMap { $0.isEmpty ? nil : $0 }.map { text in
+                guard let version = Version(text) else { throw ConfigurationError("LYKTA_VERSION must be MAJOR.MINOR.PATCH.") }
+                return version
             }
             var keys: [PushEnvironment: (id: String, pem: String)] = [:]
             for environment in PushEnvironment.allCases {
@@ -38,14 +46,17 @@ enum Gateway {
             let store = try Store(path: try value("LYKTA_DATABASE", default: "lykta.sqlite"),
                                   maximumDevices: try number("LYKTA_MAX_DEVICES", default: 100),
                                   maximumLiveActivities: try number("LYKTA_MAX_LIVE_ACTIVITIES", default: 5))
-            let api = API(store: store, environments: push.environments)
+            let shutdown = Shutdown()
+            let signals = shutdown.onSignals([SIGTERM, SIGINT])
+            let api = API(store: store, environments: push.environments, version: version, shutdown: shutdown)
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
-            let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20) { await api.handle($0) }
+            let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20, shutdown: shutdown) { await api.handle($0) }
             try await server.run {
-                log("Lykta gateway listening on \(host):\(port)")
-                try await Delivery(store: store, push: push).run()
+                log("Lykta gateway \(version?.description ?? "of unknown version") listening on \(host):\(port)")
+                try await Delivery(store: store, push: push).run(until: shutdown)
             }
+            withExtendedLifetime(signals) { log("Lykta gateway stopped after draining") }
         } catch {
             log("Lykta gateway stopped: \(error)")
             exit(1)

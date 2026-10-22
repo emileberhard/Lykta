@@ -135,10 +135,22 @@ actor Store {
         db = try Database(path: path)
         self.maximumDevices = maximumDevices
         self.maximumLiveActivities = maximumLiveActivities
+        guard let schema = try db.query("PRAGMA user_version").first.map({ try $0.integer("user_version") }), schema <= Self.schemaVersion else {
+            throw ConfigurationError("The database was written by a newer gateway with an incompatible schema; run that version or restore a backup.")
+        }
         try db.execute(Self.schema)
         if try db.query("SELECT 1 FROM pragma_table_info('activities') WHERE name = 'ends_at'").isEmpty {
             try db.execute("ALTER TABLE activities ADD COLUMN ends_at INTEGER")
         }
+        if try db.query("SELECT 1 FROM pragma_table_info('devices') WHERE name = 'layout_version'").isEmpty {
+            try db.execute("ALTER TABLE devices ADD COLUMN layout_version TEXT")
+        }
+        try db.execute("PRAGMA user_version = \(Self.schemaVersion)")
+    }
+
+    static func backup(_ database: String, to path: String) throws {
+        guard FileManager.default.fileExists(atPath: database) else { throw ConfigurationError("There is no database at \(database).") }
+        try Database(path: database).run("VACUUM INTO ?", path)
     }
 
     // MARK: Devices
@@ -171,8 +183,8 @@ actor Store {
         try db.transaction {
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
-            try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, bundle_instance = ? WHERE id = ?",
-                       report.pushToStartToken, report.appVersion, report.bundleInstance, device.id)
+            try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
+                       report.pushToStartToken, report.appVersion, report.layoutVersion?.description, report.bundleInstance, device.id)
             let reported = Set(report.activities.map(\.id))
             let isNewInstall = previous != nil && previous != report.bundleInstance
             var abandoned: [JSONValue] = []
@@ -202,6 +214,7 @@ actor Store {
             }
             try record("device.sync", device: device.id, activity: nil, [
                 "appVersion": .string(report.appVersion),
+                "layoutVersion": report.layoutVersion.map { .string($0.description) } ?? .null,
                 "install": .string(report.bundleInstance.uuidString),
                 "newInstall": .bool(isNewInstall),
                 "pushToStartToken": .string(token),
@@ -229,7 +242,9 @@ actor Store {
                 throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
             }
             let data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
-            let content = try Self.content(title: title, layout: layout, data: data)
+            let state = try Self.content(title: title, layout: layout, data: data)
+            try Self.admit(state, on: device)
+            let content = try Self.encoded(state)
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
@@ -287,12 +302,32 @@ actor Store {
             throw APIError(.notFound, "No activity is named \(name).")
         }
         let activity = try Activity(row)
-        return ActivityDetail(status: activity.status, data: try decode(activity.data))
+        return ActivityDetail(status: try status(of: activity, observations: observations(device)), data: try decode(activity.data))
     }
 
     func list(_ device: Device) throws -> [ActivityStatus] {
-        try db.query("SELECT * FROM activities WHERE device_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", device.id)
-            .map { try Activity($0).status }
+        let observations = try observations(device)
+        return try db.query("SELECT * FROM activities WHERE device_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", device.id)
+            .map { try status(of: Activity($0), observations: observations) }
+    }
+
+    private func observations(_ device: Device) throws -> [UUID: [String: Bool]] {
+        let rows = try db.query("""
+            SELECT activity_id, json_extract(detail, '$.fingerprint') AS fingerprint, json_extract(detail, '$.layoutReadable') AS readable, max(seq)
+              FROM events WHERE device_id = ? AND source = 'app' AND activity_id IS NOT NULL
+                AND json_type(detail, '$.fingerprint') = 'text' AND json_type(detail, '$.layoutReadable') IN ('true', 'false')
+              GROUP BY activity_id, fingerprint
+            """, device.id)
+        var observations: [UUID: [String: Bool]] = [:]
+        for row in rows {
+            observations[try row.text("activity_id", as: UUID.init(uuidString:)), default: [:]][try row.string("fingerprint")] = try row.integer("readable") != 0
+        }
+        return observations
+    }
+
+    private func status(of activity: Activity, observations: [UUID: [String: Bool]]) throws -> ActivityStatus {
+        guard let observed = observations[activity.id] else { return activity.status }
+        return activity.status(layoutReadable: observed[try activity.fingerprint()])
     }
 
     // MARK: Actions
@@ -321,7 +356,7 @@ actor Store {
                 } catch let error as LayoutError {
                     throw APIError(.conflict, error.description)
                 }
-                let content = try Self.content(title: activity.title, layout: decode(activity.layout), data: data)
+                let content = try Self.encoded(Self.content(title: activity.title, layout: decode(activity.layout), data: data))
                 if content != activity.content {
                     try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(data), content, activity.id)
                     _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
@@ -525,13 +560,25 @@ actor Store {
 
     // MARK: Helpers
 
-    private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> String {
+    private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> LyktaActivity.ContentState {
         do {
-            let state = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
-            return String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+            return try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
         } catch let error as LayoutError {
             throw APIError(.invalidLayout, error.description)
         }
+    }
+
+    private static func encoded(_ state: LyktaActivity.ContentState) throws -> String {
+        String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+    }
+
+    private static func admit(_ state: LyktaActivity.ContentState, on device: Device) throws {
+        guard let requirement = state.layout?.requirement else { return }
+        let phone = device.layoutVersion ?? Version(leading: device.appVersion)
+        if let phone, phone >= requirement.version { return }
+        let runs = phone == nil ? "this phone's Lykta version (\(device.appVersion)) is unknown" : "this phone runs Lykta \(device.appVersion)"
+        throw APIError(.appUpdateRequired, "\(requirement.path) needs Lykta \(requirement.version) or later, and \(runs). "
+                       + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
     private static func payloadSize(of activity: Activity, now: Int) throws -> Int {
@@ -570,10 +617,14 @@ actor Store {
     }
 
     private func device(column: String, hash: String) throws -> Device? {
-        guard let row = try db.query("SELECT id, environment, push_token FROM devices WHERE \(column) = ?", hash).first else { return nil }
+        guard let row = try db.query("SELECT id, environment, push_token, app_version, layout_version FROM devices WHERE \(column) = ?", hash).first else {
+            return nil
+        }
         return Device(id: try row.text("id", as: UUID.init(uuidString:)),
                       environment: try row.text("environment", as: PushEnvironment.init(rawValue:)),
-                      pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)))
+                      pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)),
+                      appVersion: try row.string("app_version"),
+                      layoutVersion: try row.optionalText("layout_version", as: Version.init))
     }
 
     private func liveActivity(_ device: Device, name: ActivityName) throws -> Activity? {
@@ -609,6 +660,8 @@ actor Store {
     private static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String($0 >> 4, radix: 16) + String($0 & 0xF, radix: 16) }.joined()
     }
+
+    private static let schemaVersion: Int64 = 1
 
     private static let schema = """
         CREATE TABLE IF NOT EXISTS devices (

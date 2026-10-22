@@ -63,6 +63,7 @@ public enum Modifier: Decodable, Sendable {
             } else {
                 let fields = try decoder.container(keyedBy: Key.self)
                 try fields.allowOnly(["numericText"])
+                fields.recordKeys(in: "modifiers.contentTransition")
                 self = .numericText(value: try fields.required("numericText"))
             }
         }
@@ -94,6 +95,7 @@ public enum Modifier: Decodable, Sendable {
             } else {
                 let fields = try decoder.container(keyedBy: Key.self)
                 try fields.allowOnly(["move", "push"])
+                fields.recordKeys(in: "modifiers.transition")
                 guard fields.allKeys.count == 1, let key = fields.allKeys.first?.stringValue else {
                     throw fields.invalid(#"expected {"move": edge} or {"push": edge}"#)
                 }
@@ -114,6 +116,7 @@ public enum Modifier: Decodable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: Key.self)
             try fields.allowOnly(["curve", "duration", "delay", "value"])
+            fields.recordKeys(in: "modifiers.animation")
             curve = try fields.optional("curve") ?? .default
             duration = fields.contains(Key(stringValue: "duration")) ? try fields.number("duration", in: 0.05...2) : nil
             delay = fields.contains(Key(stringValue: "delay")) ? try fields.number("delay", in: 0...1) : 0
@@ -160,6 +163,7 @@ public enum Modifier: Decodable, Sendable {
             }
             let fields = try decoder.container(keyedBy: Key.self)
             try fields.allowOnly(["top", "leading", "bottom", "trailing", "horizontal", "vertical"])
+            fields.recordKeys(in: "modifiers.padding")
             let horizontal: Double? = try fields.optional("horizontal")
             let vertical: Double? = try fields.optional("vertical")
             top = try fields.optional("top") ?? vertical ?? 0
@@ -176,6 +180,7 @@ public enum Modifier: Decodable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: Key.self)
             try fields.allowOnly(["width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "alignment"])
+            fields.recordKeys(in: "modifiers.frame")
             func length(_ key: String) throws -> Double? {
                 if (try? fields.optional(key) as String?) == "infinity" { return .infinity }
                 guard let value: Double = try fields.optional(key) else { return nil }
@@ -199,6 +204,7 @@ public enum Modifier: Decodable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: Key.self)
             try fields.allowOnly(["color", "radius", "x", "y"])
+            fields.recordKeys(in: "modifiers.shadow")
             color = try fields.optional("color") ?? .rgb(red: 0, green: 0, blue: 0, opacity: 0.33)
             radius = try fields.optional("radius") ?? 4
             x = try fields.optional("x") ?? 0
@@ -212,6 +218,7 @@ public enum Modifier: Decodable, Sendable {
             throw fields.invalid("a modifier is an object with exactly one key, such as {\"padding\": 8}")
         }
         func value<T: Decodable>() throws -> T { try fields.required(name) }
+        fields.record("modifiers.\(name)", at: name)
         switch name {
         case "padding": self = .padding(try value())
         case "frame": self = .frame(try value())
@@ -297,6 +304,7 @@ public enum Paint: Decodable, Sendable {
         }
         let fields = try decoder.container(keyedBy: Key.self)
         try fields.allowOnly(["gradient", "direction"])
+        fields.recordKeys(in: "paint")
         let colors: [ColorValue] = try fields.required("gradient")
         guard (2...8).contains(colors.count) else { throw fields.invalid("expected 2 to 8 colors", at: "gradient") }
         self = .gradient(colors, try fields.optional("direction") ?? .vertical)
@@ -313,8 +321,14 @@ public enum ColorValue: Decodable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
-        guard let color = ColorValue(try container.decode(String.self)) else {
+        let text = try container.decode(String.self)
+        guard let color = ColorValue(text) else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected \(Self.forms)")
+        }
+        if text.hasPrefix("rgb") {
+            FeatureLog.record("color.rgb", at: container.codingPath)
+        } else if text.hasPrefix("#"), text.count <= 5 {
+            FeatureLog.record("color.shortHex", at: container.codingPath)
         }
         self = color
     }

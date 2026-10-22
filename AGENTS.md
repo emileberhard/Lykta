@@ -26,6 +26,13 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   together. Gateway tests compile every JSON example in `layout.md` and start
   every activity in the skill's `examples`. Look at a layout change with
   `just render` before shipping it.
+- Every layout feature (node, key, enum case and value form the decoder
+  accepts) has a row in `Layout.introduced` with the release that first drew
+  it. A new feature gets a row with the next minor version; released rows never
+  change, and release admission enforces both. The oldest row is the 0.2.2
+  vocabulary and matches exactly; newer rows also cover their subtree. The
+  gateway refuses a layout with `app_update_required` when the phone's reported
+  layout version predates a feature in it; never let such a layout through.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
 - The gateway is the only content writer. The app never calls
@@ -37,6 +44,11 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.
+- Migrations are additive, so the previous release runs on the new schema and
+  a rollback needs no restore. Bump `Store.schemaVersion` only for a change the
+  previous release cannot read; older gateways then refuse to start.
+- Never run a second gateway with another gateway's APNs keys, even briefly:
+  its channel cleanup deletes every channel its own database does not know.
 - Tokens are stored only as hashes. Never log tokens, push tokens or payloads.
 - Every state change, push attempt and phone observation becomes an event in
   `Store`, so a phone's problems can be debugged from the gateway alone. Events
@@ -87,18 +99,29 @@ agents may lack but nothing existing breaks. A major removes or changes
 something existing layouts, agents, phones or self-hosted gateways rely on. A
 release that adds a layout feature is therefore at least a minor.
 
-Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`
-and newer than every other version tag. `.github/workflows/release.yml` then
-builds an unsigned archive with the tag as its version. It does not run the
-tests again: it waits for `main`'s CI run on the same commit and stops unless
-that run passed. It then uploads the archive to TestFlight through Xcode's
-cloud signing with the `testflight` environment's App Store Connect key. App
-Store Connect picks the build number. The GitHub release is
-titled with the bare version, and its notes are the annotated tag's message
-verbatim: a Markdown list of user-visible changes since the previous version,
-one short sentence per item, with no heading or intro line. Submitting to App
-Review stays manual, and App Store versions use manual release, so the
-maintainer decides when an approved version goes live.
+Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
+`.github/workflows/release.yml` does the rest, gateway first:
+
+1. `admit` checks that the tag is the newest version and on `main`, runs
+   `scripts/check-feature-table` (rows newer than the previous release must
+   equal the tag, which must then be `X.Y.0`) and waits for `main`'s CI run on
+   the same commit, without running the tests again.
+2. Meanwhile `testflight` builds an unsigned archive with the tag as its
+   version.
+3. The production gateway's Mini polls for admitted tags and deploys them
+   itself (`~/configs/services/lykta-gateway`), with a database backup and an
+   automatic rollback.
+4. Once `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag, `testflight`
+   uploads the archive through Xcode's cloud signing with the `testflight`
+   environment's App Store Connect key. App Store Connect picks the build
+   number.
+5. The GitHub release is titled with the bare version, and its notes are the
+   annotated tag's message verbatim: a Markdown list of user-visible changes
+   since the previous version, one short sentence per item, with no heading or
+   intro line.
+
+Submitting to App Review stays manual, and App Store versions use manual
+release, so the maintainer decides when an approved version goes live.
 
 The App Store screenshots are four 1206 × 2622 slides, the required 6.3-inch
 iPhone size. Capture them from a Debug build on an iPhone 18 Pro simulator:
@@ -112,7 +135,9 @@ captions, and flatten each slide with
 `magick <slide> -background black -alpha remove -alpha off PNG24:<slide>`.
 Tap Reset in the app afterwards to delete the simulator from the gateway.
 
-Self-hosters build the gateway image from a tagged commit and the app from
-Xcode with their own `Config/Local.xcconfig`. Gateway state lives in SQLite,
-so replacing the container is safe. It drops in-flight HTTP requests, and
-in-flight starts become `unknown`.
+Self-hosters build the gateway image from a tagged commit, passing the tag as
+`--build-arg LYKTA_VERSION`, and the app from Xcode with their own
+`Config/Local.xcconfig`. Gateway state lives in SQLite, so replacing the
+container is safe. On SIGTERM the gateway stops claiming pushes, finishes those
+in flight within APNs' 15-second timeout while still accepting requests, then
+closes its listener; give the container a stop grace period of 30 seconds.

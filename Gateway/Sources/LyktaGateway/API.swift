@@ -4,6 +4,8 @@ import LyktaCore
 struct API: Sendable {
     let store: Store
     let environments: Set<PushEnvironment>
+    let version: Version?
+    let shutdown: Shutdown
 
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
         let failure: APIError
@@ -50,6 +52,8 @@ struct API: Sendable {
         }
         let isActivity = path.count == 3 && path[0] == "v1" && path[1] == "activities"
         switch (request.method, isActivity ? "v1/activities/{name}" : path.joined(separator: "/")) {
+        case ("GET", "v1/version"):
+            return Self.json(200, ["version": version?.description])
         case ("POST", "v1/devices"):
             let registration: Registration = try Self.decode(request.body)
             guard environments.contains(registration.environment) else {
@@ -82,7 +86,7 @@ struct API: Sendable {
             let deadline = ContinuousClock.now.advanced(by: .seconds(wait))
             while true {
                 let actions = try await store.actions(device, after: cursor, limit: 100)
-                if !actions.isEmpty || ContinuousClock.now >= deadline {
+                if !actions.isEmpty || ContinuousClock.now >= deadline || shutdown.isRequested {
                     return Self.json(200, ActionPage(actions: actions, cursor: actions.last?.seq ?? cursor))
                 }
                 try await Task.sleep(for: .milliseconds(250))

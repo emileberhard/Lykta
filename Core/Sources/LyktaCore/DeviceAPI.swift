@@ -81,12 +81,14 @@ public struct DeviceReport: Codable, Sendable {
 
     public let pushToStartToken: PushToken?
     public let appVersion: String
+    public let layoutVersion: Version?
     public let bundleInstance: UUID
     public let activities: [Observed]
 
-    public init(pushToStartToken: PushToken?, appVersion: String, bundleInstance: UUID, activities: [Observed]) {
+    public init(pushToStartToken: PushToken?, appVersion: String, layoutVersion: Version, bundleInstance: UUID, activities: [Observed]) {
         self.pushToStartToken = pushToStartToken
         self.appVersion = appVersion
+        self.layoutVersion = layoutVersion
         self.bundleInstance = bundleInstance
         self.activities = activities
     }
@@ -95,6 +97,7 @@ public struct DeviceReport: Codable, Sendable {
         let fields = try decoder.container(keyedBy: Key.self)
         pushToStartToken = try fields.optional("pushToStartToken")
         appVersion = try fields.text("appVersion", maximumLength: Self.maximumAppVersionLength)
+        layoutVersion = try fields.optional("layoutVersion")
         bundleInstance = try fields.required("bundleInstance")
         activities = try fields.required("activities")
         guard activities.count <= Self.maximumActivities else {

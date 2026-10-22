@@ -225,7 +225,8 @@ final class Model {
         guard let gateway, let credentials else { return }
         let observed = Activity<LyktaActivity>.activities
         activities = observed.map(LiveActivity.init)
-        let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, bundleInstance: Self.bundleInstance,
+        let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, layoutVersion: Layout.version,
+                                        bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
         await showingErrors("sync") {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)

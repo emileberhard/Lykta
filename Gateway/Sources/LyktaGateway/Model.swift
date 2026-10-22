@@ -14,6 +14,7 @@ struct APIError: Error, Encodable, Sendable {
         case deviceNotReady = "device_not_ready"
         case tooManyActivities = "too_many_activities"
         case payloadTooLarge = "payload_too_large"
+        case appUpdateRequired = "app_update_required"
         case `internal`
 
         var status: Int {
@@ -22,7 +23,7 @@ struct APIError: Error, Encodable, Sendable {
             case .unauthorized: 401
             case .registrationClosed: 403
             case .notFound: 404
-            case .deviceNotReady, .tooManyActivities, .conflict: 409
+            case .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired: 409
             case .payloadTooLarge: 413
             case .internal: 500
             }
@@ -62,6 +63,8 @@ struct Device: Sendable {
     let id: UUID
     let environment: PushEnvironment
     let pushToken: PushToken?
+    let appVersion: String
+    let layoutVersion: Version?
 }
 
 struct Alert: Codable, Equatable, Sendable {
@@ -79,6 +82,7 @@ struct ActivityStatus: Encodable, Sendable {
     let delivery: DeliveryState
     let device: ObservedState?
     let error: String?
+    let layoutReadable: Bool?
     let startedAt: Date
     let endedAt: Date?
 
@@ -92,12 +96,13 @@ struct ActivityStatus: Encodable, Sendable {
         try fields.encode(delivery, forKey: .delivery)
         try fields.encode(device, forKey: .device)
         try fields.encode(error, forKey: .error)
+        try fields.encode(layoutReadable, forKey: .layoutReadable)
         try fields.encode(startedAt, forKey: .startedAt)
         try fields.encode(endedAt, forKey: .endedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, id, title, state, revision, delivery, device, error, startedAt, endedAt
+        case name, id, title, state, revision, delivery, device, error, layoutReadable, startedAt, endedAt
     }
 }
 
@@ -168,8 +173,12 @@ struct Activity: Sendable {
     }
 
     var status: ActivityStatus {
+        status(layoutReadable: nil)
+    }
+
+    func status(layoutReadable: Bool?) -> ActivityStatus {
         ActivityStatus(name: name, id: id, title: title, state: phase, revision: revision, delivery: delivery, device: deviceState,
-                       error: error, startedAt: Date(timeIntervalSince1970: Double(createdAt)),
+                       error: error, layoutReadable: layoutReadable, startedAt: Date(timeIntervalSince1970: Double(createdAt)),
                        endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
     }
 

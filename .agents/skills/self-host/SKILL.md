@@ -23,13 +23,15 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
 
 ## Gateway
 
-Build the image from the repository root and run it with the keys mounted
-read-only. The container runs as an unprivileged user, so the key files must
-be world-readable.
+Build the image from a release tag at the repository root and run it with the
+keys mounted read-only. The container runs as an unprivileged user, so the key
+files must be world-readable.
 
 ```bash
-docker build --tag lykta-gateway .
-docker run --detach --name lykta --restart unless-stopped \
+version=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+git checkout "$version"
+docker build --build-arg LYKTA_VERSION="$version" --tag lykta-gateway .
+docker run --detach --name lykta --restart unless-stopped --stop-timeout 30 \
   --publish 127.0.0.1:8080:8080 --volume lykta-data:/data --volume "$KEY_DIR:/keys:ro" \
   --env LYKTA_BUNDLE_ID=com.example.lykta --env LYKTA_TEAM_ID="$TEAM_ID" \
   --env LYKTA_DEVELOPMENT_KEY_ID="$KEY_ID" --env LYKTA_DEVELOPMENT_KEY_FILE="/keys/AuthKey_$KEY_ID.p8" \
@@ -82,6 +84,9 @@ gateway needs the matching key.
 
 ## Upgrade
 
-Rebuild the image and replace the container; all state is in the volume. An
-activity that is starting during the restart becomes `unknown` and is never
-sent twice.
+Update the gateway before the app: a newer gateway refuses layouts an older
+app cannot draw, while a newer app on an older gateway cannot use its new
+features. Build the new tag and replace the container; all state is in the
+volume, and `GET /v1/version` reports the running release. On stop, the
+gateway finishes pushes in flight before it exits. Releases only add columns,
+so the previous image runs on the newer database if you roll back.

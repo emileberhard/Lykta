@@ -99,6 +99,7 @@ recent ones:
 | `delivery` | `pending`, `accepted` (Apple accepted the push), `throttled`, `unknown`, `failed` |
 | `device` | What the phone last reported: `pending`, `active`, `stale`, `ended`, `dismissed`, `unknown`, or `null` before its first report |
 | `error` | Why delivery failed or the activity ended, or `null` |
+| `layoutReadable` | Whether the phone could draw the current content, or `null` before it reports. `false` means it shows only the title |
 
 Accepted means Apple took the push, not that the phone displayed it.
 
@@ -130,6 +131,13 @@ Errors are JSON, and the message names the JSON path to fix:
 - `too_many_activities`: end an activity first.
 - `conflict`: the activity changed since the `ifRevision` you sent, or a tapped
   control no longer exists.
+- `app_update_required`: the user's Lykta app is older than a feature in the
+  layout, named in the message with its path. Resend without it, or ask the
+  user to update Lykta and open it once.
+
+A 502 or a refused connection usually means the gateway is restarting for an
+update; retry after a few seconds. Repeating a PUT is safe, but a repeated
+`alert` lights up the phone again.
 
 ## Examples
 

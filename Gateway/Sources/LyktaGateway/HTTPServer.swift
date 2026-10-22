@@ -1,6 +1,7 @@
 import NIOCore
 import NIOHTTP1
 import NIOPosix
+import Synchronization
 
 struct HTTPRequest: Sendable {
     let method: String
@@ -40,16 +41,20 @@ struct HTTPResponse: Sendable {
     }
 }
 
-struct HTTPServer: Sendable {
+final class HTTPServer: Sendable {
     private let host: String
     private let port: Int
     private let maximumBodyBytes: Int
+    private let shutdown: Shutdown
     private let handler: @Sendable (HTTPRequest) async -> HTTPResponse
+    private let inFlight = Atomic<Int>(0)
 
-    init(host: String, port: Int, maximumBodyBytes: Int, handler: @escaping @Sendable (HTTPRequest) async -> HTTPResponse) {
+    init(host: String, port: Int, maximumBodyBytes: Int, shutdown: Shutdown,
+         handler: @escaping @Sendable (HTTPRequest) async -> HTTPResponse) {
         self.host = host
         self.port = port
         self.maximumBodyBytes = maximumBodyBytes
+        self.shutdown = shutdown
         self.handler = handler
     }
 
@@ -65,11 +70,26 @@ struct HTTPServer: Sendable {
                 }
             }
         try await withThrowingDiscardingTaskGroup { group in
-            group.addTask(operation: work)
-            try await server.executeThenClose { connections in
-                for try await connection in connections {
-                    group.addTask { try? await serve(connection) }
+            group.addTask {
+                try await work()
+                try await server.channel.close()
+            }
+            try await withThrowingDiscardingTaskGroup { connections in
+                do {
+                    try await server.executeThenClose { accepted in
+                        for try await connection in accepted {
+                            connections.addTask { [self] in try? await serve(connection) }
+                        }
+                    }
+                } catch {
+                    guard shutdown.isRequested else { throw error }
                 }
+                guard shutdown.isRequested else { throw ListenerClosed() }
+                let deadline = ContinuousClock.now + Shutdown.drainLimit
+                while inFlight.load(ordering: .acquiring) > 0, ContinuousClock.now < deadline {
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                connections.cancelAll()
             }
         }
     }
@@ -90,20 +110,27 @@ struct HTTPServer: Sendable {
                     if !tooLarge { body += chunk.readableBytesView }
                 case .end:
                     guard let head else { return }
+                    inFlight.add(1, ordering: .acquiringAndReleasing)
+                    defer { inFlight.subtract(1, ordering: .acquiringAndReleasing) }
                     let headers = Dictionary(head.headers.map { ($0.name.lowercased(), $0.value) }) { _, last in last }
                     let response = tooLarge
                         ? HTTPResponse(status: 413, contentType: "text/plain", body: Array("Request body too large".utf8))
                         : await handler(HTTPRequest(method: head.method.rawValue, target: head.uri, headers: headers, body: body))
                     var responseHeaders = HTTPHeaders([("content-type", response.contentType), ("content-length", String(response.body.count))])
-                    if !head.isKeepAlive { responseHeaders.add(name: "connection", value: "close") }
+                    let closes = !head.isKeepAlive || shutdown.isRequested
+                    if closes { responseHeaders.add(name: "connection", value: "close") }
                     try await outbound.write(.head(HTTPResponseHead(version: head.version, status: .init(statusCode: response.status), headers: responseHeaders)))
                     try await outbound.write(.body(.byteBuffer(ByteBuffer(bytes: response.body))))
                     try await outbound.write(.end(nil))
-                    if !head.isKeepAlive { return }
+                    if closes { return }
                 }
             }
         }
     }
+}
+
+private struct ListenerClosed: Error, CustomStringConvertible {
+    var description: String { "The HTTP listener closed unexpectedly." }
 }
 
 private final class CloseWhenIdle: ChannelInboundHandler {

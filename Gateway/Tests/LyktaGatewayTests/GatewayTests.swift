@@ -1,5 +1,5 @@
 import Foundation
-import LyktaCore
+@testable import LyktaCore
 import Synchronization
 import Testing
 @testable import LyktaGateway
@@ -14,7 +14,7 @@ struct GatewayTests {
 
     init() async throws {
         store = try Store(path: ":memory:", maximumDevices: 2, maximumLiveActivities: 2)
-        api = API(store: store, environments: [.development])
+        api = API(store: store, environments: [.development], version: Version(9, 9, 9), shutdown: Shutdown())
         credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
                                                        body: Self.json(Registration(environment: .development, appVersion: "1.0 (1)"))))
             .decoded()
@@ -131,6 +131,69 @@ struct GatewayTests {
         #expect(events.events.first { $0.name == "activity.observed" }?.source == "app")
     }
 
+    @Test func refusesFeaturesThePhoneCannotDraw() async throws {
+        let orbit: JSONValue = ["title": "Orbit", "layout": Self.layout(["svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"])]
+        try await reportVersion("0.2.2 (7)", layoutVersion: nil)
+        #expect(try await refusal("orbit", orbit)
+            == "lockScreen.svg needs Lykta 0.2.4 or later, and this phone runs Lykta 0.2.2 (7). Ask the user to update Lykta and open it once, or send the layout without it.")
+        try await put("build", Self.start)
+        #expect(try await refusal("build", ["data": ["step": .number(5)]])?.hasPrefix("lockScreen needs Lykta 0.2.3 or later") == true)
+        try await reportVersion("1.0 (1)", layoutVersion: nil)
+        #expect(try await refusal("orbit", orbit)?.contains("this phone's Lykta version (1.0 (1)) is unknown") == true)
+        try await reportVersion("0.1.0 (1)", layoutVersion: Version(0, 2, 4))
+        try await put("orbit", orbit)
+    }
+
+    @Test func showsWhetherThePhoneCouldReadTheCurrentContent() async throws {
+        let started: Identified = try await put("build", Self.start)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        let fingerprint = try #require(events.events.first { $0.name == "activity.put" }?.detail["fingerprint"])
+        func observe(_ fingerprint: JSONValue, readable: Bool) async {
+            let event = Event(id: UUID(), at: Date(), name: "activity.content", activity: started.id,
+                              detail: ["fingerprint": fingerprint, "layoutReadable": .bool(readable)])
+            _ = await api.handle(HTTPRequest(method: "POST", target: "/v1/device/events", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                             body: Self.json(EventBatch(events: [event]))))
+        }
+        func readable() async throws -> Bool? {
+            (try await send("GET", "/v1/activities/build").decoded() as Readability).layoutReadable
+        }
+        #expect(try await readable() == nil)
+        await observe(fingerprint, readable: false)
+        #expect(try await readable() == false)
+        await observe(fingerprint, readable: true)
+        #expect(try await readable() == true)
+        await observe("another", readable: false)
+        #expect(try await readable() == true)
+        try await put("build", ["data": ["step": "Sign"]])
+        #expect(try await readable() == nil)
+    }
+
+    @Test func reportsItsVersionWithoutAToken() async throws {
+        let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/version", headers: [:], body: []))
+        #expect(try response.decoded() == ["version": "9.9.9"])
+    }
+
+    @Test func everyFeatureTheSkillUsesHasAVersion() throws {
+        let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
+        let snippets = try markdown.components(separatedBy: "```json\n").dropFirst().map { block in
+            try JSONDecoder().decode(JSONValue.self, from: Data(block.components(separatedBy: "\n```")[0].utf8))
+        }
+        let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
+        let examples = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+            .map { try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: directory.appending(path: $0))) }
+        var features: Set<String> = []
+        for case let .object(fields) in snippets + examples {
+            let layout: JSONValue = if let layout = fields["layout"] {
+                try layout.filled(with: fields["data"] ?? .object([:]))
+            } else {
+                Self.layout(try JSONValue.object(fields).filled(with: Self.snippetData))
+            }
+            features.formUnion(try Layout(json: layout.json).features)
+        }
+        let unversioned = features.filter { Layout.row(for: $0) == nil }
+        #expect(unversioned.isEmpty, "Add each new feature to Layout.introduced with the minor version that ships it: \(unversioned.sorted())")
+    }
+
     @Test func togglesChangeTheDataAndPushIt() async throws {
         let started: Identified = try await put("list", Self.checklist)
         try await deliver(at: now)
@@ -180,9 +243,6 @@ struct GatewayTests {
     @Test func skillExamplesCompile() throws {
         let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
         let blocks = markdown.components(separatedBy: "```json\n").dropFirst().map { $0.components(separatedBy: "\n```")[0] }
-        let snippetData: JSONValue = [
-            "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1), "progress": .number(0.6),
-        ]
         #expect(blocks.count == 9)
         for block in blocks {
             guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: Data(block.utf8)) else {
@@ -192,7 +252,7 @@ struct GatewayTests {
             let layout: JSONValue = if let layout = fields["layout"] {
                 try layout.filled(with: fields["data"] ?? .object([:]))
             } else {
-                .object(["lockScreen": try JSONValue.object(fields).filled(with: snippetData), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"])
+                Self.layout(try JSONValue.object(fields).filled(with: Self.snippetData))
             }
             _ = try Layout(json: layout.json)
         }
@@ -214,6 +274,14 @@ struct GatewayTests {
     }
 
     // MARK: Helpers
+
+    static let snippetData: JSONValue = [
+        "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1), "progress": .number(0.6),
+    ]
+
+    static func layout(_ lockScreen: JSONValue) -> JSONValue {
+        ["lockScreen": lockScreen, "compactLeading": "a", "compactTrailing": "b", "minimal": "c"]
+    }
 
     static let start: JSONValue = [
         "title": "Build",
@@ -254,8 +322,24 @@ struct GatewayTests {
         try await send("GET", "/v1/activities/\(name)").decoded()
     }
 
+    private func reportVersion(_ appVersion: String, layoutVersion: Version?) async throws {
+        var report: [String: JSONValue] = ["pushToStartToken": "abcdef", "appVersion": .string(appVersion),
+                                           "bundleInstance": .string(bundleInstance.uuidString), "activities": .array([])]
+        report["layoutVersion"] = layoutVersion.map { .string($0.description) }
+        let response = await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                                    body: JSONValue.object(report).json))
+        #expect(response.status == 200)
+    }
+
+    private func refusal(_ name: String, _ body: JSONValue) async throws -> String? {
+        let response = try await send("PUT", "/v1/activities/\(name)", body: body)
+        let failure: Refusal = try response.decoded()
+        #expect(response.status == 409 && failure.error == "app_update_required", "\(failure.message)")
+        return failure.message
+    }
+
     private func report(_ activities: [DeviceReport.Observed]) async throws -> SyncResult {
-        let report = DeviceReport(pushToStartToken: PushToken(hex: "abcdef"), appVersion: "1.0 (1)", bundleInstance: bundleInstance,
+        let report = DeviceReport(pushToStartToken: PushToken(hex: "abcdef"), appVersion: "1.0 (1)", layoutVersion: Layout.version, bundleInstance: bundleInstance,
                                   activities: activities)
         return try await api.handle(HTTPRequest(method: "PUT", target: "/v1/device",
                                                 headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
@@ -328,6 +412,15 @@ struct Identified: Decodable {
 
 struct Failure: Decodable, Equatable {
     let error: String
+}
+
+struct Refusal: Decodable {
+    let error: String
+    let message: String
+}
+
+struct Readability: Decodable, Equatable {
+    let layoutReadable: Bool?
 }
 
 extension HTTPResponse {

@@ -14,10 +14,14 @@ public struct LayoutError: Error, Equatable, Sendable, CustomStringConvertible {
             (context, context.debugDescription)
         @unknown default: (DecodingError.Context(codingPath: [], debugDescription: ""), "\(error)")
         }
-        let path = context.codingPath.reduce("") { path, key in
+        let path = Self.path(context.codingPath)
+        description = path.isEmpty ? detail : "\(path): \(detail)"
+    }
+
+    static func path(_ codingPath: [any CodingKey]) -> String {
+        codingPath.reduce("") { path, key in
             if let index = key.intValue { "\(path)[\(index)]" } else if path.isEmpty { key.stringValue } else { "\(path).\(key.stringValue)" }
         }
-        description = path.isEmpty ? detail : "\(path): \(detail)"
     }
 }
 
@@ -31,6 +35,8 @@ extension Choice {
             let cases = Self.allCases.map(\.rawValue).joined(separator: ", ")
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "\"\(raw)\" is not one of \(cases)")
         }
+        let type = String(reflecting: Self.self)
+        FeatureLog.record("\(type.hasPrefix("LyktaCore.") ? String(type.dropFirst(10)) : type).\(raw)", at: container.codingPath)
         self = value
     }
 }

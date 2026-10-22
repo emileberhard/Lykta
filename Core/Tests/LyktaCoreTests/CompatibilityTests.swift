@@ -1,0 +1,74 @@
+import Foundation
+import Testing
+@testable import LyktaCore
+
+struct CompatibilityTests {
+    static let fixtures: [String: String] = [
+        "link": #"{"link": "https://example.com", "label": "Open"}"#,
+        "button": #"{"button": "ok", "label": "OK"}"#,
+        "toggle": #"{"toggle": "on", "isOn": true, "label": "On"}"#,
+        "grid": #"{"grid": [["a", "b"]]}"#,
+        "chart": #"{"chart": [{"line": [1, 2]}]}"#,
+        "symbol.value": #"{"symbol": "wifi", "value": 0.5}"#,
+        "number": "5",
+        "text.number": #"{"text": 5}"#,
+        "if.bool": #"{"if": true, "then": "a"}"#,
+        "modifiers.transition": #"{"text": "a", "modifiers": [{"transition": "opacity"}]}"#,
+        "modifiers.animation": #"{"text": "a", "modifiers": [{"animation": {"value": 1}}]}"#,
+        "modifiers.id": #"{"text": "a", "modifiers": [{"id": "x"}]}"#,
+        "modifiers.overlay": #"{"text": "a", "modifiers": [{"overlay": "b"}]}"#,
+        "modifiers.blur": #"{"text": "a", "modifiers": [{"blur": 2}]}"#,
+        "modifiers.grayscale": #"{"text": "a", "modifiers": [{"grayscale": 0.5}]}"#,
+        "modifiers.saturation": #"{"text": "a", "modifiers": [{"saturation": 2}]}"#,
+        "modifiers.brightness": #"{"text": "a", "modifiers": [{"brightness": 0.1}]}"#,
+        "modifiers.contentTransition.numericText": #"{"text": "a", "modifiers": [{"contentTransition": {"numericText": 3}}]}"#,
+        "Modifier.ContentTransition.Name.symbolReplace": #"{"text": "a", "modifiers": [{"contentTransition": "symbolReplace"}]}"#,
+        "Modifier.Transition": #"{"text": "a", "modifiers": [{"transition": "slide"}]}"#,
+        "Modifier.Animation": #"{"text": "a", "modifiers": [{"animation": {"curve": "spring", "value": 1}}]}"#,
+        "Node.Content.ButtonStyle": #"{"button": "ok", "label": "OK", "style": "bordered"}"#,
+        "Node.Content.ToggleStyle": #"{"toggle": "on", "isOn": true, "label": "On", "style": "checkbox"}"#,
+        "Node.Content.Chart": #"{"chart": [{"line": [1, 2], "interpolation": "monotone"}]}"#,
+        "svg": #"{"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}"#,
+        "color.shortHex": ##"{"text": "a", "modifiers": [{"foreground": "#abc"}]}"##,
+        "color.rgb": #"{"text": "a", "modifiers": [{"foreground": "rgb(1, 2, 3)"}]}"#,
+    ]
+
+    @Test func everyRowIsDetectedAtItsVersion() throws {
+        #expect(Set(Self.fixtures.keys).union(["layout.link.appURL"]) == Set(Layout.introduced.filter { $0.value > Layout.baseline }.keys))
+        for (row, lockScreen) in Self.fixtures {
+            let layout = try Layout(json: Array(Self.layout(lockScreen).utf8))
+            #expect(layout.features.contains { Layout.row(for: $0) == row }, "\(row)")
+            #expect(layout.requirement?.version == Layout.introduced[row], "\(row)")
+        }
+        let appLink = try Layout(json: Array(Self.layout(#""a""#, extra: #", "link": "shortcuts://run""#).utf8))
+        #expect(appLink.requirement == .init(version: Version(0, 2, 3), feature: "layout.link.appURL", path: "link"))
+    }
+
+    @Test func reportsTheNewestFeatureAtItsPath() throws {
+        let layout = try Layout(json: Array(Self.layout(#"{"vstack": [{"text": "a", "modifiers": [{"blur": 1}]}, {"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}]}"#).utf8))
+        #expect(layout.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
+        let baseline = try Layout(json: Array(Self.layout(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
+        #expect(baseline.requirement == nil)
+        #expect(Layout.version == Version(0, 2, 4))
+    }
+
+    @Test func onlyNewerRowsCoverTheirSubtree() {
+        #expect(Layout.row(for: "chart.line.interpolation") == "chart")
+        #expect(Layout.row(for: "symbol") == "symbol")
+        #expect(Layout.row(for: "symbol.unreleasedKey") == nil)
+        #expect(Layout.row(for: "Modifier.Weight.unreleasedCase") == nil)
+    }
+
+    @Test func parsesVersions() {
+        #expect(Version("0.2.3") == Version(0, 2, 3))
+        #expect(Version(leading: "0.2.3 (41)") == Version(0, 2, 3))
+        for text in ["1.0", "1.0 (1)", "+1.2.3", "1.2.3.4", "1.2.x", "", "1..2"] {
+            #expect(Version(leading: text) == nil, "\(text)")
+        }
+        #expect(Version(0, 10, 0) > Version(0, 9, 9))
+    }
+
+    private static func layout(_ lockScreen: String, extra: String = "") -> String {
+        #"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"\#(extra)}"#
+    }
+}
