@@ -80,6 +80,13 @@ run on an iPhone; compiling proves neither.
 
 ## Release
 
+Choose the version by what older installs can still do. A patch only fixes
+behavior; layouts and the API accept exactly what they did. A minor adds
+something, such as a layout feature or an API field, that older phones and
+agents may lack but nothing existing breaks. A major removes or changes
+something existing layouts, agents, phones or self-hosted gateways rely on. A
+release that adds a layout feature is therefore at least a minor.
+
 Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`
 and newer than every other version tag. `.github/workflows/release.yml` then
 builds an unsigned archive with the tag as its version. It does not run the
