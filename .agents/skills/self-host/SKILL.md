@@ -24,8 +24,10 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
 ## Gateway
 
 Build the image from a release tag at the repository root and run it with the
-keys mounted read-only. The container runs as an unprivileged user, so the key
-files must be world-readable.
+keys mounted read-only. The container runs as the unprivileged user `lykta`;
+let that user read the key files through their group or an ACL, or through a
+runtime that maps file access to it, such as OrbStack, and keep them closed to
+everyone else.
 
 ```bash
 version=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
@@ -50,9 +52,11 @@ docker run --detach --name lykta --restart unless-stopped --stop-timeout 30 \
 At least one key pair is required. A legacy key valid in both environments
 can be set as both pairs.
 
-Registration needs no credential, so anyone who reaches the gateway can use up
-the device limit. Keep the gateway on a private network such as a tailnet, or
-set `LYKTA_MAX_DEVICES` to the number of phones the user has.
+A phone registers only with an App Attest attestation from the app built for
+this gateway's Team ID and bundle ID, so scripts cannot use up the device
+limit. Simulators cannot attest: create a one-time invite, valid for an hour,
+with `docker exec lykta lykta-gateway invite`, and launch the app with
+`SIMCTL_CHILD_LYKTA_INVITE=<invite> xcrun simctl launch <simulator> <bundle ID>`.
 
 ## HTTPS
 

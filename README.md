@@ -26,11 +26,11 @@ curl -X PUT "$LYKTA_URL/v1/activities/build" \
 
 ## How it works
 
-The app registers with your gateway and shares its push-to-start token. When
-an agent starts an activity, the gateway validates the layout with the same
-Swift code the widget renders it with, then starts it through APNs and updates
-it over a broadcast channel. Timers and progress run on the phone, so agents
-only send changes.
+The app registers with your gateway, proving with App Attest that it is a
+genuine copy, and shares its push-to-start token. When an agent starts an
+activity, the gateway validates the layout with the same Swift code the widget
+renders it with, then starts it through APNs and updates it over a broadcast
+channel. Timers and progress run on the phone, so agents only send changes.
 
 ## Use it from an agent
 

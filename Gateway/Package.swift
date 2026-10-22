@@ -24,6 +24,8 @@ let package = Package(
         .package(path: "../Core"),
         .package(url: "https://github.com/apple/swift-nio.git", exact: "2.104.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.0.3"),
+        .package(url: "https://github.com/apple/swift-asn1.git", exact: "1.7.3"),
+        .package(url: "https://github.com/apple/swift-certificates.git", exact: "1.21.0"),
     ],
     targets: [
         .systemLibrary(name: "CSQLite", pkgConfig: "sqlite3", providers: [.apt(["libsqlite3-dev"])]),
@@ -35,6 +37,8 @@ let package = Package(
                 .product(name: "NIOPosix", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "Crypto", package: "swift-crypto", condition: linux),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
+                .product(name: "X509", package: "swift-certificates"),
                 .target(name: "CSQLite", condition: linux),
             ],
             resources: [.embedInCode("Skill/SKILL.md"), .embedInCode("Skill/references/layout.md")]

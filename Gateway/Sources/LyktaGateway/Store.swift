@@ -17,6 +17,11 @@ struct ActivityRequest: Sendable {
     let ifRevision: Int?
 }
 
+enum Admission: Sendable {
+    case attested(keyID: Data)
+    case invited(String)
+}
+
 struct Job: Sendable {
     enum Kind: String, Sendable { case start, update, end, deleteChannel }
 
@@ -126,6 +131,7 @@ actor Store {
     static let maximumEventBytesPerDevice = 8 << 20
     static let actionRetention = 86400
     static let maximumActionsPerDevice = 1000
+    static let inviteLifetime = 3600
 
     private let db: Database
     private let maximumDevices: Int
@@ -145,6 +151,10 @@ actor Store {
         if try db.query("SELECT 1 FROM pragma_table_info('devices') WHERE name = 'layout_version'").isEmpty {
             try db.execute("ALTER TABLE devices ADD COLUMN layout_version TEXT")
         }
+        if try db.query("SELECT 1 FROM pragma_table_info('devices') WHERE name = 'attestation_key'").isEmpty {
+            try db.execute("ALTER TABLE devices ADD COLUMN attestation_key TEXT")
+        }
+        try db.execute("CREATE UNIQUE INDEX IF NOT EXISTS device_attestation_keys ON devices(attestation_key)")
         try db.execute("PRAGMA user_version = \(Self.schemaVersion)")
     }
 
@@ -155,20 +165,43 @@ actor Store {
 
     // MARK: Devices
 
-    func registerDevice(environment: PushEnvironment, appVersion: String, now: Int) throws -> Credentials {
+    func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, now: Int) throws -> Credentials {
         try db.transaction {
             guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
                 throw APIError(.registrationClosed, "This gateway accepts no more devices.")
             }
+            let attestationKey: String?
+            switch admission {
+            case let .attested(keyID):
+                attestationKey = keyID.base64EncodedString()
+                guard try db.query("SELECT 1 FROM devices WHERE attestation_key = ?", attestationKey).isEmpty else {
+                    throw APIError(.registrationRefused, "This App Attest key already registered a device.")
+                }
+            case let .invited(code):
+                attestationKey = nil
+                guard try !db.query("SELECT 1 FROM invites WHERE hash = ? AND expires_at > ?", Self.hash(code), now).isEmpty else {
+                    throw APIError(.registrationRefused, "The invite is unknown, used or expired.")
+                }
+                try db.run("DELETE FROM invites WHERE hash = ?", Self.hash(code))
+            }
             let id = UUID()
             let secret = Self.token("lykta_device_")
             let agentToken = Self.token("lykta_agent_")
-            try db.run("INSERT INTO devices (id, secret_hash, agent_hash, environment, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       id, Self.hash(secret), Self.hash(agentToken), environment, appVersion, now)
-            try record("device.registered", device: id, activity: nil,
-                       ["environment": .string(environment.rawValue), "appVersion": .string(appVersion)])
+            try db.run("""
+                INSERT INTO devices (id, secret_hash, agent_hash, environment, app_version, attestation_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, id, Self.hash(secret), Self.hash(agentToken), environment, appVersion, attestationKey, now)
+            try record("device.registered", device: id, activity: nil, [
+                "environment": .string(environment.rawValue), "appVersion": .string(appVersion),
+                "admission": .string(attestationKey == nil ? "invite" : "attestation"),
+            ])
             return Credentials(deviceSecret: secret, agentToken: agentToken)
         }
+    }
+
+    func invite(now: Int) throws -> String {
+        let code = Self.token("lykta_invite_")
+        try db.run("INSERT INTO invites (hash, expires_at) VALUES (?, ?)", Self.hash(code), now + Self.inviteLifetime)
+        return code
     }
 
     func device(secret: String) throws -> Device? {
@@ -417,6 +450,7 @@ actor Store {
         }
         try db.run("DELETE FROM activities WHERE phase = 'ended' AND channel IS NULL AND ended_at <= ?", now - 7 * 86400)
         try db.run("DELETE FROM actions WHERE at < ?", now - Self.actionRetention)
+        try db.run("DELETE FROM invites WHERE expires_at <= ?", now)
         try db.run("""
             DELETE FROM actions WHERE seq IN (SELECT seq FROM (
               SELECT seq, ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY seq DESC) AS n FROM actions) WHERE n > ?)
@@ -737,5 +771,9 @@ actor Store {
         ) STRICT;
         CREATE INDEX IF NOT EXISTS device_actions ON actions(device_id, seq);
         CREATE INDEX IF NOT EXISTS event_age ON events(received_at);
+        CREATE TABLE IF NOT EXISTS invites (
+          hash TEXT PRIMARY KEY,
+          expires_at INTEGER NOT NULL
+        ) STRICT;
         """
 }

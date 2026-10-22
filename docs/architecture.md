@@ -117,13 +117,20 @@ libcurl through FoundationNetworking, which negotiates the HTTP/2 that APNs
 requires; the container image ships that libcurl.
 
 **Two packages and a plain Xcode project.** `Core` has no dependencies and is
-the only package the app links; `Gateway` adds SwiftNIO and, on Linux,
-swift-crypto. The app uses Xcode's JSON project format directly instead of a
+the only package the app links; `Gateway` adds SwiftNIO, swift-certificates
+for App Attest and, on Linux, swift-crypto. The app uses Xcode's JSON project format directly instead of a
 generator.
 
 **Credentials.** Each phone gets a device secret and an agent token, both 256
-random bits stored as SHA-256 hashes. Registration is open up to a configured
-device limit; operators keep the gateway on a private network.
+random bits stored as SHA-256 hashes. Registration needs proof, so a script
+cannot use up the device limit. The app attests a new App Attest key over a
+challenge the gateway signed less than five minutes earlier, and the gateway
+checks the certificate chain against Apple's App Attest root, the challenge,
+the key and the App ID built from its Team ID and bundle ID; each key registers
+once. Simulators cannot attest, so an operator can instead create a one-time
+invite valid for an hour with `lykta-gateway invite`. Someone with a real phone
+and the genuine app can still register again by reinstalling, which the device
+limit bounds.
 
 **Observability.** Every fact needed to debug a phone lands in the gateway's
 `events` table, so nobody needs the phone or its logs.

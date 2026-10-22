@@ -15,6 +15,9 @@ For each registered phone:
 - the push tokens Apple issues for starting and updating Live Activities
 - hashes of the device secret and the agent token; the tokens stay in the
   phone's Keychain and with the agents you give them to
+- the identifier of the App Attest key the app created to register, which is a
+  hash of the key's public part and proves the registration came from a genuine
+  copy of the app
 
 For each Live Activity:
 

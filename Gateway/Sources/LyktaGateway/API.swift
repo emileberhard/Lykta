@@ -4,6 +4,7 @@ import LyktaCore
 struct API: Sendable {
     let store: Store
     let environments: Set<PushEnvironment>
+    let enrolment: Enrolment
     let version: Version?
     let shutdown: Shutdown
 
@@ -54,12 +55,23 @@ struct API: Sendable {
         switch (request.method, isActivity ? "v1/activities/{name}" : path.joined(separator: "/")) {
         case ("GET", "v1/version"):
             return Self.json(200, ["version": version?.description])
+        case ("GET", "v1/devices/challenge"):
+            return Self.json(200, Challenge(challenge: enrolment.challenge(now: now)))
         case ("POST", "v1/devices"):
             let registration: Registration = try Self.decode(request.body)
             guard environments.contains(registration.environment) else {
                 throw APIError(.unsupportedEnvironment, "This gateway has no APNs key for \(registration.environment.rawValue) builds.")
             }
-            let credentials = try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion, now: now)
+            let admission: Admission
+            switch registration.proof {
+            case let .attestation(keyID, object, challenge):
+                try await enrolment.verify(keyID: keyID, object: object, challenge: challenge, now: now)
+                admission = .attested(keyID: keyID)
+            case let .invite(code):
+                admission = .invited(code)
+            }
+            let credentials = try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion,
+                                                             admission: admission, now: now)
             return Self.json(201, credentials)
         case ("PUT", "v1/device"):
             let device = try await phone(request)

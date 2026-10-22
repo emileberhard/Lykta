@@ -58,6 +58,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   previous release cannot read; older gateways then refuse to start.
 - Never run a second gateway with another gateway's APNs keys, even briefly:
   its channel cleanup deletes every channel its own database does not know.
+- A phone registers only with a verified App Attest attestation of a new key
+  over a challenge this gateway signed, or with a one-time invite an operator
+  created. Never add a registration path without such proof.
 - Tokens are stored only as hashes. Never log tokens, push tokens or payloads.
 - Every state change, push attempt and phone observation becomes an event in
   `Store`, so a phone's problems can be debugged from the gateway alone. Events
@@ -134,7 +137,10 @@ release, so the maintainer decides when an approved version goes live.
 
 The App Store screenshots are four 1206 × 2622 slides, the required 6.3-inch
 iPhone size. Capture them from a Debug build on an iPhone 18 Pro simulator:
-tap Copy Agent Setup, start the fixture activities with
+launch it with a one-time invite from `lykta-gateway invite` as
+`SIMCTL_CHILD_LYKTA_INVITE=<invite> xcrun simctl launch <device> <bundle ID>`,
+because simulators cannot use App Attest, tap Copy Agent Setup, start the
+fixture activities with
 `LYKTA_URL=… LYKTA_TOKEN=… python3 AppStore/activities.py --quiet`, and capture
 with `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
 Island is missing without a mask. Name the captures `1-lock`, `2-compact`,

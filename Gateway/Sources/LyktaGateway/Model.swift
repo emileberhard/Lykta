@@ -9,6 +9,7 @@ struct APIError: Error, Encodable, Sendable {
         case unsupportedEnvironment = "unsupported_environment"
         case unauthorized
         case registrationClosed = "registration_closed"
+        case registrationRefused = "registration_refused"
         case notFound = "not_found"
         case conflict
         case deviceNotReady = "device_not_ready"
@@ -21,7 +22,7 @@ struct APIError: Error, Encodable, Sendable {
             switch self {
             case .invalidRequest, .invalidName, .invalidLayout, .unsupportedEnvironment: 400
             case .unauthorized: 401
-            case .registrationClosed: 403
+            case .registrationClosed, .registrationRefused: 403
             case .notFound: 404
             case .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired: 409
             case .payloadTooLarge: 413

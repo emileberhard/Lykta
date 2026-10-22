@@ -9,6 +9,10 @@ struct AppError: LocalizedError {
 struct GatewayClient: Sendable {
     let url: URL
 
+    func challenge() async throws -> Data {
+        try JSONDecoder().decode(Challenge.self, from: await send("GET", url.appending(path: "v1/devices/challenge"), token: nil, body: nil)).challenge
+    }
+
     func register(_ registration: Registration) async throws -> Credentials {
         try JSONDecoder().decode(Credentials.self, from: await send("POST", url.appending(path: "v1/devices"), token: nil, body: registration))
     }

@@ -14,11 +14,31 @@ struct GatewayTests {
 
     init() async throws {
         store = try Store(path: ":memory:", maximumDevices: 2, maximumLiveActivities: 2)
-        api = API(store: store, environments: [.development], version: Version(9, 9, 9), shutdown: Shutdown())
-        credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
-                                                       body: Self.json(Registration(environment: .development, appVersion: "1.0 (1)"))))
-            .decoded()
+        api = API(store: store, environments: [.development], enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9),
+                  shutdown: Shutdown())
+        credentials = try await api.handle(Self.registration(.invite(try await store.invite(now: now)))).decoded()
         _ = try await report([])
+    }
+
+    @Test func registersOnlyAttestedAppsAndInvitedDevices() async throws {
+        let invite = try await store.invite(now: now)
+        let refusals: [(Registration.Proof, String)] = [
+            (.invite("lykta_invite_unknown"), "The invite is unknown, used or expired."),
+            (.attestation(keyID: AppAttestTests.keyID, object: AppAttestTests.object, challenge: Data(count: 56)),
+             "The challenge did not come from this gateway. Ask for a new one."),
+            (.attestation(keyID: AppAttestTests.keyID, object: AppAttestTests.object, challenge: try await challenge()),
+             "The app could not prove it is a genuine Lykta install: its certificate does not lead to Apple's App Attest root."),
+        ]
+        for (proof, message) in refusals {
+            let response = await api.handle(Self.registration(proof))
+            #expect(response.status == 403)
+            #expect(try response.decoded() as Refusal == Refusal(error: "registration_refused", message: message))
+        }
+        #expect(await api.handle(Self.registration(.invite(invite))).status == 201)
+        #expect(await api.handle(Self.registration(.invite(invite))).status == 403)
+        let unproven = await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
+                                                    body: #"{"environment": "development", "appVersion": "1.0 (1)"}"#.utf8.map { $0 }))
+        #expect(unproven.status == 400)
     }
 
     @Test func startsCoalescesUpdatesAndEnds() async throws {
@@ -365,6 +385,16 @@ struct GatewayTests {
         }
     }
 
+    private func challenge() async throws -> Data {
+        let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/devices/challenge", headers: [:], body: []))
+        return (try response.decoded() as Challenge).challenge
+    }
+
+    private static func registration(_ proof: Registration.Proof) -> HTTPRequest {
+        HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
+                    body: json(Registration(environment: .development, appVersion: "1.0 (1)", proof: proof)))
+    }
+
     private static func json(_ value: some Encodable) -> [UInt8] {
         Array(try! JSONEncoder().encode(value))
     }
@@ -416,7 +446,7 @@ struct Failure: Decodable, Equatable {
     let error: String
 }
 
-struct Refusal: Decodable {
+struct Refusal: Decodable, Equatable {
     let error: String
     let message: String
 }

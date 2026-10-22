@@ -40,18 +40,54 @@ public struct PushToken: Codable, Hashable, Sendable, CustomStringConvertible {
 }
 
 public struct Registration: Codable, Sendable {
+    public enum Proof: Sendable {
+        case attestation(keyID: Data, object: Data, challenge: Data)
+        case invite(String)
+    }
+
     public let environment: PushEnvironment
     public let appVersion: String
+    public let proof: Proof
 
-    public init(environment: PushEnvironment, appVersion: String) {
+    public init(environment: PushEnvironment, appVersion: String, proof: Proof) {
         self.environment = environment
         self.appVersion = appVersion
+        self.proof = proof
     }
 
     public init(from decoder: any Decoder) throws {
         let fields = try decoder.container(keyedBy: Key.self)
         environment = try fields.required("environment")
         appVersion = try fields.text("appVersion", maximumLength: DeviceReport.maximumAppVersionLength)
+        if let invite: String = try fields.optional("invite") {
+            try fields.allowOnly(["environment", "appVersion", "invite"])
+            proof = .invite(invite)
+        } else {
+            try fields.allowOnly(["environment", "appVersion", "keyID", "attestation", "challenge"])
+            proof = .attestation(keyID: try fields.required("keyID"), object: try fields.required("attestation"), challenge: try fields.required("challenge"))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: Key.self)
+        try fields.encode(environment, forKey: Key(stringValue: "environment"))
+        try fields.encode(appVersion, forKey: Key(stringValue: "appVersion"))
+        switch proof {
+        case let .attestation(keyID, object, challenge):
+            try fields.encode(keyID, forKey: Key(stringValue: "keyID"))
+            try fields.encode(object, forKey: Key(stringValue: "attestation"))
+            try fields.encode(challenge, forKey: Key(stringValue: "challenge"))
+        case let .invite(code):
+            try fields.encode(code, forKey: Key(stringValue: "invite"))
+        }
+    }
+}
+
+public struct Challenge: Codable, Sendable {
+    public let challenge: Data
+
+    public init(challenge: Data) {
+        self.challenge = challenge
     }
 }
 

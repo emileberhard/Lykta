@@ -1,4 +1,6 @@
 import ActivityKit
+import CryptoKit
+import DeviceCheck
 import Foundation
 import LyktaCore
 import MetricKit
@@ -140,7 +142,7 @@ final class Model {
             if let saved = try Keychain.load() {
                 credentials = saved
             } else {
-                let registered = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion))
+                let registered = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion, proof: proof(gateway)))
                 try Keychain.save(registered)
                 credentials = registered
                 record("app.registered")
@@ -157,6 +159,23 @@ final class Model {
             group.addTask { await self.observeActivities() }
             group.addTask { await self.observeAuthorization() }
         }
+    }
+
+    private func proof(_ gateway: GatewayClient) async throws -> Registration.Proof {
+        if let invite = ProcessInfo.processInfo.environment["LYKTA_INVITE"] {
+            return .invite(invite)
+        }
+        let service = DCAppAttestService.shared
+        guard service.isSupported else {
+            throw AppError(status: nil, errorDescription: "This device cannot prove Lykta is genuine with App Attest. Launch it with LYKTA_INVITE set to an invite from the gateway.")
+        }
+        let challenge = try await gateway.challenge()
+        let keyID = try await service.generateKey()
+        guard let key = Data(base64Encoded: keyID) else {
+            throw AppError(status: nil, errorDescription: "App Attest returned an unreadable key identifier.")
+        }
+        let object = try await service.attestKey(keyID, clientDataHash: Data(SHA256.hash(data: challenge)))
+        return .attestation(keyID: key, object: object, challenge: challenge)
     }
 
     private func observePushTokens() async {
