@@ -51,25 +51,13 @@ struct HomeView: View {
                 .listRowBackground(Color.clear)
         case let .failed(message):
             Section {
-                HStack {
-                    Problem(message)
-                    Spacer(minLength: 12)
-                    Button("Try Again") { model.start() }
-                        .buttonStyle(.bordered)
-                        .tint(.primary)
-                }
+                Notice(Problem(message), action: "Try Again") { model.start() }
             }
         case .ready:
             if !model.areActivitiesEnabled {
                 Section {
-                    HStack {
-                        Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill")
-                            .symbolRenderingMode(.multicolor)
-                        Spacer(minLength: 12)
-                        Button("Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
-                            .buttonStyle(.bordered)
-                            .tint(.primary)
-                    }
+                    Notice(Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor),
+                           action: "Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
                 }
             }
             if let error = model.error {
@@ -141,6 +129,31 @@ private struct Problem: View {
     }
 }
 
+private struct Notice<Message: View>: View {
+    let message: Message
+    let action: LocalizedStringKey
+    let perform: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(_ message: Message, action: LocalizedStringKey, perform: @escaping () -> Void) {
+        self.message = message
+        self.action = action
+        self.perform = perform
+    }
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+        layout {
+            message.frame(maxWidth: .infinity, alignment: .leading)
+            Button(action, action: perform)
+                .buttonStyle(.bordered)
+                .tint(.primary)
+        }
+    }
+}
+
 private extension LiveActivity {
     var status: LocalizedStringResource? {
         switch state {
@@ -174,6 +187,7 @@ private struct Actions: View {
                 }
                 .buttonStyle(.glassProminent)
                 .tint(.primary)
+                .accessibilityShowsLargeContentViewer()
 
                 Button {
                     Task {
@@ -195,9 +209,11 @@ private struct Actions: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(isSendingDemo)
+                .accessibilityShowsLargeContentViewer()
             }
             .controlSize(.large)
             .buttonSizing(.flexible)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .padding(.horizontal)
         .disabled(!model.phase.isReady)
