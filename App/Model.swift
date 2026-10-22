@@ -72,8 +72,8 @@ final class Model {
         record("app.scene", ["phase": .string(name)])
     }
 
-    func copySetup() {
-        guard let gateway, let credentials else { return }
+    func copySetup() -> Bool {
+        guard let gateway, let credentials else { return false }
         record("app.copySetup")
         UIPasteboard.general.string = """
             Show Live Activities on my iPhone with Lykta.
@@ -81,6 +81,7 @@ final class Model {
             Token: \(credentials.agentToken)
             Instructions: \(gateway.url.appending(path: "skill/SKILL.md").absoluteString)
             """
+        return true
     }
 
     func show(_ example: Example) async -> Bool {

@@ -182,22 +182,14 @@ private extension LiveActivity {
 
 private struct Actions: View {
     let model: Model
-    @State private var copies = 0
-    @State private var isShowingCopied = false
 
     var body: some View {
         GlassEffectContainer {
             VStack(spacing: 10) {
-                Button {
+                ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", done: "Copied") {
                     model.copySetup()
-                    copies += 1
-                } label: {
-                    Label(isShowingCopied ? "Copied" : "Copy Agent Setup",
-                          systemImage: isShowingCopied ? "checkmark" : "doc.on.doc")
-                        .contentTransition(.symbolEffect(.replace))
                 }
                 .disabled(!model.phase.isReady)
-                .accessibilityShowsLargeContentViewer()
 
                 NavigationLink(value: Gallery.Route()) {
                     Label("Examples", systemImage: "rectangle.stack")
@@ -210,13 +202,6 @@ private struct Actions: View {
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .padding(.horizontal)
-        .sensoryFeedback(.success, trigger: copies)
-        .task(id: copies) {
-            guard copies > 0 else { return }
-            withAnimation { isShowingCopied = true }
-            guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
-            withAnimation { isShowingCopied = false }
-        }
     }
 }
 

@@ -70,52 +70,17 @@ struct ExampleView: View {
         .navigationTitle(example.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaBar(edge: .bottom) {
-            ShowButton(example: example, model: model)
-        }
-    }
-}
-
-private struct ShowButton: View {
-    let example: Example
-    let model: Model
-    @State private var sends = 0
-    @State private var isSending = false
-    @State private var isShowingSent = false
-
-    var body: some View {
-        Button {
-            Task {
-                isSending = true
-                if await model.show(example) { sends += 1 }
-                isSending = false
+            ActionButton(title: "Show on Lock Screen", systemImage: "platter.filled.bottom.and.arrow.down.iphone", done: "Sent") {
+                await model.show(example)
             }
-        } label: {
-            Label {
-                Text(isSending ? "Sending…" : isShowingSent ? "Sent" : "Show on Lock Screen")
-            } icon: {
-                if isSending {
-                    ProgressView()
-                } else {
-                    Image(systemName: isShowingSent ? "checkmark" : "platter.filled.bottom.and.arrow.down.iphone")
-                }
-            }
-            .contentTransition(.symbolEffect(.replace))
+            .buttonStyle(.glassProminent)
+            .tint(.primary)
             .foregroundStyle(Color(.systemBackground))
-        }
-        .buttonStyle(.glassProminent)
-        .tint(.primary)
-        .controlSize(.large)
-        .buttonSizing(.flexible)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .accessibilityShowsLargeContentViewer()
-        .disabled(isSending || !model.phase.isReady)
-        .padding(.horizontal)
-        .sensoryFeedback(.success, trigger: sends)
-        .task(id: sends) {
-            guard sends > 0 else { return }
-            withAnimation { isShowingSent = true }
-            guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
-            withAnimation { isShowingSent = false }
+            .controlSize(.large)
+            .buttonSizing(.flexible)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .disabled(!model.phase.isReady)
+            .padding(.horizontal)
         }
     }
 }
