@@ -36,8 +36,8 @@
                       "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
                     },
                     {
-                      "text": "#{{pr.number}}",
-                      "modifiers": [{"font": "footnote"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+                      "text": "{{pr.repo}}#{{pr.number}}",
+                      "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}, {"foreground": "#8B949E"}]
                     },
                     {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
                     {"spacer": 4},
@@ -55,12 +55,14 @@
                     {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
                   ],
                   "spacing": 7
-                }
+                },
+                "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}, {"id": "{{pr.number}}"}]
               }
             }
           ],
           "alignment": "leading",
-          "spacing": 9
+          "spacing": 9,
+          "modifiers": [{"animation": {"curve": "snappy", "value": "{{count}}"}}]
         }
       ],
       "alignment": "leading",
@@ -70,7 +72,12 @@
     "compactLeading": {"symbol": "arrow.triangle.pull", "modifiers": [{"bold": true}, {"foreground": "#58A6FF"}]},
     "compactTrailing": {
       "text": "{{count}}",
-      "modifiers": [{"bold": true}, {"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#58A6FF"}]
+      "modifiers": [
+        {"bold": true},
+        {"monospacedDigit": true},
+        {"contentTransition": {"numericText": "{{count}}"}},
+        {"foreground": "#58A6FF"}
+      ]
     },
     "minimal": {"text": "{{count}}", "modifiers": [{"bold": true}, {"monospacedDigit": true}, {"foreground": "#58A6FF"}]},
     "expanded": {
@@ -78,10 +85,7 @@
         "symbol": "arrow.triangle.pull",
         "modifiers": [{"font": "title3"}, {"bold": true}, {"foreground": "#58A6FF"}, {"padding": {"leading": 6}}]
       },
-      "center": {
-        "text": "{{count}} pull requests need you",
-        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
-      },
+      "center": {"text": "{{count}} pull requests need you", "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
       "bottom": {
         "vstack": [
           {
@@ -96,8 +100,8 @@
                     "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
                   },
                   {
-                    "text": "#{{pr.number}}",
-                    "modifiers": [{"font": "footnote"}, {"monospacedDigit": true}, {"foreground": "#8B949E"}]
+                    "text": "{{pr.repo}}#{{pr.number}}",
+                    "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}, {"foreground": "#8B949E"}]
                   },
                   {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
                   {"spacer": 4},
@@ -115,13 +119,14 @@
                   {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
                 ],
                 "spacing": 7
-              }
+              },
+              "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}, {"id": "{{pr.number}}"}]
             }
           }
         ],
         "alignment": "leading",
         "spacing": 8,
-        "modifiers": [{"padding": {"top": 4}}]
+        "modifiers": [{"padding": {"top": 4}}, {"animation": {"curve": "snappy", "value": "{{count}}"}}]
       }
     },
     "background": "#0D1117",
@@ -132,6 +137,7 @@
     "count": 3,
     "prs": [
       {
+        "repo": "relay",
         "number": 482,
         "title": "Drain relay on shutdown",
         "status": "review",
@@ -141,6 +147,7 @@
         "url": "https://github.com/acme/relay/pull/482"
       },
       {
+        "repo": "gateway",
         "number": 479,
         "title": "Scheduled ends",
         "status": "CI failed",
@@ -150,6 +157,7 @@
         "url": "https://github.com/acme/gateway/pull/479"
       },
       {
+        "repo": "app",
         "number": 471,
         "title": "Faster release path",
         "status": "changes",
