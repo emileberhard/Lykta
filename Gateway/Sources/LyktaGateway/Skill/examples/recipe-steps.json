@@ -5,26 +5,57 @@
       "vstack": [
         {
           "hstack": [
-            {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
             {
-              "concat": [{"text": "{{dish}}", "modifiers": [{"fontWeight": "semibold"}]}, " · step {{n}} of {{steps}}"],
-              "modifiers": [{"font": "subheadline"}]
+              "text": "{{dish}}",
+              "modifiers": [
+                {"font": "caption"},
+                {"fontWeight": "bold"},
+                {"textCase": "uppercase"},
+                {"tracking": 1.5},
+                {"foreground": "#C8432B"}
+              ]
             },
+            {"text": "serves {{serves}}", "modifiers": [{"font": "caption"}, {"italic": true}, {"foreground": "#8A7462"}]},
             {"spacer": true},
             {
-              "concat": [{"symbol": "person.2.fill"}, " {{serves}}"],
-              "modifiers": [{"font": "caption"}, {"foreground": "#B39B8E"}]
+              "hstack": [
+                {
+                  "each": "pages",
+                  "as": "page",
+                  "do": {
+                    "shape": "capsule",
+                    "fill": "{{page.color}}",
+                    "modifiers": [{"frame": {"width": "{{page.width}}", "height": 6}}]
+                  }
+                }
+              ],
+              "spacing": 4,
+              "modifiers": [{"animation": {"curve": "snappy", "value": "{{n}}"}}]
             }
           ],
-          "spacing": 6
+          "spacing": 6,
+          "modifiers": [{"fontDesign": "serif"}]
         },
         {
           "hstack": [
             {
+              "text": "{{n}}",
+              "modifiers": [
+                {"font": 50},
+                {"fontWeight": "bold"},
+                {"fontDesign": "serif"},
+                {"foreground": "#C8432B"},
+                {"transition": [{"push": "trailing"}, "opacity"]},
+                {"id": "{{n}}"},
+                {"frame": {"width": 34, "alignment": "leading"}}
+              ]
+            },
+            {
               "text": "{{text}}",
               "modifiers": [
                 {"font": "title3"},
-                {"fontWeight": "semibold"},
+                {"fontWeight": "medium"},
+                {"fontDesign": "serif"},
                 {"lineLimit": 3},
                 {"minimumScaleFactor": 0.8},
                 {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
@@ -40,17 +71,17 @@
                     "progress": ["{{timer.start}}", "{{timer.end}}"],
                     "style": "circular",
                     "countsDown": true,
-                    "modifiers": [{"tint": "#FF6B3D"}]
+                    "modifiers": [{"tint": "#C8432B"}]
                   },
                   {
                     "date": "{{timer.end}}",
                     "style": "timer",
                     "modifiers": [
-                      {"font": 11.0},
+                      {"font": 11},
                       {"bold": true},
                       {"monospacedDigit": true},
                       {"multilineTextAlignment": "center"},
-                      {"frame": {"width": 37.5}}
+                      {"frame": {"width": 38}}
                     ]
                   }
                 ],
@@ -58,7 +89,8 @@
               }
             }
           ],
-          "spacing": 12,
+          "alignment": "center",
+          "spacing": 10,
           "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
         },
         {
@@ -67,39 +99,78 @@
               "button": "back",
               "label": {"concat": [{"symbol": "chevron.left"}, " Back"], "modifiers": [{"font": "subheadline"}]},
               "style": "bordered",
-              "modifiers": [{"tint": "#C9B2A6"}]
+              "modifiers": [{"tint": "#8A7462"}]
             },
             {"spacer": true},
             {
               "button": "next",
               "label": {
                 "concat": ["Next step ", {"symbol": "chevron.right"}],
-                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
               },
               "style": "borderedProminent",
-              "modifiers": [{"tint": "#FF6B3D"}]
+              "modifiers": [{"tint": "#C8432B"}]
             }
           ]
         }
       ],
       "alignment": "leading",
-      "spacing": 10,
-      "modifiers": [{"padding": 16}, {"foreground": "white"}]
+      "spacing": 8,
+      "modifiers": [{"padding": {"horizontal": 16, "vertical": 13}}, {"foreground": "#3A2A1F"}]
     },
-    "compactLeading": {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
+    "compactLeading": {
+      "text": "{{n}}",
+      "modifiers": [
+        {"font": "subheadline"},
+        {"fontWeight": "bold"},
+        {"fontDesign": "serif"},
+        {"foreground": "white"},
+        {"frame": {"width": 22, "height": 22}},
+        {"background": "#C8432B"},
+        {"clip": "circle"},
+        {"padding": {"leading": 2}}
+      ]
+    },
     "compactTrailing": {
-      "text": "{{n}}/{{steps}}",
-      "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}, {"foreground": "#FF8F6B"}]
+      "if": "{{timer.on}}",
+      "then": {
+        "date": "{{timer.end}}",
+        "style": "timer",
+        "modifiers": [
+          {"monospacedDigit": true},
+          {"foreground": "#FF7A5C"},
+          {"multilineTextAlignment": "trailing"},
+          {"frame": {"width": 44}}
+        ]
+      },
+      "else": {"text": "of {{steps}}", "modifiers": [{"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
     },
-    "minimal": {"symbol": "frying.pan.fill", "modifiers": [{"foreground": "#FF6B3D"}]},
+    "minimal": {
+      "if": "{{timer.on}}",
+      "then": {
+        "progress": ["{{timer.start}}", "{{timer.end}}"],
+        "style": "circular",
+        "countsDown": true,
+        "modifiers": [{"tint": "#FF7A5C"}, {"frame": {"width": 24, "height": 24}}]
+      },
+      "else": {"text": "{{n}}", "modifiers": [{"fontWeight": "bold"}, {"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]}
+    },
     "expanded": {
       "leading": {
-        "symbol": "frying.pan.fill",
-        "modifiers": [{"font": "title3"}, {"foreground": "#FF6B3D"}, {"padding": {"leading": 6}}]
+        "text": "{{n}}",
+        "modifiers": [
+          {"font": 34},
+          {"fontWeight": "bold"},
+          {"fontDesign": "serif"},
+          {"foreground": "#FF7A5C"},
+          {"transition": [{"push": "trailing"}, "opacity"]},
+          {"id": "{{n}}"},
+          {"padding": {"leading": 8}}
+        ]
       },
       "center": {
-        "text": "{{dish}} · step {{n}} of {{steps}}",
-        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+        "concat": [{"text": "{{dish}}", "modifiers": [{"fontWeight": "semibold"}]}, " · step {{n}} of {{steps}}"],
+        "modifiers": [{"font": "subheadline"}, {"fontDesign": "serif"}]
       },
       "trailing": {
         "if": "{{timer.on}}",
@@ -109,21 +180,21 @@
               "progress": ["{{timer.start}}", "{{timer.end}}"],
               "style": "circular",
               "countsDown": true,
-              "modifiers": [{"tint": "#FF6B3D"}]
+              "modifiers": [{"tint": "#C8432B"}]
             },
             {
               "date": "{{timer.end}}",
               "style": "timer",
               "modifiers": [
-                {"font": 7.92},
+                {"font": 9},
                 {"bold": true},
                 {"monospacedDigit": true},
                 {"multilineTextAlignment": "center"},
-                {"frame": {"width": 27.0}}
+                {"frame": {"width": 30}}
               ]
             }
           ],
-          "modifiers": [{"frame": {"width": 36, "height": 36}}]
+          "modifiers": [{"frame": {"width": 38, "height": 38}}]
         },
         "modifiers": [{"padding": {"trailing": 4}}]
       },
@@ -133,7 +204,7 @@
             "text": "{{text}}",
             "modifiers": [
               {"font": "callout"},
-              {"fontWeight": "semibold"},
+              {"fontDesign": "serif"},
               {"lineLimit": 2},
               {"fixedSize": "vertical"},
               {"frame": {"maxWidth": "infinity", "alignment": "leading"}},
@@ -154,10 +225,10 @@
                 "button": "next",
                 "label": {
                   "concat": ["Next step ", {"symbol": "chevron.right"}],
-                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]
+                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
                 },
                 "style": "borderedProminent",
-                "modifiers": [{"tint": "#FF6B3D"}]
+                "modifiers": [{"tint": "#C8432B"}]
               }
             ]
           }
@@ -166,16 +237,27 @@
         "modifiers": [{"animation": {"curve": "smooth", "value": "{{n}}"}}]
       }
     },
-    "background": "#1A0F0A",
-    "keyline": "#FF6B3D"
+    "background": "#FBF3E4",
+    "keyline": "#C8432B"
   },
   "data": {
     "dish": "Shakshuka",
+    "serves": 4,
     "n": 4,
     "steps": 9,
-    "serves": 4,
     "text": "Crack the eggs into the wells, then cover the pan",
-    "timer": {"on": true, "start": 1792999910, "end": 1793000270}
+    "timer": {"on": true, "start": 1792999910, "end": 1793000270},
+    "pages": [
+      {"color": "#C8432B", "width": 6},
+      {"color": "#C8432B", "width": 6},
+      {"color": "#C8432B", "width": 6},
+      {"color": "#C8432B", "width": 16},
+      {"color": "#3A2A1F33", "width": 6},
+      {"color": "#3A2A1F33", "width": 6},
+      {"color": "#3A2A1F33", "width": 6},
+      {"color": "#3A2A1F33", "width": 6},
+      {"color": "#3A2A1F33", "width": 6}
+    ]
   },
   "endAfter": 7200
 }
