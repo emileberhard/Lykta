@@ -138,11 +138,19 @@ actor Store {
     private let maximumLiveActivities: Int
 
     init(path: String, maximumDevices: Int, maximumLiveActivities: Int) throws {
-        db = try Database(path: path)
+        let db = try Database(path: path)
+        self.db = db
         self.maximumDevices = maximumDevices
         self.maximumLiveActivities = maximumLiveActivities
         guard let schema = try db.query("PRAGMA user_version").first.map({ try $0.integer("user_version") }), schema <= Self.schemaVersion else {
             throw ConfigurationError("The database was written by a newer gateway with an incompatible schema; run that version or restore a backup.")
+        }
+        if try !db.query("SELECT 1 FROM sqlite_master WHERE name = 'events' AND sql NOT LIKE '%AUTOINCREMENT%'").isEmpty {
+            try db.transaction {
+                try db.execute("ALTER TABLE events RENAME TO reused_events; DROP INDEX device_events; DROP INDEX event_age;")
+                try db.execute(Self.schema)
+                try db.execute("INSERT INTO events SELECT * FROM reused_events; DROP TABLE reused_events;")
+            }
         }
         try db.execute(Self.schema)
         if try db.query("SELECT 1 FROM pragma_table_info('activities') WHERE name = 'ends_at'").isEmpty {
@@ -477,6 +485,9 @@ actor Store {
     }
 
     func events(device: UUID?, after: Int64?, limit: Int) throws -> [StoredEvent] {
+        if let after, after > (try db.query("SELECT COALESCE(MAX(seq), 0) AS seq FROM sqlite_sequence WHERE name = 'events'")[0].integer("seq")) {
+            throw APIError(.invalidRequest, "after is newer than the newest event; read without after to start again.")
+        }
         let rows = if let after {
             try db.query("SELECT * FROM events WHERE (?1 IS NULL OR device_id = ?1) AND seq > ?2 ORDER BY seq LIMIT ?3", device, after, limit)
         } else {
@@ -747,7 +758,7 @@ actor Store {
         CREATE UNIQUE INDEX IF NOT EXISTS live_activity_names ON activities(device_id, name) WHERE phase IN ('starting', 'live');
         CREATE INDEX IF NOT EXISTS activity_devices ON activities(device_id);
         CREATE TABLE IF NOT EXISTS events (
-          seq INTEGER PRIMARY KEY,
+          seq INTEGER PRIMARY KEY AUTOINCREMENT,
           id TEXT NOT NULL UNIQUE,
           device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
           activity_id TEXT,

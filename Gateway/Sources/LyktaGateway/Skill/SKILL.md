@@ -119,6 +119,8 @@ phone received that exact content. An accepted `push.start` followed by
 is spent; wait instead of retrying. An `app.authorization` with
 `activitiesEnabled: false` means the user turned Live Activities off. Pass
 `?after=<seq>` to read only newer events and `limit` (1 to 1000, default 200).
+An `after` newer than the gateway's newest event fails with `invalid_request`;
+read once without it to start again.
 
 ## Errors
 

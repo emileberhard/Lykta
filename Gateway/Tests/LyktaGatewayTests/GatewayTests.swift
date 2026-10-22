@@ -80,6 +80,33 @@ struct GatewayTests {
         #expect(detail.data == ["step": "Running"])
     }
 
+    @Test func eventCursorsNeverPointBackwards() async throws {
+        let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let old = try Store(path: path, maximumDevices: 1, maximumLiveActivities: 1)
+        let registered = try await old.registerDevice(environment: .development, appVersion: "1.0 (1)",
+                                                      admission: .invited(try await old.invite(now: now)), now: now)
+        try Database(path: path).execute("""
+            ALTER TABLE events RENAME TO new_events; DROP INDEX device_events; DROP INDEX event_age;
+            CREATE TABLE events (
+              seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+              activity_id TEXT, source TEXT NOT NULL CHECK (source IN ('app', 'gateway')), name TEXT NOT NULL, at INTEGER NOT NULL,
+              received_at INTEGER NOT NULL, bytes INTEGER NOT NULL, detail TEXT NOT NULL
+            ) STRICT;
+            CREATE INDEX device_events ON events(device_id, seq);
+            CREATE INDEX event_age ON events(received_at);
+            INSERT INTO events SELECT * FROM new_events; DROP TABLE new_events; DELETE FROM sqlite_sequence WHERE name = 'events';
+            """)
+        let migrated = try Store(path: path, maximumDevices: 1, maximumLiveActivities: 1)
+        let first = try await migrated.events(device: nil, after: nil, limit: 10)
+        #expect(first.map(\.name) == ["device.registered"])
+        try await migrated.housekeep(now: now + Store.eventRetention + 60)
+        let device = try #require(try await migrated.device(secret: registered.deviceSecret))
+        try await migrated.ingest(device, EventBatch(events: [Event(id: UUID(), at: Date(), name: "app.launch", activity: nil, detail: [:])]))
+        #expect(try await migrated.events(device: nil, after: first[0].seq, limit: 10).map(\.name) == ["app.launch"])
+        await #expect(throws: APIError.self) { try await migrated.events(device: nil, after: first[0].seq + 5, limit: 10) }
+    }
+
     @Test func startsCoalescesUpdatesAndEnds() async throws {
         try await put("build", Self.start)
         try await deliver(at: now)
