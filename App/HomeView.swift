@@ -77,10 +77,7 @@ struct HomeView: View {
             }
             ForEach(model.activities) { activity in
                 Section {
-                    LockScreenView(state: activity.content, isStale: activity.state == .stale)
-                        .frame(maxWidth: .infinity)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(activity.content.layout?.background?.value)
+                    LockScreenCard(activity: activity)
                 } footer: {
                     if let status = activity.status {
                         Text(status)
@@ -107,6 +104,22 @@ private struct Header: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .listRowBackground(Color.clear)
+    }
+}
+
+private struct LockScreenCard: View {
+    private static let maximumHeight: CGFloat = 160
+    private static let textSizes = DynamicTypeSize.large ... .xxxLarge
+
+    let activity: LiveActivity
+
+    var body: some View {
+        LockScreenView(state: activity.content, isStale: activity.state == .stale)
+            .frame(maxWidth: .infinity, maxHeight: Self.maximumHeight)
+            .clipped()
+            .dynamicTypeSize(Self.textSizes)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(activity.content.layout?.background?.value)
     }
 }
 

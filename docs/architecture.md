@@ -35,10 +35,10 @@ sequenceDiagram
 **Layouts are data rendered by native views.** The language is a tree of
 SwiftUI primitives and modifiers decoded by `LyktaCore`. `Rendering` maps each
 node to its SwiftUI view. The widget and the app both compile it, so the app
-shows each live activity exactly as the Lock Screen does. Fixed templates would
-limit what agents can show, an extension cannot run downloaded code, and images
-lose live timers and text quality. A new primitive needs an app update; until
-then the phone shows the activity's title.
+shows each live activity with the Lock Screen's views, text sizes and height
+limit. Fixed templates would limit what agents can show, an extension cannot
+run downloaded code, and images lose live timers and text quality. A new
+primitive needs an app update; until then the phone shows the activity's title.
 
 **One decoder validates and renders.** The gateway and the phone compile the
 same `Layout` type, so a layout the gateway accepts renders on the phone, and
