@@ -158,4 +158,4 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 | [puppy-potty](examples/puppy-potty.json) | Time since the last trip outside, reset with a button |
 | [recipe-steps](examples/recipe-steps.json) | Recipe steps that slide in on Next and Back, with a ring timer |
 | [shopping-list](examples/shopping-list.json) | A two-column checklist of toggles that works without an agent |
-| [solar-eclipse](examples/solar-eclipse.json) | A countdown to totality with a drawn eclipse |
+| [solar-eclipse](examples/solar-eclipse.json) | A countdown to totality over the eclipse's phases, drawn in SVG with a glowing corona |
