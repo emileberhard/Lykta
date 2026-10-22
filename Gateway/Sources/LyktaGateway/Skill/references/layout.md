@@ -114,7 +114,7 @@ Each modifier is an object with one key: `{"padding": 8}`.
 A paint is a color, a level (`primary`, `secondary`, `tertiary`,
 `quaternary`) or `{"gradient": [2 to 8 colors], "direction": d}` with `d` one
 of `vertical` (default), `horizontal`, `diagonal`, `radial`, `angular`. A color
-is `#RRGGBB`, `#RRGGBBAA` or one of `red`, `orange`, `yellow`, `green`, `mint`,
+is `#RGB`, `#RRGGBB`, `#RRGGBBAA`, `rgb(r, g, b)`, `rgba(r, g, b, a)` or one of `red`, `orange`, `yellow`, `green`, `mint`,
 `teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown`, `white`, `gray`,
 `black`, `clear`, `accent`.
 

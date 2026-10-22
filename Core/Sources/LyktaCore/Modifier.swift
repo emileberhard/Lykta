@@ -313,18 +313,34 @@ public enum ColorValue: Decodable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
-        let text = try container.decode(String.self)
+        guard let color = ColorValue(try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected \(Self.forms)")
+        }
+        self = color
+    }
+
+    static var forms: String {
+        "#RGB, #RRGGBB, #RRGGBBAA, rgb(r, g, b), rgba(r, g, b, a) or one of \(Name.allCases.map(\.rawValue).joined(separator: ", "))"
+    }
+
+    init?(_ text: String) {
         if let name = Name(rawValue: text) {
             self = .named(name)
-            return
+        } else if text.first == "#" {
+            let hex = text.dropFirst()
+            guard [3, 4, 6, 8].contains(hex.count), hex.allSatisfy(\.isHexDigit) else { return nil }
+            let digits = hex.count > 4 ? Array(hex) : hex.flatMap { [$0, $0] }
+            let channels = stride(from: 0, to: digits.count, by: 2).map { Double(Int(String(digits[$0...$0 + 1]), radix: 16)!) / 255 }
+            self = .rgb(red: channels[0], green: channels[1], blue: channels[2], opacity: channels.count == 4 ? channels[3] : 1)
+        } else if let open = text.firstIndex(of: "("), text.last == ")", ["rgb", "rgba"].contains(text[..<open]) {
+            let parts = text[open...].dropFirst().dropLast().split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let channels = parts.enumerated().compactMap { index, part in
+                part.hasSuffix("%") ? Double(part.dropLast()).map { $0 / 100 } : Double(part).map { index < 3 ? $0 / 255 : $0 }
+            }
+            guard (3...4).contains(parts.count), channels.count == parts.count, channels.allSatisfy((0...1).contains) else { return nil }
+            self = .rgb(red: channels[0], green: channels[1], blue: channels[2], opacity: channels.count == 4 ? channels[3] : 1)
+        } else {
+            return nil
         }
-        let hex = text.dropFirst()
-        guard text.first == "#", hex.count == 6 || hex.count == 8, hex.allSatisfy(\.isHexDigit), let value = UInt32(hex, radix: 16) else {
-            let names = Name.allCases.map(\.rawValue).joined(separator: ", ")
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "expected #RRGGBB, #RRGGBBAA or one of \(names)")
-        }
-        let rgba = hex.count == 6 ? value << 8 | 0xFF : value
-        func channel(_ shift: UInt32) -> Double { Double(rgba >> shift & 0xFF) / 255 }
-        self = .rgb(red: channel(24), green: channel(16), blue: channel(8), opacity: channel(0))
     }
 }
