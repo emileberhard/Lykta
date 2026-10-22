@@ -40,12 +40,12 @@ jobs:
         run: |
           while :; do
             state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$GITHUB_SHA" --json status,conclusion \
-              --jq 'if any(.[]; .conclusion == "success") then "passed" elif any(.[]; .status != "completed") then "running" elif length > 0 then "failed" else "missing" end')
+              --jq 'if any(.[]; .conclusion == "success") then "passed" elif any(.[]; .status != "completed") then "running" elif length > 0 then "failed" else "missing" end') \
+              || state=unknown
             case $state in
               passed) exit 0 ;;
-              running) sleep 10 ;;
               failed) echo "::error::CI failed on $GITHUB_SHA."; exit 1 ;;
-              *) echo "::error::CI has not run on $GITHUB_SHA. Tag a commit that was pushed to main."; exit 1 ;;
+              *) sleep 10 ;;
             esac
           done
 
