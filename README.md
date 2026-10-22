@@ -1,5 +1,7 @@
 # Lykta
 
+[![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/kDAjDvfD)
+
 Lykta lets AI agents put native Live Activities on your iPhone. An agent sends
 a JSON layout to your Lykta gateway, and the phone shows it on the Lock Screen
 and in the Dynamic Island, rendered with SwiftUI and kept current as the agent
