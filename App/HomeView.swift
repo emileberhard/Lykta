@@ -4,37 +4,27 @@ import UIKit
 
 struct HomeView: View {
     let model: Model
-    @State private var examples: [Example] = []
     @State private var isConfirmingReset = false
-    @Namespace private var transition
     @Environment(\.openURL) private var openURL
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
             List {
                 Header()
                 content
-                ExampleRows(examples: examples, transition: transition)
             }
             .listSectionSpacing(.compact)
-            .navigationLinkIndicatorVisibility(.hidden)
-            .navigationDestination(for: Example.ID.self) { id in
-                if let example = examples.first(where: { $0.id == id }) {
-                    ExampleView(example: example, model: model)
-                        .navigationTransition(.zoom(sourceID: id, in: transition))
-                }
+            .navigationDestination(for: Gallery.Route.self) { _ in
+                Gallery(model: model)
             }
             .safeAreaBar(edge: .bottom) {
-                if model.phase.isConfigured {
-                    Actions(model: model)
-                }
+                Actions(model: model)
             }
             .toolbar {
-                Menu("More", systemImage: "ellipsis") {
+                ToolbarOverflowMenu {
                     Button("Reset", systemImage: "arrow.counterclockwise", role: .destructive) { isConfirmingReset = true }
+                        .disabled(!model.phase.isReady)
                 }
-                .disabled(!model.phase.isReady)
             }
             .confirmationDialog("Reset Lykta?", isPresented: $isConfirmingReset) {
                 Button("Reset", role: .destructive) {
@@ -48,10 +38,6 @@ struct HomeView: View {
             }
         }
         .onOpenURL { openURL($0) }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
-            examples = await Example.bundled(at: .now)
-        }
     }
 
     @ViewBuilder private var content: some View {
@@ -200,23 +186,30 @@ private struct Actions: View {
     @State private var isShowingCopied = false
 
     var body: some View {
-        Button {
-            model.copySetup()
-            copies += 1
-        } label: {
-            Label(isShowingCopied ? "Copied" : "Copy Agent Setup",
-                  systemImage: isShowingCopied ? "checkmark" : "doc.on.doc")
-                .contentTransition(.symbolEffect(.replace))
-                .foregroundStyle(Color(.systemBackground))
+        GlassEffectContainer {
+            VStack(spacing: 10) {
+                Button {
+                    model.copySetup()
+                    copies += 1
+                } label: {
+                    Label(isShowingCopied ? "Copied" : "Copy Agent Setup",
+                          systemImage: isShowingCopied ? "checkmark" : "doc.on.doc")
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .disabled(!model.phase.isReady)
+                .accessibilityShowsLargeContentViewer()
+
+                NavigationLink(value: Gallery.Route()) {
+                    Label("Examples", systemImage: "rectangle.stack")
+                }
+                .accessibilityShowsLargeContentViewer()
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            .buttonSizing(.flexible)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
-        .buttonStyle(.glassProminent)
-        .tint(.primary)
-        .controlSize(.large)
-        .buttonSizing(.flexible)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .accessibilityShowsLargeContentViewer()
         .padding(.horizontal)
-        .disabled(!model.phase.isReady)
         .sensoryFeedback(.success, trigger: copies)
         .task(id: copies) {
             guard copies > 0 else { return }
@@ -230,10 +223,6 @@ private struct Actions: View {
 extension Model.Phase {
     var isReady: Bool {
         if case .ready = self { true } else { false }
-    }
-
-    var isConfigured: Bool {
-        if case .unconfigured = self { false } else { true }
     }
 }
 

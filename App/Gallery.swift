@@ -1,12 +1,16 @@
 import LyktaCore
 import SwiftUI
 
-struct ExampleRows: View {
-    let examples: [Example]
-    let transition: Namespace.ID
+struct Gallery: View {
+    struct Route: Hashable {}
+
+    let model: Model
+    @State private var examples: [Example] = []
+    @Namespace private var transition
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ForEach(examples) { example in
+        List(examples) { example in
             Section {
                 NavigationLink(value: example.id) {
                     LockScreenCard(state: example.preview, activity: nil, isStale: false)
@@ -17,11 +21,20 @@ struct ExampleRows: View {
                 .accessibilityLabel(example.title)
                 .matchedTransitionSource(id: example.id, in: transition)
                 .lockScreenRow(example.preview)
-            } header: {
-                if example.id == examples.first?.id {
-                    Text("Examples")
-                }
             }
+        }
+        .listSectionSpacing(.compact)
+        .navigationLinkIndicatorVisibility(.hidden)
+        .navigationTitle("Examples")
+        .navigationDestination(for: Example.ID.self) { id in
+            if let example = examples.first(where: { $0.id == id }) {
+                ExampleView(example: example, model: model)
+                    .navigationTransition(.zoom(sourceID: id, in: transition))
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            examples = await Example.bundled(at: .now)
         }
     }
 }
@@ -242,3 +255,11 @@ private extension View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Examples") {
+    NavigationStack {
+        Gallery(model: .preview(.ready))
+    }
+}
+#endif
