@@ -66,9 +66,13 @@ struct ExampleView: View {
             }
             if let layout = example.preview.layout {
                 Section {
-                    IslandPreview(layout: layout)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowBackground(Color.clear)
+                    VStack(spacing: 24) {
+                        ExpandedIsland(regions: layout.expanded, keyline: layout.keyline?.value)
+                        CompactIsland(leading: layout.compactLeading, trailing: layout.compactTrailing, keyline: layout.keyline?.value)
+                        MinimalIsland(node: layout.minimal, keyline: layout.keyline?.value)
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
                 }
             }
             if model.phase.isReady && !model.areActivitiesEnabled {
@@ -97,139 +101,112 @@ struct ExampleView: View {
     }
 }
 
-private struct IslandPreview: View {
-    private enum Presentation: Hashable {
-        case compact, expanded, minimal
+private struct CompactIsland: View {
+    private static let width: CGFloat = 52.33
 
-        var name: LocalizedStringResource {
-            switch self {
-            case .compact: "Compact Dynamic Island"
-            case .expanded: "Expanded Dynamic Island"
-            case .minimal: "Minimal Dynamic Island"
-            }
-        }
-    }
-
-    private static let height: CGFloat = 36.67
-    private static let camera: CGFloat = 120
-    private static let compactWidth: CGFloat = 52.33
-
-    let layout: LyktaCore.Layout
-    @State private var presentation = Presentation.compact
-    @Namespace private var island
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let leading: Node?
+    let trailing: Node?
+    let keyline: Color?
 
     var body: some View {
-        VStack(spacing: 20) {
-            Picker("Dynamic Island", selection: $presentation.animation(animation)) {
-                Text("Compact").tag(Presentation.compact)
-                Text("Expanded").tag(Presentation.expanded)
-                Text("Minimal").tag(Presentation.minimal)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-
-            ZStack(alignment: .top) {
-                switch presentation {
-                case .compact: compact
-                case .expanded: expanded
-                case .minimal: minimal
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(.rect)
-            .onTapGesture {
-                withAnimation(animation) { presentation = presentation == .expanded ? .compact : .expanded }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(presentation.name))
-        }
-        .sensoryFeedback(.impact(weight: .light), trigger: presentation)
-    }
-
-    private var compact: some View {
         HStack(spacing: 0) {
-            region(layout.compactLeading)
+            IslandRegion(node: leading)
                 .compact()
-                .frame(maxWidth: Self.compactWidth, alignment: .leading)
-            Spacer(minLength: Self.camera)
-            region(layout.compactTrailing)
+                .frame(maxWidth: Self.width, alignment: .leading)
+            Spacer(minLength: Island.camera)
+            IslandRegion(node: trailing)
                 .compact()
-                .frame(maxWidth: Self.compactWidth, alignment: .trailing)
+                .frame(maxWidth: Self.width, alignment: .trailing)
         }
         .fixedSize()
         .padding(.horizontal, 12)
-        .frame(height: Self.height)
-        .island(cornerRadius: Self.height / 2, outline: outline, id: id(.compact), in: island)
+        .frame(height: Island.height)
+        .modifier(Island(cornerRadius: Island.height / 2, keyline: keyline))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Compact Dynamic Island")
     }
+}
 
-    private var expanded: some View {
+private struct ExpandedIsland: View {
+    let regions: LyktaCore.Layout.Expanded?
+    let keyline: Color?
+
+    var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                region(layout.expanded?.leading)
+                IslandRegion(node: regions?.leading)
                     .layoutPriority(1)
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 20)
-                    region(layout.expanded?.center)
+                    IslandRegion(node: regions?.center)
                 }
                 .frame(maxWidth: .infinity)
-                region(layout.expanded?.trailing)
+                IslandRegion(node: regions?.trailing)
                     .layoutPriority(1)
             }
-            region(layout.expanded?.bottom)
+            IslandRegion(node: regions?.bottom)
         }
         .padding(EdgeInsets(top: 20, leading: 24, bottom: 20, trailing: 24))
         .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 160, alignment: .top)
-        .island(cornerRadius: 44, outline: outline, id: id(.expanded), in: island)
+        .modifier(Island(cornerRadius: 44, keyline: keyline))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Expanded Dynamic Island")
     }
+}
 
-    private var minimal: some View {
-        HStack(spacing: 8) {
-            Color.clear
-                .frame(width: Self.camera, height: Self.height)
-                .island(cornerRadius: Self.height / 2, outline: idleOutline, id: id(.minimal), in: island)
-            region(layout.minimal)
-                .compact()
-                .frame(minWidth: Self.height, maxWidth: 45, minHeight: Self.height, maxHeight: Self.height)
-                .island(cornerRadius: Self.height / 2, outline: outline, id: "detached", in: island)
-                .transition(.scale(scale: 0.5, anchor: .leading).combined(with: .opacity))
-        }
+private struct MinimalIsland: View {
+    let node: Node?
+    let keyline: Color?
+
+    var body: some View {
+        Color.clear
+            .frame(width: Island.camera, height: Island.height)
+            .modifier(Island(cornerRadius: Island.height / 2, keyline: nil))
+            .overlay(alignment: .trailing) {
+                IslandRegion(node: node)
+                    .compact()
+                    .frame(minWidth: Island.height, maxWidth: 45, minHeight: Island.height, maxHeight: Island.height)
+                    .modifier(Island(cornerRadius: Island.height / 2, keyline: keyline))
+                    .alignmentGuide(.trailing) { $0[.leading] - 8 }
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Minimal Dynamic Island")
     }
+}
 
-    private func region(_ node: Node?) -> some View {
+private struct IslandRegion: View {
+    let node: Node?
+
+    var body: some View {
         Root(node: node, activity: nil, isStale: false)
             .environment(\.colorScheme, .dark)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
-
-    private var outline: Color? {
-        colorScheme == .dark ? layout.keyline?.value.opacity(0.6) ?? idleOutline : nil
-    }
-
-    private var idleOutline: Color? {
-        colorScheme == .dark ? Color(.separator) : nil
-    }
-
-    private var animation: Animation {
-        reduceMotion ? .easeInOut(duration: 0.25) : .spring(duration: 0.45, bounce: 0.25)
-    }
-
-    private func id(_ presentation: Presentation) -> String {
-        reduceMotion ? "\(presentation)" : "island"
-    }
 }
 
-private extension View {
-    func island(cornerRadius: CGFloat, outline: Color?, id: String, in namespace: Namespace.ID) -> some View {
+private struct Island: ViewModifier {
+    static let height: CGFloat = 36.67
+    static let camera: CGFloat = 120
+
+    let cornerRadius: CGFloat
+    let keyline: Color?
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return clipShape(shape).background {
-            shape
-                .fill(.black)
-                .overlay { if let outline { shape.strokeBorder(outline, lineWidth: 1) } }
-                .matchedGeometryEffect(id: id, in: namespace)
-        }
+        content
+            .clipShape(shape)
+            .background {
+                shape
+                    .fill(.black)
+                    .overlay {
+                        if colorScheme == .dark {
+                            shape.strokeBorder(keyline?.opacity(0.6) ?? Color(.separator), lineWidth: 1)
+                        }
+                    }
+            }
     }
 }
 
