@@ -55,6 +55,10 @@ phone's registration, activities and diagnostics from the gateway. If you delete
 the app without Reset, the registration stays; the gateway forgets its push
 tokens once Apple rejects them.
 
+Before each update, the App Store app's gateway copies its database so that a
+failed update can be recovered. Each copy is deleted after at most 14 days, so
+data deleted from the gateway is gone from its copies 14 days later.
+
 ## Who else handles data
 
 Apple's Push Notification service delivers activity content to the phone. The
