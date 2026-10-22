@@ -10,14 +10,13 @@ permissions:
 concurrency: release
 
 jobs:
-  test:
-    uses: ./.github/workflows/ci.yml
-
   testflight:
-    needs: test
     runs-on: xcode-27
     environment: testflight
     timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       VERSION: ${{ github.ref_name }}
@@ -50,7 +49,23 @@ jobs:
         run: |
           xcodebuild archive -quiet -project Lykta.xcodeproj -scheme Lykta -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Lykta.xcarchive" \
-            MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO
+            MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Wait for CI to pass on this commit
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          while :; do
+            state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$GITHUB_SHA" --json status,conclusion \
+              --jq 'if any(.[]; .conclusion == "success") then "passed" elif any(.[]; .status != "completed") then "running" elif length > 0 then "failed" else "missing" end')
+            case $state in
+              passed) exit 0 ;;
+              running) sleep 10 ;;
+              failed) echo "::error::CI failed on $GITHUB_SHA."; exit 1 ;;
+              *) echo "::error::CI has not run on $GITHUB_SHA. Tag a commit that was pushed to main."; exit 1 ;;
+            esac
+          done
 
       - name: Sign and upload to TestFlight
         env:

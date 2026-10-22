@@ -75,11 +75,13 @@ run on an iPhone; compiling proves neither.
 
 ## Release
 
-Push a version tag, such as `0.2.0`, that is on `main` and newer than every
-other version tag. `.github/workflows/release.yml` then runs the tests, builds
-an unsigned archive with the tag as its version, and uploads it to TestFlight
-through Xcode's cloud signing with the `testflight` environment's App Store
-Connect key. App Store Connect picks the build number. The GitHub release is
+Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`
+and newer than every other version tag. `.github/workflows/release.yml` then
+builds an unsigned archive with the tag as its version. It does not run the
+tests again: it waits for `main`'s CI run on the same commit and stops unless
+that run passed. It then uploads the archive to TestFlight through Xcode's
+cloud signing with the `testflight` environment's App Store Connect key. App
+Store Connect picks the build number. The GitHub release is
 titled with the bare version, and its notes are the annotated tag's message
 verbatim: a Markdown list of user-visible changes since the previous version,
 one short sentence per item, with no heading or intro line. Submitting to App
