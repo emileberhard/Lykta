@@ -147,7 +147,7 @@ Unix seconds around 1793000000; replace them with real ones from `date +%s`.
 
 | Example | Shows |
 | --- | --- |
-| [agent-question](examples/agent-question.json) | An agent waiting on a decision, answered with buttons |
+| [agent-question](examples/agent-question.json) | An agent's question in a chat bubble, answered with reply buttons |
 | [app-review](examples/app-review.json) | App Store review stages for a build, from data-driven symbols and colors |
 | [homelab](examples/homelab.json) | Server graphs as line charts, each linking to its dashboard |
 | [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
