@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+import argparse
+import concurrent.futures
+import fcntl
+import json
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+STAGE = ROOT / ".local" / "render"
+OUTPUT = ROOT / ".local" / "renders"
+PROJECT = ROOT / "Lykta.xcodeproj"
+PREVIEW = "Widgets/RenderPreviews.swift"
+STYLES = {
+    "lock": "Content (Lock Screen)",
+    "expanded": "Expanded",
+    "compact": "Compact",
+    "minimal": "Minimal",
+    "standby": "Content (StandBy)",
+    "smartstack": "Content (Smart Stack)",
+}
+
+
+class RenderError(Exception):
+    pass
+
+
+class Xcode:
+    def __init__(self):
+        self.process = subprocess.Popen(["xcrun", "mcpbridge"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                        stderr=subprocess.DEVNULL, text=True)
+        self.lock = threading.Lock()
+        self.pending = {}
+        self.identifier = 0
+        threading.Thread(target=self.read, daemon=True).start()
+        self.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                    "clientInfo": {"name": "lykta-render", "version": "1"}})
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    def send(self, message):
+        with self.lock:
+            self.process.stdin.write(json.dumps(message) + "\n")
+            self.process.stdin.flush()
+
+    def read(self):
+        for line in self.process.stdout:
+            message = json.loads(line)
+            if "id" in message and message["id"] in self.pending:
+                self.pending[message["id"]].append(message)
+                self.pending[message["id"]][0].set()
+        for waiter in list(self.pending.values()):
+            waiter[0].set()
+
+    def request(self, method, params):
+        with self.lock:
+            self.identifier += 1
+            identifier = self.identifier
+            self.pending[identifier] = [threading.Event()]
+        self.send({"jsonrpc": "2.0", "id": identifier, "method": method, "params": params})
+        self.pending[identifier][0].wait()
+        waiter = self.pending.pop(identifier)
+        if len(waiter) == 1:
+            raise RenderError("xcrun mcpbridge exited; is Xcode 27 running with its MCP server enabled?")
+        if "error" in waiter[1]:
+            raise RenderError(waiter[1]["error"].get("message", str(waiter[1]["error"])))
+        return waiter[1]["result"]
+
+    def call(self, tool, arguments):
+        result = self.request("tools/call", {"name": tool, "arguments": arguments})
+        content = result.get("structuredContent")
+        if content is None:
+            text = result["content"][0]["text"]
+            try:
+                content = json.loads(text)
+            except json.JSONDecodeError:
+                content = {"message": text}
+        if result.get("isError") or content.get("type") == "error":
+            raise RenderError(str(content.get("data") or content.get("message") or content))
+        return content
+
+    def close(self):
+        self.process.terminate()
+
+
+def load(arguments):
+    bodies = []
+    for argument in arguments:
+        if argument == "-":
+            sources = [("stdin", sys.stdin.read())]
+        elif argument.lstrip().startswith("{"):
+            sources = [("inline", argument)]
+        elif Path(argument).is_dir():
+            sources = [(path.stem, path.read_text()) for path in sorted(Path(argument).glob("*.json"))]
+        elif Path(argument).is_file():
+            sources = [(Path(argument).stem, Path(argument).read_text())]
+        else:
+            raise RenderError(f"{argument}: not a file, directory, inline JSON or -")
+        for name, text in sources:
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError as error:
+                raise RenderError(f"{name}: invalid JSON: {error}")
+            if not isinstance(body, dict) or not ("layout" in body or "lockScreen" in body):
+                raise RenderError(f"{name}: expected a layout or an object with a layout")
+            if "lockScreen" in body:
+                body = {"layout": body}
+            taken = {existing for existing, _ in bodies}
+            unique = name if name not in taken else next(f"{name}-{n}" for n in range(2, 1000) if f"{name}-{n}" not in taken)
+            bodies.append((unique, {"title": body.get("title", unique), "layout": body["layout"], "data": body.get("data", {})}))
+    if not bodies:
+        raise RenderError("no inputs to render")
+    return bodies
+
+
+def workspace(xcode):
+    listing = xcode.call("XcodeListWorkspaces", {})["message"]
+    match = re.search(r"workspaceIdentifier: (\S+), workspacePath: " + re.escape(str(PROJECT)) + r"$", listing, re.MULTILINE)
+    identifier = match.group(1) if match else xcode.call("XcodeOpenWorkspace", {"path": str(PROJECT)})["workspaceIdentifier"]
+    destinations = xcode.call("XcodeListRunDestinations", {"workspaceIdentifier": identifier})
+    active = next((d for d in destinations["destinations"] if d["isActive"]), None)
+    if not (active and active["isSimulator"] and active["displayTitle"].startswith("iPhone")):
+        iphone = next((d for d in destinations["destinations"] if d["isSimulator"] and d["displayTitle"].startswith("iPhone")), None)
+        if iphone is None:
+            raise RenderError("no iPhone simulator is available as a run destination")
+        xcode.call("XcodeSwitchRunDestination", {"workspaceIdentifier": identifier, "displayTitle": iphone["displayTitle"]})
+    return identifier
+
+
+def render(xcode, identifier, index, presentation, dark, target):
+    arguments = {
+        "sourceFilePath": PREVIEW,
+        "workspaceIdentifier": identifier,
+        "previewVariantOverrides": {"View Style": STYLES[presentation],
+                                    "Color Scheme": "Dark Appearance" if dark else "Light Appearance"},
+        "previewCanvasControlOverrides": {"timelineIndex": index},
+        "timeout": 300,
+    }
+    for _ in range(90):
+        try:
+            result = xcode.call("RenderPreview", arguments)
+        except RenderError as error:
+            if "PreviewBlockedReason" in str(error):
+                time.sleep(2)
+                continue
+            raise
+        shutil.move(result["previewSnapshotPath"], target)
+        return
+    raise RenderError("Xcode kept blocking previews; open the project in Xcode and check its package resolution")
+
+
+def summary(message):
+    errors = {}
+    for line in message.splitlines():
+        if "error:" in line:
+            errors.setdefault(line.split("error:", 1)[1].strip(), line.strip(" |`-"))
+    return "\n".join(errors.values()) if errors else message[:2000]
+
+
+def sheet(rows, target):
+    arguments = [str(target)] + ["\t".join([label] + [str(path) for path in paths]) for label, paths in rows]
+    subprocess.run(["xcrun", "swift", str(ROOT / "scripts" / "sheet.swift"), *arguments], check=True,
+                   stdout=subprocess.DEVNULL)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Render Lykta layouts through Xcode's previews, all at once. Leaves the project open in Xcode "
+                    "so later renders take seconds.")
+    parser.add_argument("inputs", nargs="+",
+                        help="request bodies ({title, layout, data}) or bare layouts: files, directories, inline JSON, or - for stdin")
+    parser.add_argument("--only", default="lock,expanded,compact,minimal",
+                        help=f"comma-separated presentations from {', '.join(STYLES)} (default: lock,expanded,compact,minimal)")
+    parser.add_argument("--dark", action="store_true", help="render in dark appearance")
+    args = parser.parse_args()
+    try:
+        presentations = args.only.split(",")
+        unknown = [p for p in presentations if p not in STYLES]
+        if unknown:
+            raise RenderError(f"unknown presentation {', '.join(unknown)}; use {', '.join(STYLES)}")
+        bodies = load(args.inputs)
+        STAGE.mkdir(parents=True, exist_ok=True)
+        with open(ROOT / ".local" / "render.lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            for stale in list(STAGE.iterdir()) + (list(OUTPUT.iterdir()) if OUTPUT.exists() else []):
+                stale.unlink()
+            OUTPUT.mkdir(exist_ok=True)
+            for index, (name, body) in enumerate(bodies):
+                (STAGE / f"{index:03d}-{name}.json").write_text(json.dumps(body))
+            xcode = Xcode()
+            try:
+                identifier = workspace(xcode)
+                jobs = {(index, presentation): OUTPUT / f"{name}-{presentation}.png"
+                        for presentation in presentations for index, (name, _) in enumerate(bodies)}
+                failures = {}
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+                    futures = {pool.submit(render, xcode, identifier, index, presentation, args.dark, target): target
+                               for (index, presentation), target in jobs.items()}
+                    for future in concurrent.futures.as_completed(futures):
+                        if future.exception():
+                            failures.setdefault(summary(str(future.exception())), []).append(futures[future].stem)
+            finally:
+                xcode.close()
+            errors = [{"input": bodies[index][0], "error": (STAGE / f"{index:03d}-{name}.error").read_text()}
+                      for index, (name, _) in enumerate(bodies) if (STAGE / f"{index:03d}-{name}.error").exists()]
+            rendered = [(bodies[index][0], target) for (index, _), target in jobs.items() if target.exists()]
+            rows = [(name, [target for owner, target in rendered if owner == name]) for name, _ in bodies]
+            result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": [{"error": error, "renders": sorted(names)} for error, names in failures.items()]}
+            if rendered:
+                sheet([row for row in rows if row[1]], OUTPUT / "sheet.png")
+                result["sheet"] = str(OUTPUT / "sheet.png")
+        print(json.dumps(result, indent=2))
+        return 1 if errors or failures else 0
+    except RenderError as error:
+        print(f"render: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

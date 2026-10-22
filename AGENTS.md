@@ -18,13 +18,14 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `AppStore` | The App Store screenshot fixture activities and slide composer |
+| `scripts/render`, `Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
 
 ## Invariants
 
 - A layout change touches `Core`, `Rendering` and the skill's `layout.md`
   together. Gateway tests compile every JSON example in `layout.md` and start
-  every activity in the skill's `examples`; `Widgets/ExamplePreviews.swift`
-  previews those in Xcode.
+  every activity in the skill's `examples`. Look at a layout change with
+  `just render` before shipping it.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
 - The gateway is the only content writer. The app never calls
@@ -72,6 +73,7 @@ maintainer, because the App Store privacy label must match.
 | `just ios` | Compile the app and widgets without signing |
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |
+| `just render <inputs>` | Render request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded` and `--dark` narrow it. |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a
 run on an iPhone; compiling proves neither.

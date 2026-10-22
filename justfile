@@ -10,6 +10,11 @@ test:
 gateway:
     swift run --package-path Gateway LyktaGateway
 
+# Render layouts with Xcode previews: files, directories, inline JSON or - for stdin
+[positional-arguments]
+render *args:
+    @scripts/render "$@"
+
 # Build the gateway container image
 image:
     docker build --tag lykta-gateway .
