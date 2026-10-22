@@ -3,7 +3,8 @@
 Lykta lets AI agents put native Live Activities on your iPhone. An agent sends
 a JSON layout to your Lykta gateway, and the phone shows it on the Lock Screen
 and in the Dynamic Island, rendered with SwiftUI and kept current as the agent
-sends updates. Any layout works without an app update.
+sends updates. Any layout works without an app update, including buttons,
+toggles and links that report back to the agent.
 
 ```bash
 curl -X PUT "$LYKTA_URL/v1/activities/build" \

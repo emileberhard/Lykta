@@ -21,6 +21,8 @@ For each Live Activity:
 - the name, title, layout, data and alert text your agents send
 - its delivery state and what the phone reports about it, such as active,
   ended or dismissed
+- each button press and toggle change, with its time, so your agents can act
+  on it; these are kept for one day
 
 Your agents supply all activity content. Do not send content that you do not
 want stored on the gateway.

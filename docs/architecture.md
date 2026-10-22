@@ -9,8 +9,7 @@
 - The codebase stays small: two Swift packages, Apple frameworks first, and
   third-party dependencies only from Apple's GitHub organization.
 
-Non-goals for now: hosted multi-tenant service, interactive buttons, platforms
-other than iPhone.
+Non-goals for now: hosted multi-tenant service, platforms other than iPhone.
 
 ## Flow
 
@@ -28,6 +27,8 @@ sequenceDiagram
     Agent->>Gateway: PUT data
     Gateway->>APNs: broadcast update
     Phone->>Gateway: report activity states
+    Phone->>Gateway: button press or toggle
+    Agent->>Gateway: GET actions after cursor
 ```
 
 ## Decisions
@@ -54,6 +55,20 @@ channel five minutes after its activity ends and sweeps orphans at startup.
 **The layout travels in the push.** `ContentState` carries the title and the
 raw-deflated layout JSON; the phone decodes it once. The gateway checks the
 real payload against the 4 KB APNs limit before accepting a request.
+
+**Taps travel through the gateway.** A button or toggle runs a
+`LiveActivityIntent` in the app, which posts the action to the gateway with the
+device secret. The gateway applies a toggle itself: it flips the boolean at the
+toggle's data path, raises the revision and pushes the new content, so the
+switch stays right with no agent listening and the gateway remains the only
+content writer. Buttons and toggles both join a per-phone action log that
+agents read with `GET /v1/actions`, long-polling from a cursor. The gateway
+never calls out: webhooks would need every agent to expose an endpoint and would
+let a layout make the gateway request arbitrary URLs. An agent that writes data
+a toggle may have changed reads the activity and sends `ifRevision`, which the
+gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
+most 1,000 per phone. Links open through the app's URL handler, so a layout can
+reach any https or app URL without a gateway round trip.
 
 **One actor owns durable state.** `Store` owns the SQLite database; every
 mutation is one transaction. Delivery claims jobs from rows, so a restart
@@ -99,4 +114,6 @@ device limit; operators keep the gateway on a private network.
   installed apps and pushes depend on.
 - The meaning of existing layout keys, which agents' saved layouts rely on.
   Adding keys is cheap.
-- The device API in `DeviceAPI.swift`, shared by installed apps and gateways.
+- The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
+  including the action report that installed apps send.
+- The `GET /v1/actions` cursor and record format, which agents poll.

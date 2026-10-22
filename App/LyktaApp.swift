@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 @main
@@ -7,6 +8,8 @@ struct LyktaApp: App {
 
     init() {
         model.start()
+        let model = model
+        AppDependencyManager.shared.add(dependency: ActionSender { try await model.send($0) })
     }
 
     var body: some Scene {

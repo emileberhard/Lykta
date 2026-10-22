@@ -96,6 +96,23 @@ final class Model {
         }
     }
 
+    func send(_ action: Action) async throws {
+        guard let gateway, let credentials = try credentials ?? Keychain.load() else {
+            throw AppError(status: nil, errorDescription: "Lykta is not connected to a gateway.")
+        }
+        let detail: [String: JSONValue] = switch action.input {
+        case let .button(name): ["button": .string(name)]
+        case let .toggle(path, isOn): ["toggle": .string(path), "isOn": .bool(isOn)]
+        }
+        record("activity.action", activity: action.activity, detail)
+        do {
+            try await gateway.act(action, secret: credentials.deviceSecret)
+        } catch {
+            record("app.error", activity: action.activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
+            throw error
+        }
+    }
+
     func reset() async {
         guard let gateway, let credentials else { return }
         record("app.reset")
@@ -326,13 +343,14 @@ final class Model {
 
 struct LiveActivity: Identifiable, Equatable {
     let id: String
+    let attributes: LyktaActivity
     let content: LyktaActivity.ContentState
     let state: ObservedState
 }
 
 private extension LiveActivity {
     init(_ activity: Activity<LyktaActivity>) {
-        self.init(id: activity.id, content: activity.content.state, state: ObservedState(activity.activityState))
+        self.init(id: activity.id, attributes: activity.attributes, content: activity.content.state, state: ObservedState(activity.activityState))
     }
 }
 

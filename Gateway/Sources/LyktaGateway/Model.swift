@@ -10,6 +10,7 @@ struct APIError: Error, Encodable, Sendable {
         case unauthorized
         case registrationClosed = "registration_closed"
         case notFound = "not_found"
+        case conflict
         case deviceNotReady = "device_not_ready"
         case tooManyActivities = "too_many_activities"
         case payloadTooLarge = "payload_too_large"
@@ -21,7 +22,7 @@ struct APIError: Error, Encodable, Sendable {
             case .unauthorized: 401
             case .registrationClosed: 403
             case .notFound: 404
-            case .deviceNotReady, .tooManyActivities: 409
+            case .deviceNotReady, .tooManyActivities, .conflict: 409
             case .payloadTooLarge: 413
             case .internal: 500
             }
@@ -74,6 +75,7 @@ struct ActivityStatus: Encodable, Sendable {
     let id: UUID
     let title: String
     let state: Activity.Phase
+    let revision: Int
     let delivery: DeliveryState
     let device: ObservedState?
     let error: String?
@@ -86,6 +88,7 @@ struct ActivityStatus: Encodable, Sendable {
         try fields.encode(id, forKey: .id)
         try fields.encode(title, forKey: .title)
         try fields.encode(state, forKey: .state)
+        try fields.encode(revision, forKey: .revision)
         try fields.encode(delivery, forKey: .delivery)
         try fields.encode(device, forKey: .device)
         try fields.encode(error, forKey: .error)
@@ -94,7 +97,22 @@ struct ActivityStatus: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, id, title, state, delivery, device, error, startedAt, endedAt
+        case name, id, title, state, revision, delivery, device, error, startedAt, endedAt
+    }
+}
+
+struct ActivityDetail: Encodable, Sendable {
+    let status: ActivityStatus
+    let data: JSONValue
+
+    func encode(to encoder: any Encoder) throws {
+        try status.encode(to: encoder)
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(data, forKey: .data)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case data
     }
 }
 
@@ -150,7 +168,7 @@ struct Activity: Sendable {
     }
 
     var status: ActivityStatus {
-        ActivityStatus(name: name, id: id, title: title, state: phase, delivery: delivery, device: deviceState,
+        ActivityStatus(name: name, id: id, title: title, state: phase, revision: revision, delivery: delivery, device: deviceState,
                        error: error, startedAt: Date(timeIntervalSince1970: Double(createdAt)),
                        endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
     }

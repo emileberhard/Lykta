@@ -29,7 +29,15 @@ public enum Modifier: Decodable, Sendable {
     case multilineTextAlignment(Node.Content.HorizontalAlignment)
     case truncationMode(Truncation)
     case textCase(TextCase)
-    case contentTransition(Transition)
+    case contentTransition(ContentTransition)
+    case transition(Transition)
+    case animation(Animation)
+    case id(JSONValue)
+    case overlay(Node)
+    case blur(Double)
+    case grayscale(Double)
+    case saturation(Double)
+    case brightness(Double)
     case symbolRenderingMode(SymbolRendering)
     case imageScale(ImageScale)
     case accessibilityLabel(String)
@@ -40,9 +48,78 @@ public enum Modifier: Decodable, Sendable {
     public enum Width: String, Choice { case compressed, condensed, standard, expanded }
     public enum Truncation: String, Choice { case head, middle, tail }
     public enum TextCase: String, Choice { case uppercase, lowercase }
-    public enum Transition: String, Choice { case numericText, opacity, interpolate, identity }
     public enum SymbolRendering: String, Choice { case monochrome, hierarchical, palette, multicolor }
     public enum ImageScale: String, Choice { case small, medium, large }
+
+    public enum ContentTransition: Decodable, Sendable {
+        public enum Name: String, Choice { case numericText, opacity, interpolate, identity, symbolReplace }
+
+        case named(Name)
+        case numericText(value: Double)
+
+        public init(from decoder: any Decoder) throws {
+            if (try? decoder.singleValueContainer().decode(String.self)) != nil {
+                self = .named(try Name(from: decoder))
+            } else {
+                let fields = try decoder.container(keyedBy: Key.self)
+                try fields.allowOnly(["numericText"])
+                self = .numericText(value: try fields.required("numericText"))
+            }
+        }
+    }
+
+    public indirect enum Transition: Decodable, Sendable {
+        public enum Name: String, Choice { case opacity, slide, scale, identity }
+        public enum Edge: String, Choice { case top, bottom, leading, trailing }
+
+        case named(Name)
+        case move(Edge)
+        case push(Edge)
+        case combined([Transition])
+
+        public init(from decoder: any Decoder) throws {
+            if (try? decoder.singleValueContainer().decode(String.self)) != nil {
+                self = .named(try Name(from: decoder))
+            } else if var list = try? decoder.unkeyedContainer() {
+                var parts: [Transition] = []
+                while !list.isAtEnd {
+                    let part = try list.decode(Transition.self)
+                    if case .combined = part { throw DecodingError.dataCorruptedError(in: list, debugDescription: "lists do not nest") }
+                    parts.append(part)
+                }
+                guard (2...3).contains(parts.count) else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "combine 2 or 3 transitions"))
+                }
+                self = .combined(parts)
+            } else {
+                let fields = try decoder.container(keyedBy: Key.self)
+                try fields.allowOnly(["move", "push"])
+                guard fields.allKeys.count == 1, let key = fields.allKeys.first?.stringValue else {
+                    throw fields.invalid(#"expected {"move": edge} or {"push": edge}"#)
+                }
+                let edge: Edge = try fields.required(key)
+                self = key == "move" ? .move(edge) : .push(edge)
+            }
+        }
+    }
+
+    public struct Animation: Decodable, Sendable {
+        public enum Curve: String, Choice { case `default`, linear, easeIn, easeOut, easeInOut, spring, bouncy, snappy, smooth }
+
+        public let curve: Curve
+        public let duration: Double?
+        public let delay: Double
+        public let trigger: JSONValue
+
+        public init(from decoder: any Decoder) throws {
+            let fields = try decoder.container(keyedBy: Key.self)
+            try fields.allowOnly(["curve", "duration", "delay", "value"])
+            curve = try fields.optional("curve") ?? .default
+            duration = fields.contains(Key(stringValue: "duration")) ? try fields.number("duration", in: 0.05...2) : nil
+            delay = fields.contains(Key(stringValue: "delay")) ? try fields.number("delay", in: 0...1) : 0
+            trigger = try fields.required("value")
+        }
+    }
 
     public enum Font: Decodable, Sendable {
         public enum Style: String, Choice {
@@ -174,6 +251,19 @@ public enum Modifier: Decodable, Sendable {
         case "truncationMode": self = .truncationMode(try value())
         case "textCase": self = .textCase(try value())
         case "contentTransition": self = .contentTransition(try value())
+        case "transition": self = .transition(try value())
+        case "animation": self = .animation(try value())
+        case "id":
+            let id: JSONValue = try value()
+            switch id {
+            case .string, .number, .bool: self = .id(id)
+            case .array, .object, .null: throw fields.invalid("expected a string, number or boolean", at: name)
+            }
+        case "overlay": self = .overlay(try value())
+        case "blur": self = .blur(try fields.number(name, in: 0...20))
+        case "grayscale": self = .grayscale(try fields.number(name, in: 0...1))
+        case "saturation": self = .saturation(try fields.number(name, in: 0...5))
+        case "brightness": self = .brightness(try fields.number(name, in: -1...1))
         case "symbolRenderingMode": self = .symbolRenderingMode(try value())
         case "imageScale": self = .imageScale(try value())
         case "accessibilityLabel": self = .accessibilityLabel(try value())

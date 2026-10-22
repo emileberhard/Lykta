@@ -1,6 +1,6 @@
 ---
 name: lykta
-description: Show live status on the user's iPhone Lock Screen and Dynamic Island as a Live Activity through their Lykta gateway. Use for countdowns, progress, builds, deliveries or any ongoing task the user wants to glance at; not for one-off notifications.
+description: Show live status on the user's iPhone Lock Screen and Dynamic Island as a Live Activity through their Lykta gateway. Use for countdowns, progress, builds, deliveries, checklists, questions answered with a tap or any ongoing task the user wants to glance at; not for one-off notifications.
 ---
 
 # Lykta
@@ -27,6 +27,7 @@ from `a-z`, `0-9`, `-`, `_` and `.`.
 | `staleAfter` | Seconds until the phone marks the activity as out of date. Each PUT renews it. |
 | `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
 | `relevance` | 0 to 100. The most relevant activity takes the Dynamic Island. |
+| `ifRevision` | Apply the PUT only if the activity is still at this `revision`; otherwise fail with `conflict`. |
 
 iOS budgets how many activities an app may start by push. Once the budget is
 spent it silently drops new starts for a while, so keep one name per purpose and
@@ -47,6 +48,33 @@ curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
   -d '{"data": {"service": "api", "step": "Done", "done": 5, "total": 5, "progress": 1, "started": 1793000000}}'
 ```
 
+## Buttons and toggles
+
+Layouts can hold links, buttons and toggles (see the layout reference). A
+toggle flips a boolean in the activity's data on the gateway and redraws at
+once, so a checklist works while no agent runs. Button presses wait for an
+agent, which reads them from `GET /v1/actions`:
+
+```bash
+cursor=$(curl -sS "$LYKTA_URL/v1/actions" -H "Authorization: Bearer $LYKTA_TOKEN" | jq .cursor)
+curl -sS "$LYKTA_URL/v1/actions?after=$cursor&wait=25" -H "Authorization: Bearer $LYKTA_TOKEN"
+```
+
+```json
+{"actions": [{"seq": 41, "activity": "deploy", "button": "retry", "at": "2026-10-21T18:02:11Z"}], "cursor": 41}
+```
+
+Without `after`, only actions that arrive during the request count, and the
+`cursor` marks where to continue. `wait` (0 to 25 seconds) holds the request
+open until an action arrives, so loop on it with the returned cursor to answer
+presses within a second. Toggle changes appear as
+`{"toggle": "items.0.done", "isOn": true}`. Actions are kept for a day.
+
+Answer a press with a PUT, such as the next step or an outcome. Because the
+user can change toggled data at any moment, an agent that rewrites data reads
+the activity first and sends the `revision` it read as `ifRevision`; on
+`conflict`, read again and redo the change.
+
 ## End
 
 `DELETE /v1/activities/{name}` ends the activity with its last content. The
@@ -56,8 +84,9 @@ ends stays until iOS ends it after eight hours.
 
 ## Status
 
-`GET /v1/activities/{name}` returns the newest activity with that name, and
-`GET /v1/activities` lists recent ones:
+`GET /v1/activities/{name}` returns the newest activity with that name,
+including its current `data` and `revision`, and `GET /v1/activities` lists
+recent ones:
 
 | Field | Values |
 | --- | --- |
@@ -94,3 +123,5 @@ Errors are JSON, and the message names the JSON path to fix:
   text or simplify the layout.
 - `device_not_ready`: the user has to open the Lykta app once.
 - `too_many_activities`: end an activity first.
+- `conflict`: the activity changed since the `ifRevision` you sent, or a tapped
+  control no longer exists.

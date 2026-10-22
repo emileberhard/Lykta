@@ -19,8 +19,8 @@ struct NodeView: View {
 
     @ViewBuilder private var content: some View {
         switch node.content {
-        case let .symbol(name):
-            Image(systemName: name)
+        case let .symbol(name, value):
+            Image(systemName: name, variableValue: value)
         case let .shape(shape):
             ShapeNodeView(shape: shape)
         case let .hstack(children, alignment, spacing):
@@ -41,9 +41,32 @@ struct NodeView: View {
             ProgressNodeView(progress: progress, style: style)
         case let .gauge(gauge):
             GaugeNodeView(gauge: gauge)
-        case let .conditional(condition, then, otherwise):
+        case let .conditional(.value(holds), then, otherwise):
+            if holds {
+                NodeView(then)
+            } else if let otherwise {
+                NodeView(otherwise)
+            }
+        case let .conditional(.environment(condition), then, otherwise):
             ConditionalNodeView(condition: condition, then: then, otherwise: otherwise)
-        case .text, .timer, .date, .concat:
+        case let .link(url, label):
+            Link(destination: url) { NodeView(label) }
+        case let .button(name, label, style):
+            ButtonNodeView(name: name, label: label, style: style)
+        case let .toggle(path, isOn, label, style):
+            ToggleNodeView(path: path, isOn: isOn, label: label, style: style)
+        case let .grid(rows, alignment, horizontalSpacing, verticalSpacing):
+            Grid(alignment: alignment.value, horizontalSpacing: horizontalSpacing.map { CGFloat($0) },
+                 verticalSpacing: verticalSpacing.map { CGFloat($0) }) {
+                ForEach(rows.indices, id: \.self) { row in
+                    GridRow { Children(nodes: rows[row]) }
+                }
+            }
+        case let .chart(chart):
+            ChartNodeView(chart: chart)
+        case let .concat(parts):
+            HStack(alignment: .firstTextBaseline, spacing: 0) { Children(nodes: parts) }
+        case .text, .timer, .date:
             EmptyView()
         }
     }
@@ -127,8 +150,66 @@ private struct GaugeNodeView: View {
     }
 }
 
+private struct ButtonNodeView: View {
+    let name: String
+    let label: Node
+    let style: Node.Content.ButtonStyle
+    @Environment(\.activityID) private var activity
+
+    var body: some View {
+        if let activity {
+            let button = Button(intent: ButtonIntent(activity: activity, button: name)) { NodeView(label) }
+            switch style {
+            case .automatic: button
+            case .plain: button.buttonStyle(.plain)
+            case .bordered: button.buttonStyle(.bordered)
+            case .borderedProminent: button.buttonStyle(.borderedProminent)
+            }
+        } else {
+            NodeView(label)
+        }
+    }
+}
+
+private struct ToggleNodeView: View {
+    let path: String
+    let isOn: Bool
+    let label: Node
+    let style: Node.Content.ToggleStyle
+    @Environment(\.activityID) private var activity
+
+    var body: some View {
+        if let activity {
+            let toggle = Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
+            switch style {
+            case .switch: toggle.toggleStyle(.switch)
+            case .button: toggle.toggleStyle(.button)
+            case .checkbox: toggle.toggleStyle(CheckboxToggleStyle())
+            }
+        } else {
+            NodeView(label)
+        }
+    }
+}
+
+private struct CheckboxToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(configuration.isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .contentTransition(.symbolEffect(.replace))
+                configuration.label
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct ConditionalNodeView: View {
-    let condition: Node.Content.Condition
+    let condition: Node.Content.Condition.Environment
     let then: Node
     let otherwise: Node?
     @Environment(\.isActivityStale) private var isStale
@@ -153,19 +234,35 @@ private struct ConditionalNodeView: View {
     }
 }
 
+private extension Node.Content {
+    var isSymbol: Bool {
+        if case .symbol = self { true } else { false }
+    }
+
+    var isSelfUpdating: Bool {
+        switch self {
+        case .timer: true
+        case let .date(_, style): style != .time && style != .date
+        default: false
+        }
+    }
+}
+
 extension EnvironmentValues {
     @Entry var isActivityStale = false
+    @Entry var activityID: UUID?
 }
 
 private extension Text {
     init?(_ node: Node, inline: Bool = false) {
         switch node.content {
         case let .text(text): self.init(verbatim: text)
-        case let .symbol(name) where inline: self.init(Image(systemName: name))
+        case let .symbol(name, value) where inline: self.init(Image(systemName: name, variableValue: value))
         case let .timer(interval, countsDown, pausedAt, showsHours):
             self.init(timerInterval: interval, pauseTime: pausedAt, countsDown: countsDown, showsHours: showsHours)
         case let .date(date, style): self.init(date, style: style.value)
-        case let .concat(parts): self = parts.reduce(Text(verbatim: "")) { text, part in Text("\(text)\(Text(part, inline: true) ?? Text(verbatim: ""))") }
+        case let .concat(parts) where !(parts.contains(where: \.content.isSymbol) && parts.contains(where: \.content.isSelfUpdating)):
+            self = parts.reduce(Text(verbatim: "")) { text, part in Text("\(text)\(Text(part, inline: true) ?? Text(verbatim: ""))") }
         default: return nil
         }
         self = node.modifiers.filter(\.isTextModifier).reduce(self) { $0.styled(by: $1) }

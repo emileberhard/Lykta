@@ -131,6 +131,46 @@ struct GatewayTests {
         #expect(events.events.first { $0.name == "activity.observed" }?.source == "app")
     }
 
+    @Test func togglesChangeTheDataAndPushIt() async throws {
+        let started: Identified = try await put("list", Self.checklist)
+        try await deliver(at: now)
+        let tick = Action(id: UUID(), activity: started.id, input: .toggle("items.0.done", isOn: true))
+        #expect(await act(tick).status == 204)
+        #expect(await act(tick).status == 204)
+        let detail: Detail = try await send("GET", "/v1/activities/list").decoded()
+        #expect(detail.revision == 2)
+        #expect(detail.data == ["items": .array([["name": "Milk", "done": .bool(true)]])])
+        try await deliver(at: now + 1)
+        #expect(push.sent == ["createChannel", "start", "update 5"])
+        let stale = await act(Action(id: UUID(), activity: started.id, input: .toggle("items.1.done", isOn: true)))
+        #expect(stale.status == 409)
+    }
+
+    @Test func buttonPressesReachTheAgentInOrder() async throws {
+        let started: Identified = try await put("deploy", Self.question)
+        let empty: Actions = try await send("GET", "/v1/actions").decoded()
+        #expect(empty.actions.isEmpty)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("retry"))).status == 204)
+        #expect(await act(Action(id: UUID(), activity: started.id, input: .button("delete"))).status == 409)
+        let pressed: Actions = try await send("GET", "/v1/actions?after=\(empty.cursor)&wait=1").decoded()
+        #expect(pressed.actions.map(\.button) == ["retry"])
+        #expect(pressed.actions.map(\.activity) == ["deploy"])
+        let none: Actions = try await send("GET", "/v1/actions?after=\(pressed.cursor)").decoded()
+        #expect(none.actions.isEmpty)
+        #expect(none.cursor == pressed.cursor)
+        try await store.housekeep(now: now + 86_401)
+        let expired: Actions = try await send("GET", "/v1/actions?after=0").decoded()
+        #expect(expired.actions.isEmpty)
+    }
+
+    @Test func ifRevisionRefusesToOverwriteANewerState() async throws {
+        try await put("build", Self.start)
+        try await put("build", ["data": ["step": "Test"], "ifRevision": .number(1)])
+        let stale = try await send("PUT", "/v1/activities/build", body: ["data": ["step": "Sign"], "ifRevision": .number(1)])
+        #expect(stale.status == 409)
+        #expect(try stale.decoded() as Failure == Failure(error: "conflict"))
+    }
+
     @Test func requiresTheAgentToken() async throws {
         let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/activities",
                                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
@@ -140,7 +180,10 @@ struct GatewayTests {
     @Test func skillExamplesCompile() throws {
         let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
         let blocks = markdown.components(separatedBy: "```json\n").dropFirst().map { $0.components(separatedBy: "\n```")[0] }
-        #expect(blocks.count == 5)
+        let snippetData: JSONValue = [
+            "steps": .array([["name": "Build"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1),
+        ]
+        #expect(blocks.count == 8)
         for block in blocks {
             guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: Data(block.utf8)) else {
                 Issue.record("not an object: \(block)")
@@ -149,7 +192,7 @@ struct GatewayTests {
             let layout: JSONValue = if let layout = fields["layout"] {
                 try layout.filled(with: fields["data"] ?? .object([:]))
             } else {
-                .object(["lockScreen": .object(fields), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"])
+                .object(["lockScreen": try JSONValue.object(fields).filled(with: snippetData), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"])
             }
             _ = try Layout(json: layout.json)
         }
@@ -161,6 +204,23 @@ struct GatewayTests {
         "title": "Build",
         "layout": ["lockScreen": "{{step}}", "compactLeading": "a", "compactTrailing": "b", "minimal": "c"],
         "data": ["step": "Compile"],
+    ]
+
+    static let checklist: JSONValue = [
+        "title": "Shopping",
+        "layout": [
+            "lockScreen": ["vstack": .array([["each": "items", "as": "item", "do": ["toggle": "item.done", "label": "{{item.name}}"]]])],
+            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
+        ],
+        "data": ["items": .array([["name": "Milk", "done": .bool(false)]])],
+    ]
+
+    static let question: JSONValue = [
+        "title": "Deploy failed",
+        "layout": [
+            "lockScreen": ["hstack": .array([["button": "retry", "label": "Retry"], ["button": "stop", "label": "Stop"]])],
+            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
+        ],
     ]
 
     static let oversized: JSONValue = [
@@ -192,6 +252,11 @@ struct GatewayTests {
                                      body: body?.json ?? []))
     }
 
+    private func act(_ action: Action) async -> HTTPResponse {
+        await api.handle(HTTPRequest(method: "POST", target: "/v1/device/actions",
+                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: Self.json(action)))
+    }
+
     private func deliver(at time: Int) async throws {
         let delivery = Delivery(store: store, push: push)
         for job in try await store.claim(now: time, limit: 4) {
@@ -214,6 +279,21 @@ struct Status: Decodable, Equatable {
     let state: String
     let delivery: String
     let error: String?
+}
+
+struct Detail: Decodable {
+    let revision: Int
+    let data: JSONValue
+}
+
+struct Actions: Decodable {
+    struct Entry: Decodable {
+        let activity: String
+        let button: String?
+    }
+
+    let actions: [Entry]
+    let cursor: Int
 }
 
 struct Events: Decodable {

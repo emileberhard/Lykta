@@ -24,6 +24,13 @@ struct DeviceAPITests {
         }
     }
 
+    @Test func actionsAreAButtonOrAToggle() throws {
+        let toggle = Action(id: UUID(), activity: UUID(), input: .toggle("items.0.done", isOn: true))
+        #expect(try JSONDecoder().decode(Action.self, from: JSONEncoder().encode(toggle)) == toggle)
+        let mixed = #"{"id": "\#(UUID())", "activity": "\#(UUID())", "button": "retry", "isOn": true}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(Action.self, from: Data(mixed.utf8)) }
+    }
+
     private func decode(_ fields: [String: JSONValue]) throws(LayoutError) -> DeviceReport {
         do {
             return try JSONDecoder().decode(DeviceReport.self, from: Data(JSONValue.object(fields).json))

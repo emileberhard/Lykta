@@ -103,7 +103,7 @@ private struct LockScreenCard: View {
     let activity: LiveActivity
 
     var body: some View {
-        LockScreenView(state: activity.content, isStale: activity.state == .stale)
+        LockScreenView(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
             .frame(maxWidth: .infinity, maxHeight: Self.maximumHeight)
             .clipped()
             .dynamicTypeSize(Self.textSizes)
@@ -241,9 +241,9 @@ private extension Model.Phase {
 #if DEBUG
 #Preview("Live") {
     HomeView(model: .preview(.ready, activities: [
-        LiveActivity(id: "1", content: try! LyktaActivity.ContentState(title: Demo.title, layout: Demo.layout.filled(with: Demo.data(start: .now)).json),
+        LiveActivity(id: "1", attributes: LyktaActivity(id: UUID(), name: "demo"), content: try! LyktaActivity.ContentState(title: Demo.title, layout: Demo.layout.filled(with: Demo.data(start: .now)).json),
                      state: .active),
-        LiveActivity(id: "2", content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
+        LiveActivity(id: "2", attributes: LyktaActivity(id: UUID(), name: "deploy"), content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
             {
               "lockScreen": {
                 "hstack": [

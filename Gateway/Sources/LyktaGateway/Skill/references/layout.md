@@ -15,7 +15,7 @@ example below is valid.
 | `small` | no | Apple Watch Smart Stack and CarPlay. Defaults to the compact pair side by side. |
 | `background` | no | Lock Screen background color. |
 | `keyline` | no | Dynamic Island outline color. |
-| `link` | no | An `https` URL that opens when the user taps the activity. |
+| `link` | no | A URL that opens when the user taps the activity: `https`, or an app URL such as `shortcuts://run-shortcut?name=Lights`. |
 
 Treat the compact and minimal views as a 28-point circle: a symbol, a short
 number or a ring. Use `{"if": "limitedWidth"}` when the Dynamic Island is
@@ -25,9 +25,18 @@ narrower than usual.
 
 `{{path}}` placeholders take values from the request's `data`. A placeholder
 that is the whole string keeps the value's JSON type, so
-`"progress": "{{fraction}}"` gives a number. Inside other text the value is
-inserted as text: `"{{done}} of {{total}}"`. Paths use dots for nesting and
-indices: `{{build.steps.0.name}}`. A missing value is an error.
+`"progress": "{{fraction}}"` gives a number, `"offset": "{{shift}}"` an array
+and `"if": "{{done}}"` a boolean. Inside other text the value is inserted as
+text: `"{{done}} of {{total}}"`. Paths use dots for nesting and indices:
+`{{build.steps.0.name}}`. A missing value is an error.
+
+An item `{"each": "list.path", "as": "name", "do": node}` inside any list
+repeats `node` once per entry of a data list, reading the entry as
+`{{name.field}}`. Lists nest, and a layout repeats at most 256 items in total:
+
+```json
+{"vstack": [{"each": "steps", "as": "step", "do": {"text": "{{step.name}}"}}], "alignment": "leading"}
+```
 
 Dates are ISO 8601 strings (`"2026-10-21T18:00:00Z"`) or Unix seconds.
 
@@ -38,8 +47,8 @@ below, its optional fields and an optional `modifiers` array.
 
 | Node | Optional fields |
 | --- | --- |
-| `{"text": "Hi"}` | Same as `"Hi"`. |
-| `{"symbol": "bolt.fill"}` | Any SF Symbol name. |
+| `{"text": "Hi"}` | Same as `"Hi"`. A number shows as text. |
+| `{"symbol": "bolt.fill"}` | Any SF Symbol name. `value` (0 to 1) fills symbols with variable parts, such as `wifi` or `speaker.wave.3.fill`. |
 | `{"timer": [start, end]}` | `countsDown` (true), `pausedAt` (a date), `showsHours` (true). Counts on the phone without updates. |
 | `{"date": date}` | `style`: `time` (default), `date`, `relative`, `offset`, `timer`. A `timer` date in the past counts up. |
 | `{"concat": [parts]}` | One run of text from text, symbol, date and timer parts. Parts take only text modifiers. |
@@ -53,7 +62,12 @@ below, its optional fields and an optional `modifiers` array.
 | `{"progress": [start, end]}` | `style`, `countsDown` (false), `pausedAt`. Fills on the phone between the two dates. |
 | `{"gauge": value}` | `min` (0), `max` (1), `style`: `circular` (default), `circularCapacity`, `linear`, `linearCapacity`. Label nodes: `label`, `currentValueLabel`, `minimumValueLabel`, `maximumValueLabel`. |
 | `{"viewThatFits": [nodes]}` | `in`: `horizontal`, `vertical`. Shows the first node that fits, so put the largest first. |
-| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`. |
+| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`, or `true`/`false` from data: `{"if": "{{failed}}", ...}`. |
+| `{"grid": [[nodes], [nodes]]}` | Rows of cells whose columns line up. `alignment`, `horizontalSpacing`, `verticalSpacing`. |
+| `{"chart": [marks]}` | `min` and `max` for the value axis, `axes` (false). See [charts](#charts). |
+| `{"link": url, "label": node}` | Opens the URL. See [links, buttons and toggles](#links-buttons-and-toggles). |
+| `{"button": name, "label": node}` | `style`: `automatic`, `plain`, `bordered`, `borderedProminent`. |
+| `{"toggle": "data.path", "label": node}` | `style`: `switch` (default), `button`, `checkbox`. Shows and flips the boolean at that data path. |
 
 ## Modifiers
 
@@ -84,7 +98,15 @@ Each modifier is an object with one key: `{"padding": 8}`.
 | `multilineTextAlignment` | `leading`, `center`, `trailing` |
 | `truncationMode` | `head`, `middle`, `tail` |
 | `textCase` | `uppercase`, `lowercase` |
-| `contentTransition` | `numericText`, `opacity`, `interpolate`, `identity`; animates changes between updates |
+| `contentTransition` | `numericText`, `opacity`, `interpolate`, `identity`, `symbolReplace`, or `{"numericText": value}` to count in the direction the value moved |
+| `transition` | How the node enters and leaves: `opacity`, `slide`, `scale`, `identity`, `{"move": edge}`, `{"push": edge}` with an edge of `top`, `bottom`, `leading`, `trailing`, or a list of 2 to 3 of these to combine |
+| `animation` | `{"value": v, "curve", "duration", "delay"}` animates changes inside the node when `v` changes. Curves: `default`, `linear`, `easeIn`, `easeOut`, `easeInOut`, `spring`, `bouncy`, `snappy`, `smooth`. `duration` 0.05 to 2 seconds, `delay` up to 1 |
+| `id` | A string, number or boolean. A new value replaces the node, running its `transition` |
+| `overlay` | A node drawn on top, sized to this node |
+| `blur` | 0 to 20 |
+| `grayscale` | 0 to 1 |
+| `saturation` | 0 to 5 |
+| `brightness` | -1 to 1 |
 | `symbolRenderingMode` | `monochrome`, `hierarchical`, `palette`, `multicolor` |
 | `imageScale` | `small`, `medium`, `large` |
 | `accessibilityLabel` | Text for VoiceOver |
@@ -96,13 +118,83 @@ is `#RRGGBB`, `#RRGGBBAA` or one of `red`, `orange`, `yellow`, `green`, `mint`,
 `teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown`, `white`, `gray`,
 `black`, `clear`, `accent`.
 
+## Charts
+
+A chart draws up to 8 marks over shared positions 0, 1, 2… Each mark is an
+object with one kind key holding 1 to 100 numbers:
+
+| Mark | Optional fields |
+| --- | --- |
+| `{"line": [numbers]}` | `color` (a paint), `lineWidth` (2), `interpolation`: `linear`, `monotone`, `catmullRom`, `cardinal`, `stepStart`, `stepCenter`, `stepEnd` |
+| `{"area": [numbers]}` | `color`, `interpolation` |
+| `{"bar": [numbers]}` | `color`, `colors` (one color per value), `cornerRadius` |
+| `{"point": [numbers]}` | `color`, `colors` |
+| `{"rule": number}` | `color`, `lineWidth`. A dashed line across the chart, such as a target. |
+| `{"sector": [numbers]}` | `colors`, `innerRadius` (0 up to 1). Slices of a pie or, with an inner radius, a donut. |
+
+Charts hide their axes unless `axes` is true, so give them a `frame`. Bind a
+data list with `"line": "{{series}}"`.
+
+## Links, buttons and toggles
+
+The system accepts taps only in `lockScreen` and `expanded`, so controls are
+rejected elsewhere, and a label cannot contain another control. Buttons and
+toggles work once the phone is unlocked.
+
+- A `link` opens its URL, like the presentation-wide `link`.
+- A `button` press is delivered to agents through `GET /v1/actions` with the
+  button's name, which is 1 to 64 characters from `a-z`, `0-9`, `-`, `_` and
+  `.`. Nothing on the phone changes until an agent responds with an update.
+- A `toggle` names a boolean in the data instead of holding a state. A tap
+  flips that value on the gateway, which redraws the activity at once and also
+  reports the change through `GET /v1/actions`. A checklist therefore works
+  without any agent listening. Inside `each`, `"toggle": "item.done"` names the
+  current entry.
+
+```json
+{
+  "vstack": [
+    {"each": "items", "as": "item", "do": {
+      "toggle": "item.done", "style": "checkbox",
+      "label": {"if": "{{item.done}}", "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}]}, "else": "{{item.name}}"}
+    }},
+    {"button": "restock", "label": "Add more", "style": "bordered"}
+  ],
+  "alignment": "leading"
+}
+```
+
+## Motion
+
+The phone animates the change from one update to the next for up to two
+seconds, and not at all on the Always-On display. Numbers roll with
+`contentTransition`. To make a node slide or fade in, give it a `transition`
+and an `id` from the data, and an `animation` on a container whose `value`
+changes with it:
+
+```json
+{
+  "hstack": [{"text": "{{step}}", "modifiers": [{"transition": {"push": "trailing"}}, {"id": "{{index}}"}]}],
+  "modifiers": [{"animation": {"curve": "smooth", "value": "{{index}}"}}]
+}
+```
+
 ## Fitting
 
 A layout may be at most 32 KB with 256 nodes, 16 levels and 512 modifiers, and
 its compressed push must fit Apple's 4 KB limit. Within a presentation:
 
 - Give timers a fixed `frame` width; timer text otherwise reserves room for its
-  longest value.
+  longest value. In the expanded `center`, an unframed timer pushes `leading`
+  and `trailing` below the camera.
+- Expanded `leading` and `trailing` beside the camera hold about 44 points;
+  wider content moves below it.
+- Size a circular `progress` with a `frame`, such as 24 points in `minimal`.
+- Glows and shadows are clipped at the edge of a Dynamic Island region; keep
+  their radius small in compact and minimal.
+- Expanded regions are short: add `fixedSize: "vertical"` to text that must
+  keep its second line.
+- `tint` on `progress` takes one color; a gradient shows only its first.
 - Offer shorter alternatives with `viewThatFits`.
 - Bound text with `lineLimit` and `minimumScaleFactor`.
 - Prefer `spacer` and alignment over fixed offsets so content adapts to each

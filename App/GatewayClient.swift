@@ -21,6 +21,10 @@ struct GatewayClient: Sendable {
         _ = try await send("POST", url.appending(path: "v1/device/events"), token: secret, body: batch)
     }
 
+    func act(_ action: Action, secret: String) async throws {
+        _ = try await send("POST", url.appending(path: "v1/device/actions"), token: secret, body: action)
+    }
+
     func deleteDevice(secret: String) async throws {
         _ = try await send("DELETE", url.appending(path: "v1/device"), token: secret, body: nil)
     }

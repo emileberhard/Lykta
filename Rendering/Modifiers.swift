@@ -41,6 +41,14 @@ extension View {
         case let .truncationMode(mode): truncationMode(mode == .head ? .head : mode == .middle ? .middle : .tail)
         case let .textCase(textCase): self.textCase(textCase == .uppercase ? .uppercase : .lowercase)
         case let .contentTransition(transition): contentTransition(transition.value)
+        case let .transition(transition): self.transition(transition.value)
+        case let .animation(animation): self.animation(animation.value, value: animation.trigger)
+        case let .id(id): self.id(id)
+        case let .overlay(node): overlay { NodeView(node) }
+        case let .blur(radius): blur(radius: radius)
+        case let .grayscale(amount): grayscale(amount)
+        case let .saturation(amount): saturation(amount)
+        case let .brightness(amount): brightness(amount)
         case let .symbolRenderingMode(mode): symbolRenderingMode(mode.value)
         case let .imageScale(scale): imageScale(scale == .small ? .small : scale == .medium ? .medium : .large)
         case let .accessibilityLabel(label): accessibilityLabel(label)
@@ -161,14 +169,58 @@ extension Modifier.Width {
     }
 }
 
-extension Modifier.Transition {
+extension Modifier.ContentTransition {
     var value: ContentTransition {
         switch self {
-        case .numericText: .numericText()
-        case .opacity: .opacity
-        case .interpolate: .interpolate
-        case .identity: .identity
+        case .named(.numericText): .numericText()
+        case .named(.opacity): .opacity
+        case .named(.interpolate): .interpolate
+        case .named(.identity): .identity
+        case .named(.symbolReplace): .symbolEffect(.replace)
+        case let .numericText(value): .numericText(value: value)
         }
+    }
+}
+
+extension Modifier.Transition {
+    var value: AnyTransition {
+        switch self {
+        case .named(.opacity): .opacity
+        case .named(.slide): .slide
+        case .named(.scale): .scale
+        case .named(.identity): .identity
+        case let .move(edge): .move(edge: edge.value)
+        case let .push(edge): .push(from: edge.value)
+        case let .combined(parts): parts.dropFirst().reduce(parts[0].value) { $0.combined(with: $1.value) }
+        }
+    }
+}
+
+extension Modifier.Transition.Edge {
+    var value: Edge {
+        switch self {
+        case .top: .top
+        case .bottom: .bottom
+        case .leading: .leading
+        case .trailing: .trailing
+        }
+    }
+}
+
+extension Modifier.Animation {
+    var value: SwiftUI.Animation {
+        let animation: SwiftUI.Animation = switch curve {
+        case .default: duration.map { .easeInOut(duration: $0) } ?? .default
+        case .linear: .linear(duration: duration ?? 0.35)
+        case .easeIn: .easeIn(duration: duration ?? 0.35)
+        case .easeOut: .easeOut(duration: duration ?? 0.35)
+        case .easeInOut: .easeInOut(duration: duration ?? 0.35)
+        case .spring: .spring(duration: duration ?? 0.5)
+        case .bouncy: .bouncy(duration: duration ?? 0.5)
+        case .snappy: .snappy(duration: duration ?? 0.5)
+        case .smooth: .smooth(duration: duration ?? 0.5)
+        }
+        return animation.delay(delay)
     }
 }
 

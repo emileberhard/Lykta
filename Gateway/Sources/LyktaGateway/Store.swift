@@ -14,6 +14,7 @@ struct ActivityRequest: Sendable {
     let staleAfter: Int?
     let endAfter: Int?
     let relevance: Double?
+    let ifRevision: Int?
 }
 
 struct Job: Sendable {
@@ -36,6 +37,36 @@ enum Outcome: Sendable {
 struct Attempt: Sendable {
     let outcome: Outcome
     let detail: [String: JSONValue]
+}
+
+struct ActionRecord: Encodable, Sendable {
+    let seq: Int64
+    let activity: ActivityName
+    let input: Action.Input
+    let at: Date
+
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        activity = try row.text("name", as: ActivityName.init(rawValue:))
+        input = if let button = try row.optionalString("button") {
+            .button(button)
+        } else {
+            .toggle(try row.string("toggle"), isOn: try row.integer("is_on") != 0)
+        }
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")))
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(seq, forKey: .seq)
+        try fields.encode(activity, forKey: .activity)
+        try input.encode(to: encoder)
+        try fields.encode(at, forKey: .at)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case seq, activity, at
+    }
 }
 
 struct StoredEvent: Encodable, Sendable {
@@ -93,6 +124,8 @@ actor Store {
     static let maximumPayloadBytes = 4096
     static let eventRetention = 14 * 86400
     static let maximumEventBytesPerDevice = 8 << 20
+    static let actionRetention = 86400
+    static let maximumActionsPerDevice = 1000
 
     private let db: Database
     private let maximumDevices: Int
@@ -189,17 +222,14 @@ actor Store {
     func put(_ device: Device, name: ActivityName, request: ActivityRequest, now: Int) throws -> ActivityStatus {
         try db.transaction {
             let current = try liveActivity(device, name: name)
+            if let expected = request.ifRevision, current?.revision != expected {
+                throw APIError(.conflict, "The activity is no longer at revision \(expected). Read it again, then send your change.")
+            }
             guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
                 throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
             }
             let data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
-            let content: String
-            do {
-                let state = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
-                content = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
-            } catch let error as LayoutError {
-                throw APIError(.invalidLayout, error.description)
-            }
+            let content = try Self.content(title: title, layout: layout, data: data)
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
@@ -231,12 +261,7 @@ actor Store {
                     """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
             }
             let activity = try self.activity(id)
-            let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
-                                            channel: String(repeating: "x", count: 64), alert: activity.alert).count
-            guard size <= Self.maximumPayloadBytes else {
-                throw APIError(.payloadTooLarge,
-                               "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). Simplify the layout or shorten its text.")
-            }
+            let size = try Self.payloadSize(of: activity, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
                 "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
@@ -256,17 +281,70 @@ actor Store {
         }
     }
 
-    func status(_ device: Device, name: ActivityName) throws -> ActivityStatus {
+    func detail(_ device: Device, name: ActivityName) throws -> ActivityDetail {
         guard let row = try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
                                      device.id, name).first else {
             throw APIError(.notFound, "No activity is named \(name).")
         }
-        return try Activity(row).status
+        let activity = try Activity(row)
+        return ActivityDetail(status: activity.status, data: try decode(activity.data))
     }
 
     func list(_ device: Device) throws -> [ActivityStatus] {
         try db.query("SELECT * FROM activities WHERE device_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100", device.id)
             .map { try Activity($0).status }
+    }
+
+    // MARK: Actions
+
+    func act(_ device: Device, _ action: Action, now: Int) throws {
+        try db.transaction {
+            guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return }
+            guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ? AND phase IN ('starting', 'live')",
+                                         action.activity, device.id).first else {
+                throw APIError(.notFound, "The activity has ended.")
+            }
+            let activity = try Activity(row)
+            let layout = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(activity.content.utf8)).layout
+            var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
+            switch action.input {
+            case let .button(name):
+                guard layout?.buttons.contains(name) == true else { throw APIError(.conflict, "The activity no longer shows the button \(name).") }
+                try db.run("INSERT INTO actions (id, device_id, activity_id, button, at) VALUES (?, ?, ?, ?, ?)",
+                           action.id, device.id, activity.id, name, now)
+                detail["button"] = .string(name)
+            case let .toggle(path, isOn):
+                guard layout?.toggles[path] != nil else { throw APIError(.conflict, "The activity no longer shows the toggle \(path).") }
+                let data: JSONValue
+                do {
+                    data = try decode(activity.data).replacing(path, with: .bool(isOn))
+                } catch let error as LayoutError {
+                    throw APIError(.conflict, error.description)
+                }
+                let content = try Self.content(title: activity.title, layout: decode(activity.layout), data: data)
+                if content != activity.content {
+                    try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(data), content, activity.id)
+                    _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
+                }
+                try db.run("INSERT INTO actions (id, device_id, activity_id, toggle, is_on, at) VALUES (?, ?, ?, ?, ?, ?)",
+                           action.id, device.id, activity.id, path, isOn, now)
+                detail["toggle"] = .string(path)
+                detail["isOn"] = .bool(isOn)
+            }
+            detail["revision"] = .number(Double(try self.activity(activity.id).revision))
+            try record("activity.action", device: device.id, activity: activity.id, detail)
+        }
+    }
+
+    func actions(_ device: Device, after: Int64, limit: Int) throws -> [ActionRecord] {
+        try db.query("""
+            SELECT x.seq, x.button, x.toggle, x.is_on, x.at, a.name FROM actions x JOIN activities a ON a.id = x.activity_id
+              WHERE x.device_id = ? AND x.seq > ? ORDER BY x.seq LIMIT ?
+            """, device.id, after, limit).map(ActionRecord.init)
+    }
+
+    func latestAction(_ device: Device) throws -> Int64 {
+        try db.query("SELECT COALESCE(MAX(seq), 0) AS seq FROM actions WHERE device_id = ?", device.id)[0].integer("seq")
     }
 
     // MARK: Delivery
@@ -301,6 +379,11 @@ actor Store {
             }
         }
         try db.run("DELETE FROM activities WHERE phase = 'ended' AND channel IS NULL AND ended_at <= ?", now - 7 * 86400)
+        try db.run("DELETE FROM actions WHERE at < ?", now - Self.actionRetention)
+        try db.run("""
+            DELETE FROM actions WHERE seq IN (SELECT seq FROM (
+              SELECT seq, ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY seq DESC) AS n FROM actions) WHERE n > ?)
+            """, Self.maximumActionsPerDevice)
         try db.run("DELETE FROM events WHERE received_at < ?", Int64(now - Self.eventRetention) * 1000)
         try db.run("""
             DELETE FROM events WHERE seq IN (SELECT seq FROM (
@@ -442,6 +525,25 @@ actor Store {
 
     // MARK: Helpers
 
+    private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> String {
+        do {
+            let state = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
+            return String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+        } catch let error as LayoutError {
+            throw APIError(.invalidLayout, error.description)
+        }
+    }
+
+    private static func payloadSize(of activity: Activity, now: Int) throws -> Int {
+        let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
+                                        channel: String(repeating: "x", count: 64), alert: activity.alert).count
+        guard size <= maximumPayloadBytes else {
+            throw APIError(.payloadTooLarge,
+                           "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). Simplify the layout or shorten its text.")
+        }
+        return size
+    }
+
     private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {
         try db.run("""
             UPDATE activities SET phase = CASE WHEN phase = 'starting' AND in_flight = 0 THEN 'ended' ELSE 'ending' END,
@@ -561,6 +663,18 @@ actor Store {
           detail TEXT NOT NULL
         ) STRICT;
         CREATE INDEX IF NOT EXISTS device_events ON events(device_id, seq);
+        CREATE TABLE IF NOT EXISTS actions (
+          seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT NOT NULL UNIQUE,
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+          button TEXT,
+          toggle TEXT,
+          is_on INTEGER,
+          at INTEGER NOT NULL,
+          CHECK ((button IS NULL) != (toggle IS NULL) AND (toggle IS NULL) = (is_on IS NULL))
+        ) STRICT;
+        CREATE INDEX IF NOT EXISTS device_actions ON actions(device_id, seq);
         CREATE INDEX IF NOT EXISTS event_age ON events(received_at);
         """
 }

@@ -110,3 +110,54 @@ public struct SyncResult: Codable, Sendable {
         self.end = end
     }
 }
+
+public struct Action: Codable, Equatable, Sendable {
+    public enum Input: Encodable, Equatable, Sendable {
+        case button(String)
+        case toggle(String, isOn: Bool)
+
+        public func encode(to encoder: any Encoder) throws {
+            var fields = encoder.container(keyedBy: Key.self)
+            switch self {
+            case let .button(name):
+                try fields.encode(name, forKey: Key(stringValue: "button"))
+            case let .toggle(path, isOn):
+                try fields.encode(path, forKey: Key(stringValue: "toggle"))
+                try fields.encode(isOn, forKey: Key(stringValue: "isOn"))
+            }
+        }
+    }
+
+    public let id: UUID
+    public let activity: UUID
+    public let input: Input
+
+    public init(id: UUID, activity: UUID, input: Input) {
+        self.id = id
+        self.activity = activity
+        self.input = input
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: Key.self)
+        try fields.allowOnly(["id", "activity", "button", "toggle", "isOn"])
+        id = try fields.required("id")
+        activity = try fields.required("activity")
+        if let button: String = try fields.optional("button") {
+            guard Node.Content.isName(button) else { throw fields.invalid("not a button name", at: "button") }
+            guard !fields.contains(Key(stringValue: "toggle")), !fields.contains(Key(stringValue: "isOn")) else {
+                throw fields.invalid("an action is a button or a toggle with isOn")
+            }
+            input = .button(button)
+        } else {
+            input = .toggle(try fields.text("toggle", maximumLength: 256), isOn: try fields.required("isOn"))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: Key.self)
+        try fields.encode(id, forKey: Key(stringValue: "id"))
+        try fields.encode(activity, forKey: Key(stringValue: "activity"))
+        try input.encode(to: encoder)
+    }
+}

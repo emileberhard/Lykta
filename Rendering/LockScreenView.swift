@@ -4,6 +4,7 @@ import WidgetKit
 
 struct LockScreenView: View {
     let state: LyktaActivity.ContentState
+    let activity: UUID
     let isStale: Bool
     @Environment(\.activityFamily) private var family
 
@@ -24,17 +25,17 @@ struct LockScreenView: View {
     @ViewBuilder private var content: some View {
         if let layout = state.layout {
             if family == .small, let small = layout.small {
-                Root(node: small, isStale: isStale)
+                Root(node: small, activity: activity, isStale: isStale)
             } else if family == .small {
                 HStack {
-                    Root(node: layout.compactLeading, isStale: isStale)
+                    Root(node: layout.compactLeading, activity: activity, isStale: isStale)
                     Spacer(minLength: 4)
-                    Root(node: layout.compactTrailing, isStale: isStale)
+                    Root(node: layout.compactTrailing, activity: activity, isStale: isStale)
                 }
                 .compact()
                 .padding(12)
             } else {
-                Root(node: layout.lockScreen, isStale: isStale)
+                Root(node: layout.lockScreen, activity: activity, isStale: isStale)
             }
         } else {
             Fallback(title: state.title).padding(16)
@@ -44,11 +45,14 @@ struct LockScreenView: View {
 
 struct Root: View {
     let node: Node?
+    let activity: UUID
     let isStale: Bool
 
     var body: some View {
         if let node {
-            NodeView(node).environment(\.isActivityStale, isStale)
+            NodeView(node)
+                .environment(\.isActivityStale, isStale)
+                .environment(\.activityID, activity)
         }
     }
 }
