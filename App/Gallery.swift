@@ -168,7 +168,7 @@ private struct IslandPreview: View {
                 region(layout.expanded?.leading)
                     .layoutPriority(1)
                 VStack(spacing: 0) {
-                    Color.clear.frame(height: Self.height - 8)
+                    Color.clear.frame(height: 20)
                     region(layout.expanded?.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -177,7 +177,7 @@ private struct IslandPreview: View {
             }
             region(layout.expanded?.bottom)
         }
-        .padding(EdgeInsets(top: 12, leading: 20, bottom: 18, trailing: 20))
+        .padding(EdgeInsets(top: 20, leading: 24, bottom: 20, trailing: 24))
         .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 160, alignment: .top)
         .island(cornerRadius: 44, outline: outline, id: id(.expanded), in: island)
     }
