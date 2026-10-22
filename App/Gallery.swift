@@ -35,6 +35,8 @@ struct ExampleView: View {
             Section {
                 LockScreenCard(state: example.preview, activity: nil, isStale: false)
                     .allowsHitTesting(false)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityRemoveTraits(.isButton)
                     .lockScreenRow(example.preview)
             }
             if let layout = example.preview.layout {
@@ -108,6 +110,14 @@ private struct ShowButton: View {
 private struct IslandPreview: View {
     private enum Presentation: Hashable {
         case compact, expanded, minimal
+
+        var name: LocalizedStringResource {
+            switch self {
+            case .compact: "Compact Dynamic Island"
+            case .expanded: "Expanded Dynamic Island"
+            case .minimal: "Minimal Dynamic Island"
+            }
+        }
     }
 
     private static let height: CGFloat = 36.67
@@ -142,6 +152,8 @@ private struct IslandPreview: View {
             .onTapGesture {
                 withAnimation(animation) { presentation = presentation == .expanded ? .compact : .expanded }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(presentation.name))
         }
         .sensoryFeedback(.impact(weight: .light), trigger: presentation)
     }
@@ -199,6 +211,7 @@ private struct IslandPreview: View {
         Root(node: node, activity: nil, isStale: false)
             .environment(\.colorScheme, .dark)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private var outline: Color? {
