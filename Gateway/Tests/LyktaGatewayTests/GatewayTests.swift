@@ -69,6 +69,17 @@ struct GatewayTests {
         #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
     }
 
+    @Test func everyAcceptedChangeAdvancesTheRevision() async throws {
+        try await put("build", ["title": "Build", "layout": Self.layout("Done")])
+        try await put("build", ["layout": Self.layout("{{step}}"), "data": ["step": "Done"]])
+        try await put("build", ["layout": Self.layout("{{step}}"), "data": ["step": "Done"]])
+        try await put("build", ["endAfter": .number(600)])
+        try await put("build", ["data": ["step": "Running"]])
+        let detail: Detail = try await send("GET", "/v1/activities/build").decoded()
+        #expect(detail.revision == 4)
+        #expect(detail.data == ["step": "Running"])
+    }
+
     @Test func startsCoalescesUpdatesAndEnds() async throws {
         try await put("build", Self.start)
         try await deliver(at: now)

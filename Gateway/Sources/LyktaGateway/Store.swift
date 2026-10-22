@@ -285,14 +285,13 @@ actor Store {
             let id: UUID
             if let current {
                 id = current.id
-                if content != current.content || alert != nil || request.staleAfter != nil || relevance != current.relevance {
+                let changed = try title != current.title || layout != decode(current.layout) || data != decode(current.data) || alert != nil
+                    || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
+                if changed {
                     try db.run("""
-                        UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, relevance = ?,
+                        UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
                           alert = COALESCE(?, alert), revision = revision + 1 WHERE id = ?
-                        """, title, Self.text(layout), Self.text(data), content, staleAfter, relevance, alert, id)
-                }
-                if request.endAfter != nil {
-                    try db.run("UPDATE activities SET ends_at = ? WHERE id = ?", endsAt, id)
+                        """, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, id)
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -391,8 +390,8 @@ actor Store {
                 } catch let error as LayoutError {
                     throw APIError(.conflict, error.description)
                 }
-                let content = try Self.encoded(Self.content(title: activity.title, layout: decode(activity.layout), data: data))
-                if content != activity.content {
+                if data != (try decode(activity.data)) {
+                    let content = try Self.encoded(Self.content(title: activity.title, layout: decode(activity.layout), data: data))
                     try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(data), content, activity.id)
                     _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
                 }
