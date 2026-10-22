@@ -8,21 +8,16 @@ struct Gallery: View {
     @Namespace private var transition
 
     var body: some View {
-        List(model.examples) { example in
-            Section {
-                NavigationLink(value: example.id) {
-                    LockScreenCard(state: example.preview, activity: nil, isStale: false)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .contentShape(.rect)
+        ScrollView {
+            VStack(spacing: GalleryCard.spacing) {
+                ForEach(model.examples) { example in
+                    GalleryCard(example: example, transition: transition)
                 }
-                .accessibilityLabel(example.title)
-                .matchedTransitionSource(id: example.id, in: transition)
-                .lockScreenRow(example.preview)
             }
         }
-        .listSectionSpacing(.compact)
-        .navigationLinkIndicatorVisibility(.hidden)
+        .contentMargins(.horizontal, GalleryCard.margin, for: .scrollContent)
+        .contentMargins(.vertical, GalleryCard.spacing, for: .scrollContent)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Examples")
         .navigationDestination(for: Example.ID.self) { id in
             if let example = model.examples.first(where: { $0.id == id }) {
@@ -30,6 +25,29 @@ struct Gallery: View {
                     .navigationTransition(.zoom(sourceID: id, in: transition))
             }
         }
+    }
+}
+
+private struct GalleryCard: View {
+    static let spacing: CGFloat = 12
+    static let margin: CGFloat = 16
+    private static let shape = RoundedRectangle(cornerRadius: 26)
+
+    let example: Example
+    let transition: Namespace.ID
+
+    var body: some View {
+        NavigationLink(value: example.id) {
+            LockScreenCard(state: example.preview, activity: nil, isStale: false)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .background(example.preview.layout?.background?.value ?? Color(.secondarySystemGroupedBackground))
+                .clipShape(Self.shape)
+                .contentShape(Self.shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(example.title)
+        .matchedTransitionSource(id: example.id, in: transition) { $0.clipShape(Self.shape) }
     }
 }
 
