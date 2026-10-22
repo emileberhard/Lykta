@@ -99,7 +99,7 @@ private struct Header: View {
 
 struct LockScreenCard: View {
     private static let maximumHeight: CGFloat = 160
-    private static let textSizes = DynamicTypeSize.large ... .xxxLarge
+    static let textSizes = DynamicTypeSize.large ... .xxxLarge
 
     let state: LyktaActivity.ContentState
     let activity: UUID?

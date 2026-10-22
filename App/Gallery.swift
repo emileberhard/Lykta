@@ -122,6 +122,7 @@ private struct CompactIsland: View {
         .padding(.horizontal, 12)
         .frame(height: Island.height)
         .modifier(Island(cornerRadius: Island.height / 2, keyline: keyline))
+        .dynamicTypeSize(.large)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Compact Dynamic Island")
     }
@@ -149,6 +150,7 @@ private struct ExpandedIsland: View {
         .padding(EdgeInsets(top: 20, leading: 24, bottom: 20, trailing: 24))
         .frame(maxWidth: .infinity, minHeight: 84, maxHeight: 160, alignment: .top)
         .modifier(Island(cornerRadius: 44, keyline: keyline))
+        .dynamicTypeSize(LockScreenCard.textSizes)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Expanded Dynamic Island")
     }
@@ -170,6 +172,7 @@ private struct MinimalIsland: View {
                     .alignmentGuide(.trailing) { $0[.leading] - 8 }
             }
             .frame(maxWidth: .infinity)
+            .dynamicTypeSize(.large)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Minimal Dynamic Island")
     }

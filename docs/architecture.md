@@ -79,7 +79,10 @@ skill's `examples` folder, so the app shows the same files the gateway serves,
 drawn offline by `Rendering` before anything is sent. Fetching them from the
 gateway would need a connection and a listing endpoint, and could show layouts
 newer than the installed app draws. The Dynamic Island previews approximate the
-system's regions; only a phone shows the real presentation. Sending an example
+system's regions and hold text to the sizes Xcode's previews draw: expanded
+between large and xxxLarge like the Lock Screen, compact and minimal at large.
+Timers ignore these limits in the app and follow its text size. Only a phone
+shows the real presentation. Sending an example
 is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
