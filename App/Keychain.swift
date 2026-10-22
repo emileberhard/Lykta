@@ -27,8 +27,9 @@ enum Keychain {
         guard status == errSecSuccess else { throw failure(status) }
     }
 
-    static func delete() {
-        SecItemDelete(query as CFDictionary)
+    static func delete() throws {
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw failure(status) }
     }
 
     private static func failure(_ status: OSStatus) -> AppError {

@@ -27,7 +27,9 @@ final class Model {
     private let metrics = MetricManager()
     private var credentials: Credentials?
     private var pushToken: PushToken?
+    private var syncFailures = 0
     private var runTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
     private var flushTask: Task<Void, Never>?
     private var metricsTask: Task<Void, Never>?
 
@@ -65,6 +67,10 @@ final class Model {
         runTask = Task { await run() }
     }
 
+    var isRegistered: Bool {
+        credentials != nil
+    }
+
     func sceneChanged(to scenePhase: ScenePhase) {
         let name = switch scenePhase {
         case .active: "active"
@@ -73,6 +79,9 @@ final class Model {
         @unknown default: "unknown"
         }
         record("app.scene", ["phase": .string(name)])
+        if scenePhase == .active, phase.isReady {
+            Task { await sync() }
+        }
     }
 
     func loadExamples() async {
@@ -95,7 +104,7 @@ final class Model {
         guard let gateway, let credentials else { return false }
         record("app.example", ["example": .string(example.id)])
         let name = Example.activityName
-        let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == name && $0.activityState == .active }
+        let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == name && [.pending, .active, .stale].contains($0.activityState) }
         return await showingErrors("example") {
             if !isShowing {
                 try await gateway.endActivity(name, agentToken: credentials.agentToken)
@@ -123,17 +132,25 @@ final class Model {
 
     func reset() async {
         guard let gateway, let credentials else { return }
-        record("app.reset")
-        await showingErrors("reset") {
-            try await gateway.deleteDevice(secret: credentials.deviceSecret)
-            Keychain.delete()
+        runTask?.cancel()
+        retryTask?.cancel()
+        let deleted = await showingErrors("reset") {
+            do {
+                try await gateway.deleteDevice(secret: credentials.deviceSecret)
+            } catch let error as AppError where error.status == 401 {}
+            try Keychain.delete()
+        }
+        if deleted {
             self.credentials = nil
+            queue.clear()
             for activity in Activity<LyktaActivity>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
             activities = []
             phase = .connecting
+            record("app.reset")
         }
+        start()
     }
 
     private func run() async {
@@ -253,11 +270,30 @@ final class Model {
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, layoutVersion: Layout.version,
                                         bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
-        await showingErrors("sync") {
+        retryTask?.cancel()
+        do {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
+            syncFailures = 0
+            error = nil
             for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id) {
                 record("activity.endedByGateway", activity: activity.attributes.id)
                 await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        } catch let error as AppError where error.status == 401 {
+            guard self.credentials?.deviceSecret == credentials.deviceSecret else { return }
+            record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
+            runTask?.cancel()
+            phase = .failed("The gateway no longer knows this phone. Reset Lykta to register it again.")
+        } catch {
+            guard !Task.isCancelled else { return }
+            record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
+            self.error = error.localizedDescription
+            syncFailures += 1
+            let delay = Duration.seconds(min(60, 1 << min(syncFailures, 6)))
+            retryTask = Task {
+                guard (try? await Task.sleep(for: delay)) != nil else { return }
+                retryTask = nil
+                await sync()
             }
         }
         activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)

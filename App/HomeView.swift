@@ -24,15 +24,12 @@ struct HomeView: View {
             .toolbar {
                 ToolbarOverflowMenu {
                     Button("Reset", systemImage: "arrow.counterclockwise", role: .destructive) { isConfirmingReset = true }
-                        .disabled(!model.phase.isReady)
+                        .disabled(!model.isRegistered)
                 }
             }
             .confirmationDialog("Reset Lykta?", isPresented: $isConfirmingReset) {
                 Button("Reset", role: .destructive) {
-                    Task {
-                        await model.reset()
-                        model.start()
-                    }
+                    Task { await model.reset() }
                 }
             } message: {
                 Text("Ends every activity, deletes this phone from the gateway and replaces the agent token.")

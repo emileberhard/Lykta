@@ -33,6 +33,11 @@ final class EventQueue {
         return batch
     }
 
+    func clear() {
+        events = []
+        persist()
+    }
+
     func remove(_ sent: [Event]) {
         let ids = Set(sent.map(\.id))
         events.removeAll { ids.contains($0.id) }
