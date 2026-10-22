@@ -73,7 +73,7 @@ maintainer, because the App Store privacy label must match.
 | `just ios` | Compile the app and widgets without signing |
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |
-| `just render <inputs>` | Render request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded` and `--dark` narrow it. |
+| `just render <inputs>` | Render request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded` and `--dark` narrow it. Close the project in Xcode before removing a worktree that rendered. |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a
 run on an iPhone; compiling proves neither.
