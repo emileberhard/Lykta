@@ -41,8 +41,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   the widget makes no network requests, and view bodies never parse JSON.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
-  from the same commit. Example times stay within two days of 1793000000; the
-  gallery and `just render` move them to the present.
+  from the same commit. Example times stay within two days of 1793000000;
+  Core's `movingExampleTimes` moves them to the present for the gallery and
+  `just render`.
 - The gateway is the only content writer. The app never calls
   `Activity.request` or updates content; it ends an activity only when the
   gateway reports it ended, or on Reset.

@@ -3,8 +3,6 @@ import LyktaCore
 
 nonisolated struct Example: Identifiable, Sendable {
     static let activityName = "example"
-    private static let fixtureTime = 1_793_000_000.0
-    private static let fixtureSpan = 172_800.0
 
     let id: String
     let title: String
@@ -41,15 +39,6 @@ nonisolated struct Example: Identifiable, Sendable {
     }
 
     private static func data(_ data: JSONValue?, at date: Date) -> JSONValue {
-        moved(data ?? .object([:]), by: (date.timeIntervalSince1970 - fixtureTime).rounded())
-    }
-
-    private static func moved(_ value: JSONValue, by shift: Double) -> JSONValue {
-        switch value {
-        case let .number(number) where abs(number - fixtureTime) < fixtureSpan: .number(number + shift)
-        case let .object(fields): .object(fields.mapValues { moved($0, by: shift) })
-        case let .array(items): .array(items.map { moved($0, by: shift) })
-        case .number, .string, .bool, .null: value
-        }
+        (data ?? .object([:])).movingExampleTimes(to: date)
     }
 }
