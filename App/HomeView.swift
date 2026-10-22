@@ -6,6 +6,7 @@ struct HomeView: View {
     let model: Model
     @State private var isConfirmingReset = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,10 @@ struct HomeView: View {
             }
         }
         .onOpenURL { openURL($0) }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await model.loadExamples()
+        }
     }
 
     @ViewBuilder private var content: some View {

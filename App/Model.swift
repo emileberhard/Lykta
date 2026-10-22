@@ -15,6 +15,7 @@ final class Model {
 
     private(set) var phase: Phase
     private(set) var activities: [LiveActivity] = []
+    private(set) var examples: [Example] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
     private(set) var error: String?
 
@@ -70,6 +71,10 @@ final class Model {
         @unknown default: "unknown"
         }
         record("app.scene", ["phase": .string(name)])
+    }
+
+    func loadExamples() async {
+        examples = await Example.bundled(at: .now)
     }
 
     func copySetup() -> Bool {
