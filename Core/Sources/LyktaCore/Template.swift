@@ -149,7 +149,7 @@ private struct Template {
     private func relocate(_ changes: [String: JSONValue], of kind: String, at path: String,
                           in scope: [String: String]) throws(LayoutError) -> [String: JSONValue] {
         var located: [String: JSONValue] = [:]
-        for (target, change) in changes {
+        for (target, change) in changes.sorted(by: { $0.key < $1.key }) {
             let at = Self.join(path, target)
             var change = change
             if kind == "add", case var .object(fields) = change, case let .string(since) = fields["since"] {

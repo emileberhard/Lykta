@@ -169,7 +169,7 @@ struct TemplateTests {
             [{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1, "items[item.count].count": {"since": "paused"}}}}]
             """#)
         #expect(throws: LayoutError(#"[0].do.add.items[item.count].count: data has no value at "items.4.count""#)) { try template.filled(with: data) }
-        #expect(throws: LayoutError(#"set.items.0.count: "items.0.count" is already changed by this button; change each value once"#)) {
+        #expect(throws: LayoutError(#"set.items[pick].count: "items.0.count" is already changed by this button; change each value once"#)) {
             try json(#"{"button": "go", "label": "Go", "set": {"items[pick].count": 10, "items.0.count": 20}}"#).filled(with: data)
         }
         let each = try json(#"[{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1}, "set": {"paused": "{{item.count}}"}}}]"#)
