@@ -52,15 +52,11 @@ actor Store {
     static let inviteLifetime = 3600
 
     private let db: Database
-    private let maximumDevices: Int
-    private let maximumLiveActivities: Int
 
-    init(path: String, maximumDevices: Int, maximumLiveActivities: Int) throws {
+    init(path: String) throws {
         let db = try Database(path: path)
         try Schema.migrate(db)
         self.db = db
-        self.maximumDevices = maximumDevices
-        self.maximumLiveActivities = maximumLiveActivities
     }
 
     static func backup(_ database: String, to path: String) throws {
@@ -68,7 +64,7 @@ actor Store {
         try Database(path: database).run("VACUUM INTO ?", path)
     }
 
-    func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, now: Int) throws -> Credentials {
+    func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, maximumDevices: Int, now: Int) throws -> Credentials {
         try db.transaction {
             guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
                 throw APIError(.registrationClosed, "This gateway accepts no more devices.")
@@ -166,7 +162,7 @@ actor Store {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
 
-    func put(_ device: Device, name: ActivityName, request: ActivityRequest, now: Int) throws -> ActivityStatus {
+    func put(_ device: Device, name: ActivityName, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityStatus {
         try db.transaction {
             let current = try liveActivity(device, name: name)
             if let expected = request.ifRevision, current?.revision != expected {

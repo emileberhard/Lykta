@@ -20,10 +20,10 @@ enum Gateway {
             let database = try value("LYKTA_DATABASE", default: "lykta.sqlite")
             switch arguments.first {
             case "events":
-                try await printEvents(Store(path: database, maximumDevices: 1, maximumLiveActivities: 1), arguments: Array(arguments.dropFirst()))
+                try await printEvents(Store(path: database), arguments: Array(arguments.dropFirst()))
                 return
             case "invite":
-                let store = try Store(path: database, maximumDevices: 1, maximumLiveActivities: 1)
+                let store = try Store(path: database)
                 print(try await store.invite(now: Int(Date().timeIntervalSince1970)))
                 return
             case "backup":
@@ -49,13 +49,12 @@ enum Gateway {
             let bundleID = try value("LYKTA_BUNDLE_ID")
             let teamID = try value("LYKTA_TEAM_ID")
             let push = try APNs(bundleID: bundleID, teamID: teamID, keys: keys)
-            let store = try Store(path: database,
-                                  maximumDevices: try number("LYKTA_MAX_DEVICES", default: 100),
-                                  maximumLiveActivities: try number("LYKTA_MAX_LIVE_ACTIVITIES", default: 5))
+            let store = try Store(path: database)
             let shutdown = Shutdown()
             let signals = shutdown.onSignals([SIGTERM, SIGINT])
-            let api = API(store: store, environments: push.environments, enrolment: Enrolment(appID: "\(teamID).\(bundleID)"), version: version,
-                          shutdown: shutdown)
+            let api = API(store: store, maximumDevices: try number("LYKTA_MAX_DEVICES", default: 100),
+                          maximumLiveActivities: try number("LYKTA_MAX_LIVE_ACTIVITIES", default: 5), environments: push.environments,
+                          enrolment: Enrolment(appID: "\(teamID).\(bundleID)"), version: version, shutdown: shutdown)
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
             let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20, shutdown: shutdown) { await api.handle($0) }

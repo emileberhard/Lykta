@@ -12,9 +12,9 @@ struct GatewayTests {
     let bundleInstance = UUID()
 
     init() async throws {
-        store = try Store(path: ":memory:", maximumDevices: 2, maximumLiveActivities: 2)
-        api = API(store: store, environments: [.development], enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9),
-                  shutdown: Shutdown())
+        store = try Store(path: ":memory:")
+        api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
+                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
         credentials = try await api.handle(Self.registration(.invite(try await store.invite(now: now)))).decoded()
         _ = try await report([])
     }
@@ -82,9 +82,9 @@ struct GatewayTests {
     @Test func eventCursorsNeverPointBackwards() async throws {
         let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
         defer { try? FileManager.default.removeItem(atPath: path) }
-        let old = try Store(path: path, maximumDevices: 1, maximumLiveActivities: 1)
+        let old = try Store(path: path)
         let registered = try await old.registerDevice(environment: .development, appVersion: "1.0 (1)",
-                                                      admission: .invited(try await old.invite(now: now)), now: now)
+                                                      admission: .invited(try await old.invite(now: now)), maximumDevices: 1, now: now)
         try Database(path: path).execute("""
             ALTER TABLE events RENAME TO new_events; DROP INDEX device_events; DROP INDEX event_age;
             CREATE TABLE events (
@@ -96,7 +96,7 @@ struct GatewayTests {
             CREATE INDEX event_age ON events(received_at);
             INSERT INTO events SELECT * FROM new_events; DROP TABLE new_events; DELETE FROM sqlite_sequence WHERE name = 'events';
             """)
-        let migrated = try Store(path: path, maximumDevices: 1, maximumLiveActivities: 1)
+        let migrated = try Store(path: path)
         let first = try await migrated.events(device: nil, after: nil, limit: 10)
         #expect(first.map(\.name) == ["device.registered"])
         try await migrated.housekeep(now: now + Store.eventRetention + 60)
@@ -153,6 +153,16 @@ struct GatewayTests {
         try await deliver(at: now + 3)
         #expect(push.sent == ["createChannel", "start", "update 10", "update 10"])
         #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
+    }
+
+    @Test func enforcesTheDeviceAndActivityLimits() async throws {
+        #expect(await api.handle(Self.registration(.invite(try await store.invite(now: now)))).status == 201)
+        let third = await api.handle(Self.registration(.invite(try await store.invite(now: now))))
+        #expect(try third.decoded() as Failure == Failure(error: "registration_closed"))
+        try await put("one", Self.start)
+        try await put("two", Self.start)
+        let extra = try await send("PUT", "/v1/activities/three", body: Self.start)
+        #expect(try extra.decoded() as Failure == Failure(error: "too_many_activities"))
     }
 
     @Test func forgetsARejectedPushToken() async throws {

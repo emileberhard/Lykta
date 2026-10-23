@@ -3,6 +3,8 @@ import LyktaCore
 
 struct API: Sendable {
     let store: Store
+    let maximumDevices: Int
+    let maximumLiveActivities: Int
     let environments: Set<PushEnvironment>
     let enrolment: Enrolment
     let version: Version?
@@ -71,7 +73,7 @@ struct API: Sendable {
                 admission = .invited(code)
             }
             let credentials = try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion,
-                                                             admission: admission, now: now)
+                                                             admission: admission, maximumDevices: maximumDevices, now: now)
             return Self.json(201, credentials)
         case ("PUT", "v1/device"):
             let device = try await phone(request)
@@ -118,7 +120,8 @@ struct API: Sendable {
             return Self.json(200, try await store.detail(try await agent(request), name: try Self.name(path[2])))
         case ("PUT", "v1/activities/{name}"):
             let device = try await agent(request)
-            let status = try await store.put(device, name: try Self.name(path[2]), request: try Self.activityRequest(request.body), now: now)
+            let status = try await store.put(device, name: try Self.name(path[2]), request: try Self.activityRequest(request.body),
+                                             maximumLiveActivities: maximumLiveActivities, now: now)
             return Self.json(200, status)
         case ("DELETE", "v1/activities/{name}"):
             let device = try await agent(request)
