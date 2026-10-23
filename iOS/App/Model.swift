@@ -361,12 +361,11 @@ private extension LiveActivity {
 
 #if DEBUG
 extension Model {
-    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true, error: String? = nil) -> Model {
+    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true) -> Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
         model.areActivitiesEnabled = areActivitiesEnabled
-        model.error = error
         return model
     }
 }
