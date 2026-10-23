@@ -191,18 +191,18 @@ extension Activity {
     }
 }
 
-struct Payload: Encodable {
+struct Payload: Codable {
     enum Event: String, Codable {
         case start, update, end
     }
 
-    struct Alert: Encodable {
+    struct Alert: Codable {
         let title: String
         let body: String
         let sound: String?
     }
 
-    struct APS: Encodable {
+    struct APS: Codable {
         let timestamp: Int
         let event: Event
         let contentState: LyktaActivity.ContentState

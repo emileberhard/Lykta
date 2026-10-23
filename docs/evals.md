@@ -57,8 +57,8 @@ gateway's own validation errors, statuses and events and read the skill the
 checkout serves, so a change to either shows up in the next run.
 `lykta-gateway simulate` replaces APNs with `SimulatedPhone`, which accepts
 every push and a second later reports what the app does when it shows,
-updates or ends the activity. Without those reports agents told users the
-phone had not confirmed the activity yet. A mock server would have to copy the
+updates or ends the activity; it never marks one stale. Without those reports
+agents told users the phone had not confirmed the activity yet. A mock server would have to copy the
 API and the layout validation and would drift from both.
 
 **The simulated phone has fixed credentials.** Harbor sends every trial the
@@ -73,7 +73,8 @@ before every run.
 
 **Agents come installed.** When Harbor installed Node and the agent in each
 container, setup took about three minutes per trial. The shared image installs
-both CLIs once and Docker caches it; `--force-build` updates them.
+both CLIs once, at the versions its Dockerfile pins, so runs stay comparable;
+raising the pins is how a run tries newer agents.
 
 **The container looks like a user's computer.** It has `curl`, `python3` and a
 local timezone in both `TZ` and `/etc/localtime`, because Codex reads the
@@ -82,9 +83,10 @@ other assumed UTC. Requests give relative times, so a run means the same at
 any hour.
 
 **Docker's default isolation, for now.** The agent has root and the open
-internet, and no host files are mounted. Its network shows only the Compose
-bridge, but the host's and the LAN's addresses still route, so services there
-are reachable by IP; SSH to the Macs asked for keys. Stricter isolation, such
+internet, and only Harbor's log directories for the trial are mounted from the
+host. Its network shows only the Compose bridge, but the host's and the LAN's
+addresses still route, so services there are reachable by IP; SSH on the host
+asked for keys. Stricter isolation, such
 as Docker Sandboxes, waits until a transcript shows an agent wandering there.
 
 **No grading yet.** The first runs are for reading what agents do. Grades

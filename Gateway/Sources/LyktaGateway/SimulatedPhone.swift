@@ -7,10 +7,14 @@ final class SimulatedPhone: PushService {
                                          agentToken: "lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b")
 
     let environments: Set<PushEnvironment> = [.development]
-    private let store: Store
-    private let device: Device
-    private let install = UUID()
-    private let activities = Mutex<[String: UUID]>([:])
+    private let channels = Mutex<[String: UUID]>([:])
+    private let pushes: AsyncStream<Push>.Continuation
+
+    private struct Push {
+        let aps: Payload.APS
+        let activity: UUID
+        let received: ContinuousClock.Instant
+    }
 
     init(store: Store, now: Int) async throws {
         try await store.registerDevice(environment: .development, appVersion: Layout.version.description,
@@ -19,22 +23,38 @@ final class SimulatedPhone: PushService {
         guard let device = try await store.device(secret: Self.credentials.deviceSecret) else {
             preconditionFailure("The simulated phone was just registered")
         }
-        self.store = store
-        self.device = device
-        try await report([], now: now)
+        let install = UUID()
+        _ = try await store.sync(device, report: Self.report([:], install: install), now: now)
+        let (received, pushes) = AsyncStream.makeStream(of: Push.self)
+        self.pushes = pushes
+        Task {
+            var shown: [UUID: ObservedState] = [:]
+            for await push in received {
+                do {
+                    try await Task.sleep(until: push.received + .seconds(1))
+                    try await Self.show(push, on: &shown, of: device, install: install, in: store)
+                } catch {
+                    log("The simulated phone failed to show a \(push.aps.event.rawValue) push: \(error)")
+                }
+            }
+        }
+    }
+
+    deinit {
+        pushes.finish()
     }
 
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         let aps = Self.decode(payload)
         guard let activity = aps.attributes?.id, let channel = aps.inputPushChannel else { preconditionFailure("Starts carry attributes and a channel") }
-        activities.withLock { $0[channel] = activity }
-        receive(aps, activity: activity)
+        channels.withLock { $0[channel] = activity }
+        pushes.yield(Push(aps: aps, activity: activity, received: .now))
         return id.uuidString.lowercased()
     }
 
     func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
-        if let activity = activities.withLock({ $0[channel] }) {
-            receive(Self.decode(payload), activity: activity)
+        if let activity = channels.withLock({ $0[channel] }) {
+            pushes.yield(Push(aps: Self.decode(payload), activity: activity, received: .now))
         }
         return id.uuidString.lowercased()
     }
@@ -44,58 +64,46 @@ final class SimulatedPhone: PushService {
     }
 
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError) {
-        activities.withLock { _ = $0.removeValue(forKey: channel) }
+        channels.withLock { _ = $0.removeValue(forKey: channel) }
     }
 
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String] {
-        activities.withLock { Array($0.keys) }
+        channels.withLock { Array($0.keys) }
     }
 
-    private func receive(_ aps: APS, activity: UUID) {
-        let (name, state): (String, ObservedState) = switch aps.event {
-        case .start: ("activity.observed", .active)
-        case .update: ("activity.content", .active)
-        case .end: ("activity.state", .ended)
+    private static func show(_ push: Push, on shown: inout [UUID: ObservedState], of device: Device, install: UUID, in store: Store) async throws {
+        let now = Date()
+        func event(_ name: String, _ detail: [String: JSONValue]) -> Event {
+            Event(id: UUID(), at: now, name: name, activity: push.activity, detail: .object(detail))
         }
-        Task {
-            do {
-                try await Task.sleep(for: .seconds(1))
-                let now = Date()
-                try await store.ingest(device, EventBatch(events: [
-                    Event(id: UUID(), at: now, name: name, activity: activity, detail: .object([
-                        "fingerprint": .string(aps.contentState.fingerprint), "layoutReadable": .bool(aps.contentState.layout != nil),
-                        "state": .string(state.rawValue),
-                    ])),
-                ]))
-                try await report([.init(id: activity, state: state)], now: Int(now.timeIntervalSince1970))
-            } catch {
-                log("The simulated phone failed to report \(name): \(error)")
-            }
+        let content: [String: JSONValue] = ["fingerprint": .string(push.aps.contentState.fingerprint),
+                                            "layoutReadable": .bool(push.aps.contentState.layout != nil)]
+        let events: [Event]
+        switch push.aps.event {
+        case .start:
+            shown[push.activity] = .active
+            events = [event("activity.observed", content.merging(["state": .string(ObservedState.active.rawValue)]) { $1 })]
+        case .update:
+            events = [event("activity.content", content)]
+        case .end:
+            shown[push.activity] = .ended
+            events = [event("activity.content", content), event("activity.state", ["state": .string(ObservedState.ended.rawValue)])]
         }
-    }
-
-    private func report(_ observed: [DeviceReport.Observed], now: Int) async throws {
-        _ = try await store.sync(device, report: DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)),
-                                                              appVersion: Layout.version.description, layoutVersion: Layout.version,
-                                                              bundleInstance: install, activities: observed), now: now)
-    }
-
-    private struct APS: Decodable {
-        let event: Payload.Event
-        let contentState: LyktaActivity.ContentState
-        let attributes: LyktaActivity?
-        let inputPushChannel: String?
-
-        enum CodingKeys: String, CodingKey {
-            case event, attributes
-            case contentState = "content-state", inputPushChannel = "input-push-channel"
+        try await store.ingest(device, EventBatch(events: events))
+        for ended in try await store.sync(device, report: report(shown, install: install), now: Int(now.timeIntervalSince1970)) {
+            shown[ended] = .ended
         }
     }
 
-    private static func decode(_ payload: Data) -> APS {
-        struct Pushed: Decodable { let aps: APS }
+    private static func report(_ shown: [UUID: ObservedState], install: UUID) -> DeviceReport {
+        DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)), appVersion: Layout.version.description,
+                     layoutVersion: Layout.version, bundleInstance: install,
+                     activities: shown.map { .init(id: $0.key, state: $0.value) })
+    }
+
+    private static func decode(_ payload: Data) -> Payload.APS {
         do {
-            return try JSONDecoder().decode(Pushed.self, from: payload).aps
+            return try JSONDecoder().decode(Payload.self, from: payload).aps
         } catch {
             preconditionFailure("The gateway sent a payload its own types cannot decode: \(error)")
         }

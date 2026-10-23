@@ -19,16 +19,18 @@ struct SimulatedPhoneTests {
         let delivery = Delivery(store: store, push: phone, shutdown: Shutdown())
         var time = now
 
-        func send(_ method: String, _ body: JSONValue? = nil) async throws -> Shown {
+        func request(_ method: String, _ body: JSONValue? = nil) async {
             let response = await api.handle(HTTPRequest(method: method, target: "/v1/activities/build",
                                                          headers: ["authorization": "Bearer \(SimulatedPhone.credentials.agentToken)"],
                                                          body: body?.json ?? []))
             #expect(response.status == 200, "\(String(decoding: response.body, as: UTF8.self))")
+        }
+
+        func deliver() async throws {
             time += 1
             for job in try await store.claim(now: time, limit: 4) {
                 try await store.finish(job, try await delivery.send(job, now: time), now: time)
             }
-            return try response.decoded()
         }
 
         func shown(_ expected: Shown) async throws {
@@ -43,11 +45,14 @@ struct SimulatedPhoneTests {
             #expect(shown == expected)
         }
 
-        _ = try await send("PUT", GatewayTests.start)
+        await request("PUT", GatewayTests.start)
+        try await deliver()
         try await shown(Shown(state: "live", device: "active", layoutReadable: true))
-        _ = try await send("PUT", ["layout": GatewayTests.layout("{{step}}"), "data": ["step": "Test"]])
-        try await shown(Shown(state: "live", device: "active", layoutReadable: true))
-        _ = try await send("DELETE")
+        await request("PUT", ["layout": GatewayTests.layout("{{step}}"), "data": ["step": "Build"]])
+        try await deliver()
+        await request("PUT", ["layout": GatewayTests.layout("{{step}}"), "data": ["step": "Test"]])
+        await request("DELETE")
+        try await deliver()
         try await shown(Shown(state: "ended", device: "ended", layoutReadable: true))
     }
 }
