@@ -16,6 +16,32 @@ extension DeliveryState: SQLBindable {}
 extension ActivityName: SQLBindable {}
 extension Activity.Phase: SQLBindable {}
 
+extension ActionRecord {
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        activity = try row.text("name", as: ActivityName.init(rawValue:))
+        input = if let button = try row.optionalString("button") {
+            .button(button)
+        } else {
+            .toggle(try row.string("toggle"), isOn: try row.integer("is_on") != 0)
+        }
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")))
+    }
+}
+
+extension StoredEvent {
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        device = try row.text("device_id", as: UUID.init(uuidString:))
+        activity = try row.optionalText("activity_id", as: UUID.init(uuidString:))
+        source = try row.string("source")
+        name = try row.string("name")
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")) / 1000)
+        receivedAt = Date(timeIntervalSince1970: Double(try row.integer("received_at")) / 1000)
+        detail = try JSONDecoder().decode(JSONValue.self, from: Data(try row.string("detail").utf8))
+    }
+}
+
 actor Store {
     static let maximumAttempts = 5
     static let maximumPayloadBytes = 4096
