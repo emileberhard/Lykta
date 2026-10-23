@@ -56,59 +56,6 @@ extension View {
     }
 }
 
-extension Paint {
-    var style: AnyShapeStyle {
-        switch self {
-        case let .color(color): AnyShapeStyle(color.value)
-        case .level(.primary): AnyShapeStyle(.primary)
-        case .level(.secondary): AnyShapeStyle(.secondary)
-        case .level(.tertiary): AnyShapeStyle(.tertiary)
-        case .level(.quaternary): AnyShapeStyle(.quaternary)
-        case let .gradient(colors, direction): direction.style(Gradient(colors: colors.map(\.value)))
-        }
-    }
-}
-
-private extension Paint.Direction {
-    func style(_ gradient: Gradient) -> AnyShapeStyle {
-        switch self {
-        case .vertical: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .top, endPoint: .bottom))
-        case .horizontal: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing))
-        case .diagonal: AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-        case .radial: AnyShapeStyle(EllipticalGradient(gradient: gradient))
-        case .angular: AnyShapeStyle(AngularGradient(gradient: gradient, center: .center))
-        }
-    }
-}
-
-extension ColorValue {
-    var value: Color {
-        switch self {
-        case let .rgb(red, green, blue, opacity): Color(red: red, green: green, blue: blue, opacity: opacity)
-        case let .named(name):
-            switch name {
-            case .red: .red
-            case .orange: .orange
-            case .yellow: .yellow
-            case .green: .green
-            case .mint: .mint
-            case .teal: .teal
-            case .cyan: .cyan
-            case .blue: .blue
-            case .indigo: .indigo
-            case .purple: .purple
-            case .pink: .pink
-            case .brown: .brown
-            case .white: .white
-            case .gray: .gray
-            case .black: .black
-            case .clear: .clear
-            case .accent: .accentColor
-            }
-        }
-    }
-}
-
 extension Modifier.Font {
     var value: SwiftUI.Font {
         switch self {
@@ -231,77 +178,6 @@ extension Modifier.SymbolRendering {
         case .hierarchical: .hierarchical
         case .palette: .palette
         case .multicolor: .multicolor
-        }
-    }
-}
-
-extension Node.Content.Shape.Kind {
-    func shape(cornerRadius: Double) -> AnyShape {
-        switch self {
-        case .rectangle: AnyShape(Rectangle())
-        case .roundedRectangle: AnyShape(RoundedRectangle(cornerRadius: cornerRadius))
-        case .circle: AnyShape(Circle())
-        case .ellipse: AnyShape(Ellipse())
-        case .capsule: AnyShape(Capsule())
-        case .containerRelativeShape: AnyShape(ContainerRelativeShape())
-        }
-    }
-}
-
-extension Node.Content.DateStyle {
-    var value: Text.DateStyle {
-        switch self {
-        case .time: .time
-        case .date: .date
-        case .relative: .relative
-        case .offset: .offset
-        case .timer: .timer
-        }
-    }
-}
-
-extension Node.Content.HorizontalAlignment {
-    var value: SwiftUI.HorizontalAlignment {
-        switch self {
-        case .leading: .leading
-        case .center: .center
-        case .trailing: .trailing
-        }
-    }
-
-    var textValue: TextAlignment {
-        switch self {
-        case .leading: .leading
-        case .center: .center
-        case .trailing: .trailing
-        }
-    }
-}
-
-extension Node.Content.VerticalAlignment {
-    var value: SwiftUI.VerticalAlignment {
-        switch self {
-        case .top: .top
-        case .center: .center
-        case .bottom: .bottom
-        case .firstTextBaseline: .firstTextBaseline
-        case .lastTextBaseline: .lastTextBaseline
-        }
-    }
-}
-
-extension Node.Content.Alignment {
-    var value: SwiftUI.Alignment {
-        switch self {
-        case .center: .center
-        case .leading: .leading
-        case .trailing: .trailing
-        case .top: .top
-        case .bottom: .bottom
-        case .topLeading: .topLeading
-        case .topTrailing: .topTrailing
-        case .bottomLeading: .bottomLeading
-        case .bottomTrailing: .bottomTrailing
         }
     }
 }
