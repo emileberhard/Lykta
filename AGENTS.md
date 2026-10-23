@@ -80,12 +80,80 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `nonisolated(unsafe)`; pass identifiers, not ActivityKit handles, across
   tasks.
 
+## Code design
+
+- Delete before adding. Each layout key, API field and `LYKTA_*` setting is a
+  contract with agents, installed phones and self-hosters, so reuse or extend
+  what exists and remove what a change makes redundant in the same commit.
+  Declarations stay `private` unless another file needs them, and every
+  parameter, option, setting and endpoint has a current caller.
+- Values in, values out. `Core` reads no clock, file or network, and logic that
+  depends on time takes it as `now` or `at:` so tests choose it. I/O stays in
+  the types that own it, such as `Store`, `APNs`, `GatewayClient` and
+  `EventQueue`.
+- Alternatives are enums with associated values, as `Outcome` and
+  `Model.Phase` are, not flags and optionals that allow contradictions.
+- Failures are explicit. An error an agent, phone or operator sees says what to
+  change, with a code or JSON path. `preconditionFailure` is for a broken
+  internal guarantee, never for input from a phone, an agent or the network.
+  Use `try?` only where `nil` is the meaning, such as trying another value form
+  while decoding, and never return a default that hides a failure.
+- One path. Compatibility lives where the wire needs it: `Layout.introduced`,
+  additive migrations and the device API. Inside, replace rather than wrap:
+  delete superseded code in the same change and add no flag, alias, fallback or
+  extension point for a future need. A protocol needs a second conformer
+  today, as `PushService` has `FakePush`.
+- Test behavior at a boundary that can catch a plausible defect: gateway tests
+  drive `API.handle` against an in-memory `Store` and `FakePush`, and Core
+  tests decode real JSON and assert the exact message and path. Name each test
+  for what it proves, use `@Test(arguments:)` for cases of one rule, and don't
+  test private helpers or restate the implementation.
+
+## Swift and SwiftUI
+
+- The app and widget targets default to main-actor isolation with approachable
+  concurrency, so their code, async functions included, runs on the main actor
+  unless marked. Move work off it with a `nonisolated` type and a `@concurrent`
+  function, as `Example.bundled` does, never with `Task.detached`.
+- Prefer task groups, and `.task(id:)` in views, which SwiftUI cancels with
+  the view. Start an unstructured `Task` only at a synchronous UI or lifecycle
+  boundary, and store one that outlives its action, like `Model.runTask`, so
+  its owner can cancel it. Code runs uninterrupted only between `await`s, so
+  recheck what the next step relies on, as `Model.sync` rechecks the
+  credentials on a 401.
+- A tap intent may run right after the system launches the app in the
+  background for it, so intents only forward the action through `ActionSender`,
+  which `LyktaApp.init` registers; register new intent dependencies there too.
+- `Rendering` runs in the widget extension for every presentation of every
+  update, so `Core` parses and derives while decoding and node views only map
+  values onto concrete SwiftUI views. Type erasure stays in `NodeView`'s
+  modifier fold, whose types are known only at runtime, because `AnyView`
+  rebuilds its subtree whenever the wrapped type changes. Child nodes are
+  identified by position, since a layout names them only through the `id`
+  modifier; app lists use their elements' IDs.
+- The widget extension is not running while an activity shows, so anything
+  that changes with time uses views the system keeps current, such as
+  `Text(timerInterval:)` and `ProgressView(timerInterval:)`; only the app
+  (`LYKTA_APP`) runs a `TimelineView`.
+- `Model` is the app's one `@Observable` owner. Views take it as a plain `let`,
+  change it only through its methods and hand leaf views the values they draw,
+  since SwiftUI redraws a view when a model property its `body` reads changes.
+- App screens explain themselves through system controls, layout and visible
+  state; add copy only where the user would miss a consequence, as the Reset
+  confirmation does. Text follows Dynamic Type, capped only to match the Lock
+  Screen (`LockScreenCard.textSizes`) or to keep a control small with
+  `accessibilityShowsLargeContentViewer()`. Custom drawings carry an
+  accessibility label or are hidden.
+
 ## Dependencies and style
 
 `Core` has no dependencies. `Gateway` may depend only on packages from
 `github.com/apple`, pinned to exact versions; CI enforces this. Prefer Apple
-frameworks and adapt the design to them rather than adding packages. Use Swift
-6 language mode, Swift Testing, and no code comments.
+frameworks and adapt the design to them rather than adding packages. `Core` and
+`Gateway` also build on Linux, where CI tests them, so import
+platform-specific modules behind `#if canImport`, as `APNs.swift` does for
+`CryptoKit` and `FoundationNetworking`. Use Swift 6 language mode, Swift
+Testing, and no code comments.
 
 ## Documentation
 
