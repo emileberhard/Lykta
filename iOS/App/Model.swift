@@ -153,7 +153,7 @@ final class Model {
         }
         self.credentials = credentials
         phase = .ready
-        telemetry.upload { batch in try await gateway.upload(batch, secret: credentials.deviceSecret) }
+        telemetry.startUploading { batch in try await gateway.upload(batch, secret: credentials.deviceSecret) }
         await withDiscardingTaskGroup { group in
             group.addTask { await self.observePushTokens() }
             group.addTask { await self.observeActivities() }

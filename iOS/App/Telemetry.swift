@@ -25,7 +25,7 @@ final class Telemetry {
         scheduleFlush()
     }
 
-    func upload(with send: @escaping (EventBatch) async throws -> Void) {
+    func startUploading(with send: @escaping (EventBatch) async throws -> Void) {
         upload = send
         scheduleFlush()
     }
