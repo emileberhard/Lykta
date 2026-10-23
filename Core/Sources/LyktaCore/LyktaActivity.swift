@@ -20,11 +20,7 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
         public init(title: String, layout json: [UInt8]) throws(LayoutError) {
             self.title = title
             layout = try Layout(json: json)
-            do {
-                packed = Data(try Deflate.compress(json))
-            } catch {
-                throw LayoutError("compression failed: \(error)")
-            }
+            packed = Data(try Deflate.compress(json))
         }
 
         public var fingerprint: String {

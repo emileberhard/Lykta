@@ -27,7 +27,7 @@ struct Delivery: Sendable {
     let store: Store
     let push: any PushService
     let shutdown: Shutdown
-    let concurrency = 4
+    private static let concurrency = 4
 
     func run() async throws {
         try await store.recover()
@@ -37,7 +37,7 @@ struct Delivery: Sendable {
                 guard !shutdown.isRequested else { return }
                 let now = Int(Date().timeIntervalSince1970)
                 if tick % 240 == 0 { try await store.housekeep(now: now) }
-                for job in try await store.claim(now: now, limit: concurrency) {
+                for job in try await store.claim(now: now, limit: Self.concurrency) {
                     group.addTask {
                         try await store.finish(job, try await send(job, now: now), now: now)
                     }
