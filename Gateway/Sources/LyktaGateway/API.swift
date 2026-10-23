@@ -72,8 +72,9 @@ struct API: Sendable {
             case let .invite(code):
                 admission = .invited(code)
             }
-            let credentials = try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion,
-                                                             admission: admission, maximumDevices: maximumDevices, now: now)
+            let credentials = Store.newCredentials()
+            try await store.registerDevice(environment: registration.environment, appVersion: registration.appVersion,
+                                           admission: admission, credentials: credentials, maximumDevices: maximumDevices, now: now)
             return Self.json(201, credentials)
         case ("PUT", "v1/device"):
             let device = try await phone(request)

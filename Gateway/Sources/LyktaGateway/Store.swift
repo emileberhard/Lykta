@@ -64,7 +64,7 @@ actor Store {
         try Database(path: database).run("VACUUM INTO ?", path)
     }
 
-    func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, maximumDevices: Int, now: Int) throws -> Credentials {
+    func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, credentials: Credentials, maximumDevices: Int, now: Int) throws {
         try db.transaction {
             guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
                 throw APIError(.registrationClosed, "This gateway accepts no more devices.")
@@ -84,17 +84,18 @@ actor Store {
                 try db.run("DELETE FROM invites WHERE hash = ?", Self.hash(code))
             }
             let id = UUID()
-            let secret = Self.token("lykta_device_")
-            let agentToken = Self.token("lykta_agent_")
             try db.run("""
                 INSERT INTO devices (id, secret_hash, agent_hash, environment, app_version, attestation_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, id, Self.hash(secret), Self.hash(agentToken), environment, appVersion, attestationKey, now)
+                """, id, Self.hash(credentials.deviceSecret), Self.hash(credentials.agentToken), environment, appVersion, attestationKey, now)
             try record("device.registered", device: id, activity: nil, [
                 "environment": .string(environment.rawValue), "appVersion": .string(appVersion),
                 "admission": .string(attestationKey == nil ? "invite" : "attestation"),
             ])
-            return Credentials(deviceSecret: secret, agentToken: agentToken)
         }
+    }
+
+    static func newCredentials() -> Credentials {
+        Credentials(deviceSecret: token("lykta_device_"), agentToken: token("lykta_agent_"))
     }
 
     func invite(now: Int) throws -> String {

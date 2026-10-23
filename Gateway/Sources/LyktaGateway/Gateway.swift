@@ -30,31 +30,40 @@ enum Gateway {
                 guard arguments.count == 2 else { throw ConfigurationError("Usage: lykta-gateway backup PATH") }
                 try Store.backup(database, to: arguments[1])
                 return
-            case nil:
+            case nil, "simulate":
                 break
             default:
-                throw ConfigurationError("Usage: lykta-gateway [events [--device UUID] [--limit N] | invite | backup PATH]")
+                throw ConfigurationError("Usage: lykta-gateway [simulate | events [--device UUID] [--limit N] | invite | backup PATH]")
             }
             let version = try settings["LYKTA_VERSION"].flatMap { $0.isEmpty ? nil : $0 }.map { text in
                 guard let version = Version(text) else { throw ConfigurationError("LYKTA_VERSION must be MAJOR.MINOR.PATCH.") }
                 return version
             }
-            var keys: [PushEnvironment: (id: String, pem: String)] = [:]
-            for environment in PushEnvironment.allCases {
-                let prefix = "LYKTA_\(environment.rawValue.uppercased())_KEY"
-                guard settings["\(prefix)_ID"] != nil || settings["\(prefix)_FILE"] != nil else { continue }
-                keys[environment] = (try value("\(prefix)_ID"), try String(contentsOfFile: try value("\(prefix)_FILE"), encoding: .utf8))
+            let simulated = arguments.first == "simulate"
+            let store = try Store(path: simulated ? ":memory:" : database)
+            let push: any PushService
+            let appID: String
+            if simulated {
+                push = try await SimulatedPhone(store: store, now: Int(Date().timeIntervalSince1970))
+                appID = "simulated"
+            } else {
+                var keys: [PushEnvironment: (id: String, pem: String)] = [:]
+                for environment in PushEnvironment.allCases {
+                    let prefix = "LYKTA_\(environment.rawValue.uppercased())_KEY"
+                    guard settings["\(prefix)_ID"] != nil || settings["\(prefix)_FILE"] != nil else { continue }
+                    keys[environment] = (try value("\(prefix)_ID"), try String(contentsOfFile: try value("\(prefix)_FILE"), encoding: .utf8))
+                }
+                guard !keys.isEmpty else { throw ConfigurationError("Set LYKTA_DEVELOPMENT_KEY_ID and _FILE, LYKTA_PRODUCTION_KEY_ID and _FILE, or both.") }
+                let bundleID = try value("LYKTA_BUNDLE_ID")
+                let teamID = try value("LYKTA_TEAM_ID")
+                push = try APNs(bundleID: bundleID, teamID: teamID, keys: keys)
+                appID = "\(teamID).\(bundleID)"
             }
-            guard !keys.isEmpty else { throw ConfigurationError("Set LYKTA_DEVELOPMENT_KEY_ID and _FILE, LYKTA_PRODUCTION_KEY_ID and _FILE, or both.") }
-            let bundleID = try value("LYKTA_BUNDLE_ID")
-            let teamID = try value("LYKTA_TEAM_ID")
-            let push = try APNs(bundleID: bundleID, teamID: teamID, keys: keys)
-            let store = try Store(path: database)
             let shutdown = Shutdown()
             let signals = shutdown.onSignals([SIGTERM, SIGINT])
             let api = API(store: store, maximumDevices: try number("LYKTA_MAX_DEVICES", default: 100),
                           maximumLiveActivities: try number("LYKTA_MAX_LIVE_ACTIVITIES", default: 5), environments: push.environments,
-                          enrolment: Enrolment(appID: "\(teamID).\(bundleID)"), version: version, shutdown: shutdown)
+                          enrolment: Enrolment(appID: appID), version: version, shutdown: shutdown)
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
             let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20, shutdown: shutdown) { await api.handle($0) }

@@ -83,8 +83,9 @@ struct GatewayTests {
         let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
         defer { try? FileManager.default.removeItem(atPath: path) }
         let old = try Store(path: path)
-        let registered = try await old.registerDevice(environment: .development, appVersion: "1.0 (1)",
-                                                      admission: .invited(try await old.invite(now: now)), maximumDevices: 1, now: now)
+        let registered = Store.newCredentials()
+        try await old.registerDevice(environment: .development, appVersion: "1.0 (1)", admission: .invited(try await old.invite(now: now)),
+                                     credentials: registered, maximumDevices: 1, now: now)
         try Database(path: path).execute("""
             ALTER TABLE events RENAME TO new_events; DROP INDEX device_events; DROP INDEX event_age;
             CREATE TABLE events (

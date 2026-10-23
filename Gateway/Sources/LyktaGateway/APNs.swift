@@ -192,7 +192,7 @@ extension Activity {
 }
 
 struct Payload: Encodable {
-    enum Event: String, Encodable {
+    enum Event: String, Codable {
         case start, update, end
     }
 
