@@ -3,7 +3,6 @@ import CryptoKit
 import DeviceCheck
 import Foundation
 import LyktaCore
-import MetricKit
 import Observation
 import SwiftUI
 import UIKit
@@ -23,15 +22,12 @@ final class Model {
 
     private let gateway: GatewayClient?
     private let environment: PushEnvironment
-    private let queue = EventQueue()
-    private let metrics = MetricManager()
+    private let telemetry = Telemetry()
     private var credentials: Credentials?
     private var pushToken: PushToken?
     private var syncFailures = 0
     private var runTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
-    private var flushTask: Task<Void, Never>?
-    private var metricsTask: Task<Void, Never>?
 
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -45,21 +41,7 @@ final class Model {
     }
 
     func start() {
-        if metricsTask == nil {
-            let authorization = ActivityAuthorizationInfo()
-            record("app.launch", [
-                "appVersion": .string(Self.appVersion), "os": .string(UIDevice.current.systemVersion), "hardware": .string(Self.hardware),
-                "environment": .string(environment.rawValue), "applicationState": .string(Self.describe(UIApplication.shared.applicationState)),
-                "activitiesEnabled": .bool(authorization.areActivitiesEnabled), "frequentPushesEnabled": .bool(authorization.frequentPushesEnabled),
-                "activities": .number(Double(Activity<LyktaActivity>.activities.count)),
-            ])
-            metricsTask = Task {
-                await withDiscardingTaskGroup { group in
-                    group.addTask { await self.observeDiagnostics() }
-                    group.addTask { await self.observeMetrics() }
-                }
-            }
-        }
+        telemetry.start(launch: launchDetail())
         if case .failed = phase {
             phase = .connecting
         }
@@ -78,7 +60,7 @@ final class Model {
         case .background: "background"
         @unknown default: "unknown"
         }
-        record("app.scene", ["phase": .string(name)])
+        telemetry.record("app.scene", ["phase": .string(name)])
         if scenePhase == .active, phase.isReady {
             Task { await sync() }
         }
@@ -90,7 +72,7 @@ final class Model {
 
     func copySetup() -> Bool {
         guard let gateway, let credentials else { return false }
-        record("app.copySetup")
+        telemetry.record("app.copySetup")
         UIPasteboard.general.string = """
             Show Live Activities on my iPhone with Lykta.
             Gateway: \(gateway.url.absoluteString)
@@ -102,7 +84,7 @@ final class Model {
 
     func show(_ example: Example) async -> Bool {
         guard let gateway, let credentials else { return false }
-        record("app.example", ["example": .string(example.id)])
+        telemetry.record("app.example", ["example": .string(example.id)])
         let name = Example.activityName
         let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == name && [.pending, .active, .stale].contains($0.activityState) }
         return await showingErrors("example") {
@@ -121,11 +103,11 @@ final class Model {
         case let .button(name): ["button": .string(name)]
         case let .toggle(path, isOn): ["toggle": .string(path), "isOn": .bool(isOn)]
         }
-        record("activity.action", activity: action.activity, detail)
+        telemetry.record("activity.action", activity: action.activity, detail)
         do {
             try await gateway.act(action, secret: credentials.deviceSecret)
         } catch {
-            record("app.error", activity: action.activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", activity: action.activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
     }
@@ -142,35 +124,36 @@ final class Model {
         }
         if deleted {
             self.credentials = nil
-            queue.clear()
+            telemetry.reset()
             for activity in Activity<LyktaActivity>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
             activities = []
             phase = .connecting
-            record("app.reset")
+            telemetry.record("app.reset")
         }
         start()
     }
 
     private func run() async {
         guard let gateway else { return }
+        let credentials: Credentials
         do {
             if let saved = try Keychain.load() {
                 credentials = saved
             } else {
-                let registered = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion, proof: proof(gateway)))
-                try Keychain.save(registered)
-                credentials = registered
-                record("app.registered")
+                credentials = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion, proof: proof(gateway)))
+                try Keychain.save(credentials)
+                telemetry.record("app.registered")
             }
-            phase = .ready
         } catch {
-            record("app.error", ["operation": .string("connect"), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", ["operation": .string("connect"), "error": .string(error.localizedDescription)])
             phase = .failed(error.localizedDescription)
             return
         }
-        scheduleFlush()
+        self.credentials = credentials
+        phase = .ready
+        telemetry.upload { batch in try await gateway.upload(batch, secret: credentials.deviceSecret) }
         await withDiscardingTaskGroup { group in
             group.addTask { await self.observePushTokens() }
             group.addTask { await self.observeActivities() }
@@ -198,7 +181,7 @@ final class Model {
     private func observePushTokens() async {
         for await token in Activity<LyktaActivity>.pushToStartTokenUpdates {
             pushToken = PushToken(token)
-            record("activity.pushToStartToken", ["fingerprint": .string(fingerprint(PushToken(token).description.utf8))])
+            telemetry.record("activity.pushToStartToken", ["fingerprint": .string(fingerprint(PushToken(token).description.utf8))])
             await sync()
         }
     }
@@ -218,10 +201,10 @@ final class Model {
 
     private func observe(_ id: String) async {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else {
-            record("activity.vanished", ["activityKitID": .string(id)])
+            telemetry.record("activity.vanished", ["activityKitID": .string(id)])
             return
         }
-        record("activity.observed", activity: activity.attributes.id, Self.describe(activity))
+        telemetry.record("activity.observed", activity: activity.attributes.id, Self.describe(activity))
         await withDiscardingTaskGroup { group in
             group.addTask { await self.observeState(of: id) }
             group.addTask { await self.observeContent(of: id) }
@@ -231,7 +214,7 @@ final class Model {
     private func observeState(of id: String) async {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await state in activity.activityStateUpdates {
-            record("activity.state", activity: activity.attributes.id, ["state": .string(ObservedState(state).rawValue)])
+            telemetry.record("activity.state", activity: activity.attributes.id, ["state": .string(ObservedState(state).rawValue)])
             await sync()
         }
     }
@@ -239,7 +222,7 @@ final class Model {
     private func observeContent(of id: String) async {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await content in activity.contentUpdates {
-            record("activity.content", activity: activity.attributes.id, Self.describe(content))
+            telemetry.record("activity.content", activity: activity.attributes.id, Self.describe(content))
             activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)
         }
     }
@@ -247,19 +230,7 @@ final class Model {
     private func observeAuthorization() async {
         for await enabled in ActivityAuthorizationInfo().activityEnablementUpdates {
             areActivitiesEnabled = enabled
-            record("app.authorization", ["activitiesEnabled": .bool(enabled)])
-        }
-    }
-
-    private func observeDiagnostics() async {
-        for await report in metrics.diagnosticReports {
-            record("metrickit.diagnostic", Self.detail(of: report))
-        }
-    }
-
-    private func observeMetrics() async {
-        for await report in metrics.metricReports {
-            record("metrickit.metrics", Self.detail(of: report))
+            telemetry.record("app.authorization", ["activitiesEnabled": .bool(enabled)])
         }
     }
 
@@ -276,17 +247,17 @@ final class Model {
             syncFailures = 0
             error = nil
             for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id) {
-                record("activity.endedByGateway", activity: activity.attributes.id)
+                telemetry.record("activity.endedByGateway", activity: activity.attributes.id)
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         } catch let error as AppError where error.status == 401 {
             guard self.credentials?.deviceSecret == credentials.deviceSecret else { return }
-            record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
             runTask?.cancel()
             phase = .failed("The gateway no longer knows this phone. Reset Lykta to register it again.")
         } catch {
             guard !Task.isCancelled else { return }
-            record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
             self.error = error.localizedDescription
             syncFailures += 1
             let delay = Duration.seconds(min(60, 1 << min(syncFailures, 6)))
@@ -306,43 +277,20 @@ final class Model {
             error = nil
             return true
         } catch {
-            record("app.error", ["operation": .string(operation), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", ["operation": .string(operation), "error": .string(error.localizedDescription)])
             self.error = error.localizedDescription
             return false
         }
     }
 
-    private func record(_ name: String, activity: UUID? = nil, _ detail: [String: JSONValue] = [:]) {
-        queue.append(Event(id: UUID(), at: .now, name: name, activity: activity, detail: .object(detail)))
-        scheduleFlush()
-    }
-
-    private func scheduleFlush() {
-        guard flushTask == nil else { return }
-        flushTask = Task {
-            try? await Task.sleep(for: .seconds(1))
-            await flush()
-            flushTask = nil
-        }
-    }
-
-    private func flush() async {
-        guard let gateway, let credentials else { return }
-        while !queue.events.isEmpty {
-            let batch = queue.batch()
-            do {
-                try await gateway.upload(EventBatch(events: batch), secret: credentials.deviceSecret)
-            } catch let error as AppError where error.status == 400 || error.status == 413 {
-                queue.remove(batch)
-                queue.append(Event(id: UUID(), at: .now, name: "telemetry.rejected", activity: nil, detail: .object([
-                    "events": .number(Double(batch.count)), "error": .string(error.localizedDescription),
-                ])))
-                return
-            } catch {
-                return
-            }
-            queue.remove(batch)
-        }
+    private func launchDetail() -> [String: JSONValue] {
+        let authorization = ActivityAuthorizationInfo()
+        return [
+            "appVersion": .string(Self.appVersion), "os": .string(UIDevice.current.systemVersion), "hardware": .string(Self.hardware),
+            "environment": .string(environment.rawValue), "applicationState": .string(Self.describe(UIApplication.shared.applicationState)),
+            "activitiesEnabled": .bool(authorization.areActivitiesEnabled), "frequentPushesEnabled": .bool(authorization.frequentPushesEnabled),
+            "activities": .number(Double(Activity<LyktaActivity>.activities.count)),
+        ]
     }
 
     private static func describe(_ activity: Activity<LyktaActivity>) -> [String: JSONValue] {
@@ -368,17 +316,6 @@ final class Model {
         }
     }
 
-    private static func detail(of report: some Encodable) -> [String: JSONValue] {
-        do {
-            let data = try JSONEncoder().encode(report)
-            guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: data) else { return ["error": .string("not an object")] }
-            guard data.count > Event.maximumDetailBytes else { return fields }
-            return fields.filter { $0.value.json.count < 4096 }.merging(["truncatedFrom": .number(Double(data.count))]) { $1 }
-        } catch {
-            return ["error": .string("\(error)")]
-        }
-    }
-
     private static let hardware: String = {
         var system = utsname()
         uname(&system)
@@ -400,6 +337,12 @@ final class Model {
         defaults.set(appVersion, forKey: "bundleVersion")
         defaults.set(instance.uuidString, forKey: "bundleInstance")
         return instance
+    }
+}
+
+extension Model.Phase {
+    var isReady: Bool {
+        if case .ready = self { true } else { false }
     }
 }
 

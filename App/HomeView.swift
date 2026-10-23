@@ -1,6 +1,5 @@
 import LyktaCore
 import SwiftUI
-import UIKit
 
 struct HomeView: View {
     let model: Model
@@ -97,79 +96,6 @@ private struct Header: View {
     }
 }
 
-struct LockScreenCard: View {
-    private static let maximumHeight: CGFloat = 160
-    static let textSizes = DynamicTypeSize.large ... .xxxLarge
-
-    let state: LyktaActivity.ContentState
-    let activity: UUID?
-    let isStale: Bool
-
-    var body: some View {
-        LockScreenView(state: state, activity: activity, isStale: isStale)
-            .frame(maxWidth: .infinity, maxHeight: Self.maximumHeight)
-            .clipped()
-            .dynamicTypeSize(Self.textSizes)
-    }
-}
-
-extension View {
-    func lockScreenRow(_ state: LyktaActivity.ContentState) -> some View {
-        listRowInsets(EdgeInsets()).listRowBackground(state.layout?.background?.value)
-    }
-}
-
-struct ActivitiesOffNotice: View {
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        Notice(Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor),
-               action: "Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
-    }
-}
-
-struct Problem: View {
-    let message: String
-
-    init(_ message: String) {
-        self.message = message
-    }
-
-    var body: some View {
-        Label {
-            Text(message)
-        } icon: {
-            Image(systemName: "exclamationmark.octagon.fill")
-                .foregroundStyle(.red)
-        }
-    }
-}
-
-private struct Notice<Message: View>: View {
-    let message: Message
-    let action: LocalizedStringKey
-    let perform: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    init(_ message: Message, action: LocalizedStringKey, perform: @escaping () -> Void) {
-        self.message = message
-        self.action = action
-        self.perform = perform
-    }
-
-    var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-            : AnyLayout(HStackLayout(spacing: 12))
-        layout {
-            message.frame(maxWidth: .infinity, alignment: .leading)
-            Button(action, action: perform)
-                .buttonStyle(.bordered)
-                .tint(.primary)
-        }
-    }
-}
-
 private extension LiveActivity {
     var status: LocalizedStringResource? {
         switch state {
@@ -204,12 +130,6 @@ private struct Actions: View {
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .padding(.horizontal)
-    }
-}
-
-extension Model.Phase {
-    var isReady: Bool {
-        if case .ready = self { true } else { false }
     }
 }
 
