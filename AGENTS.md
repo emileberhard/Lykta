@@ -97,7 +97,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   change, with a code or JSON path. `preconditionFailure` is for a broken
   internal guarantee, never for input from a phone, an agent or the network.
   Use `try?` only where `nil` is the meaning, such as trying another value form
-  while decoding, and never return a default that hides a failure.
+  while decoding, or where nobody could act on the error, such as a client
+  that drops its connection, and never return a default that hides a failure.
 - One path. Compatibility lives where the wire needs it: `Layout.introduced`,
   additive migrations and the device API. Inside, replace rather than wrap:
   delete superseded code in the same change and add no flag, alias, fallback or
@@ -194,9 +195,8 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    the same commit, without running the tests again.
 2. Meanwhile `testflight` builds an unsigned archive with the tag as its
    version.
-3. The production gateway's Mini polls for admitted tags and deploys them
-   itself (`~/configs/services/lykta-gateway`), with a database backup and an
-   automatic rollback.
+3. The production gateway's host polls for admitted tags and deploys them
+   itself, with a database backup and an automatic rollback.
 4. Once `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag, `testflight`
    uploads the archive through Xcode's cloud signing with the `testflight`
    environment's App Store Connect key. App Store Connect picks the build
