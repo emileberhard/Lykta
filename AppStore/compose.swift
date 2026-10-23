@@ -13,8 +13,8 @@ let out = URL(fileURLWithPath: CommandLine.arguments[2])
 for (index, slide) in slides.enumerated() {
     guard let shot = NSImage(contentsOf: raw.appending(path: slide.file + ".png")) else { continue }
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(width), pixelsHigh: Int(height), bitsPerSample: 8,
-                               samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                               bytesPerRow: 0, bitsPerPixel: 0)!
+                               samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+                               bytesPerRow: 0, bitsPerPixel: 32)!
     rep.size = NSSize(width: width, height: height)
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
