@@ -6,114 +6,6 @@ import Crypto
 #endif
 import LyktaCore
 
-struct ActivityRequest: Sendable {
-    let title: String?
-    let layout: JSONValue?
-    let data: JSONValue?
-    let alert: Alert?
-    let staleAfter: Int?
-    let endAfter: Int?
-    let relevance: Double?
-    let ifRevision: Int?
-}
-
-enum Admission: Sendable {
-    case attested(keyID: Data)
-    case invited(String)
-}
-
-struct Job: Sendable {
-    enum Kind: String, Sendable { case start, update, end, deleteChannel }
-
-    let kind: Kind
-    let activity: Activity
-    let environment: PushEnvironment
-    let pushToken: PushToken?
-}
-
-enum Outcome: Sendable {
-    case accepted
-    case retry(String, throttled: Bool)
-    case failed(String, clearsPushToken: Bool)
-    case unknown(String)
-    case channelGone
-}
-
-struct Attempt: Sendable {
-    let outcome: Outcome
-    let detail: [String: JSONValue]
-}
-
-struct ActionRecord: Encodable, Sendable {
-    let seq: Int64
-    let activity: ActivityName
-    let input: Action.Input
-    let at: Date
-
-    init(_ row: Row) throws {
-        seq = try row.integer("seq")
-        activity = try row.text("name", as: ActivityName.init(rawValue:))
-        input = if let button = try row.optionalString("button") {
-            .button(button)
-        } else {
-            .toggle(try row.string("toggle"), isOn: try row.integer("is_on") != 0)
-        }
-        at = Date(timeIntervalSince1970: Double(try row.integer("at")))
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var fields = encoder.container(keyedBy: CodingKeys.self)
-        try fields.encode(seq, forKey: .seq)
-        try fields.encode(activity, forKey: .activity)
-        try input.encode(to: encoder)
-        try fields.encode(at, forKey: .at)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case seq, activity, at
-    }
-}
-
-struct StoredEvent: Encodable, Sendable {
-    let seq: Int64
-    let device: UUID
-    let activity: UUID?
-    let source: String
-    let name: String
-    let at: Date
-    let receivedAt: Date
-    let detail: JSONValue
-
-    init(_ row: Row) throws {
-        seq = try row.integer("seq")
-        device = try row.text("device_id", as: UUID.init(uuidString:))
-        activity = try row.optionalText("activity_id", as: UUID.init(uuidString:))
-        source = try row.string("source")
-        name = try row.string("name")
-        at = Date(timeIntervalSince1970: Double(try row.integer("at")) / 1000)
-        receivedAt = Date(timeIntervalSince1970: Double(try row.integer("received_at")) / 1000)
-        detail = try JSONDecoder().decode(JSONValue.self, from: Data(try row.string("detail").utf8))
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var fields = encoder.container(keyedBy: CodingKeys.self)
-        try fields.encode(seq, forKey: .seq)
-        try fields.encode(device, forKey: .device)
-        try fields.encode(activity, forKey: .activity)
-        try fields.encode(source, forKey: .source)
-        try fields.encode(name, forKey: .name)
-        try fields.encode(at.formatted(Self.time), forKey: .at)
-        try fields.encode(receivedAt.formatted(Self.time), forKey: .receivedAt)
-        try fields.encode(detail, forKey: .detail)
-    }
-
-    private static let time = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
-
-    private enum CodingKeys: String, CodingKey {
-        case seq, device, activity, source, name, at, receivedAt, detail
-    }
-}
-
 extension PushToken: SQLBindable {
     var sqlValue: SQLValue { .text(description) }
 }
@@ -139,31 +31,10 @@ actor Store {
 
     init(path: String, maximumDevices: Int, maximumLiveActivities: Int) throws {
         let db = try Database(path: path)
+        try Schema.migrate(db)
         self.db = db
         self.maximumDevices = maximumDevices
         self.maximumLiveActivities = maximumLiveActivities
-        guard let schema = try db.query("PRAGMA user_version").first.map({ try $0.integer("user_version") }), schema <= Self.schemaVersion else {
-            throw ConfigurationError("The database was written by a newer gateway with an incompatible schema; run that version or restore a backup.")
-        }
-        if try !db.query("SELECT 1 FROM sqlite_master WHERE name = 'events' AND sql NOT LIKE '%AUTOINCREMENT%'").isEmpty {
-            try db.transaction {
-                try db.execute("ALTER TABLE events RENAME TO reused_events; DROP INDEX device_events; DROP INDEX event_age;")
-                try db.execute(Self.schema)
-                try db.execute("INSERT INTO events SELECT * FROM reused_events; DROP TABLE reused_events;")
-            }
-        }
-        try db.execute(Self.schema)
-        if try db.query("SELECT 1 FROM pragma_table_info('activities') WHERE name = 'ends_at'").isEmpty {
-            try db.execute("ALTER TABLE activities ADD COLUMN ends_at INTEGER")
-        }
-        if try db.query("SELECT 1 FROM pragma_table_info('devices') WHERE name = 'layout_version'").isEmpty {
-            try db.execute("ALTER TABLE devices ADD COLUMN layout_version TEXT")
-        }
-        if try db.query("SELECT 1 FROM pragma_table_info('devices') WHERE name = 'attestation_key'").isEmpty {
-            try db.execute("ALTER TABLE devices ADD COLUMN attestation_key TEXT")
-        }
-        try db.execute("CREATE UNIQUE INDEX IF NOT EXISTS device_attestation_keys ON devices(attestation_key)")
-        try db.execute("PRAGMA user_version = \(Self.schemaVersion)")
     }
 
     static func backup(_ database: String, to path: String) throws {
@@ -724,78 +595,4 @@ actor Store {
     private static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String($0 >> 4, radix: 16) + String($0 & 0xF, radix: 16) }.joined()
     }
-
-    private static let schemaVersion: Int64 = 1
-
-    private static let schema = """
-        CREATE TABLE IF NOT EXISTS devices (
-          id TEXT PRIMARY KEY,
-          secret_hash TEXT NOT NULL UNIQUE,
-          agent_hash TEXT NOT NULL UNIQUE,
-          environment TEXT NOT NULL CHECK (environment IN ('development', 'production')),
-          push_token TEXT,
-          bundle_instance TEXT,
-          app_version TEXT NOT NULL,
-          created_at INTEGER NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS activities (
-          id TEXT PRIMARY KEY,
-          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-          name TEXT NOT NULL,
-          phase TEXT NOT NULL CHECK (phase IN ('starting', 'live', 'ending', 'ended')),
-          title TEXT NOT NULL,
-          layout TEXT NOT NULL,
-          data TEXT NOT NULL,
-          content TEXT NOT NULL,
-          stale_after INTEGER,
-          ends_at INTEGER,
-          relevance REAL,
-          alert TEXT,
-          dismiss_at INTEGER,
-          revision INTEGER NOT NULL,
-          sent_revision INTEGER NOT NULL DEFAULT 0,
-          channel TEXT,
-          in_flight INTEGER NOT NULL DEFAULT 0,
-          last_sent_at INTEGER NOT NULL DEFAULT 0,
-          retry_at INTEGER NOT NULL DEFAULT 0,
-          failures INTEGER NOT NULL DEFAULT 0,
-          delivery TEXT NOT NULL CHECK (delivery IN ('pending', 'accepted', 'throttled', 'unknown', 'failed')),
-          error TEXT,
-          device_state TEXT,
-          created_at INTEGER NOT NULL,
-          ended_at INTEGER
-        ) STRICT;
-        CREATE UNIQUE INDEX IF NOT EXISTS live_activity_names ON activities(device_id, name) WHERE phase IN ('starting', 'live');
-        CREATE INDEX IF NOT EXISTS activity_devices ON activities(device_id);
-        CREATE TABLE IF NOT EXISTS events (
-          seq INTEGER PRIMARY KEY AUTOINCREMENT,
-          id TEXT NOT NULL UNIQUE,
-          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-          activity_id TEXT,
-          source TEXT NOT NULL CHECK (source IN ('app', 'gateway')),
-          name TEXT NOT NULL,
-          at INTEGER NOT NULL,
-          received_at INTEGER NOT NULL,
-          bytes INTEGER NOT NULL,
-          detail TEXT NOT NULL
-        ) STRICT;
-        CREATE INDEX IF NOT EXISTS device_events ON events(device_id, seq);
-        CREATE TABLE IF NOT EXISTS actions (
-          seq INTEGER PRIMARY KEY AUTOINCREMENT,
-          id TEXT NOT NULL UNIQUE,
-          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-          activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
-          button TEXT,
-          toggle TEXT,
-          is_on INTEGER,
-          at INTEGER NOT NULL,
-          CHECK ((button IS NULL) != (toggle IS NULL) AND (toggle IS NULL) = (is_on IS NULL))
-        ) STRICT;
-        CREATE INDEX IF NOT EXISTS device_actions ON actions(device_id, seq);
-        CREATE INDEX IF NOT EXISTS event_age ON events(received_at);
-        CREATE TABLE IF NOT EXISTS invites (
-          hash TEXT PRIMARY KEY,
-          expires_at INTEGER NOT NULL
-        ) STRICT;
-        """
 }

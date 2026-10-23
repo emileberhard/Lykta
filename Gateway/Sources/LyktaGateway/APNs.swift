@@ -170,3 +170,56 @@ private final class Signer: Sendable {
             .replacingOccurrences(of: "=", with: "")
     }
 }
+
+extension Activity {
+    func payload(_ event: Payload.Event, now: Int, channel: String? = nil, alert: Alert? = nil) throws -> Data {
+        var aps = Payload.APS(timestamp: now, event: event,
+                              contentState: try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)))
+        if event == .start {
+            aps.attributesType = "LyktaActivity"
+            aps.attributes = LyktaActivity(id: id, name: name.rawValue)
+            aps.inputPushChannel = channel
+        }
+        if let alert = alert ?? (event == .start ? Alert(title: nil, body: "Live Activity started", sound: nil) : nil) {
+            aps.alert = Payload.Alert(title: alert.title ?? title, body: alert.body,
+                                      sound: alert.sound == true ? "default" : nil)
+        }
+        if event != .end { aps.staleDate = staleAfter.map { now + $0 } }
+        aps.relevanceScore = relevance
+        aps.dismissalDate = event == .end ? dismissAt : nil
+        return try JSONEncoder().encode(Payload(aps: aps))
+    }
+}
+
+struct Payload: Encodable {
+    enum Event: String, Encodable {
+        case start, update, end
+    }
+
+    struct Alert: Encodable {
+        let title: String
+        let body: String
+        let sound: String?
+    }
+
+    struct APS: Encodable {
+        let timestamp: Int
+        let event: Event
+        let contentState: LyktaActivity.ContentState
+        var attributesType: String?
+        var attributes: LyktaActivity?
+        var inputPushChannel: String?
+        var alert: Alert?
+        var staleDate: Int?
+        var dismissalDate: Int?
+        var relevanceScore: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case timestamp, event, attributes, alert
+            case contentState = "content-state", attributesType = "attributes-type", inputPushChannel = "input-push-channel"
+            case staleDate = "stale-date", dismissalDate = "dismissal-date", relevanceScore = "relevance-score"
+        }
+    }
+
+    let aps: APS
+}

@@ -170,22 +170,12 @@ struct API: Sendable {
     }
 
     private static func activityRequest(_ body: [UInt8]) throws -> ActivityRequest {
-        struct Body: Decodable {
-            let title: String?
-            let layout: JSONValue?
-            let data: JSONValue?
-            let alert: Alert?
-            let staleAfter: Int?
-            let endAfter: Int?
-            let relevance: Double?
-            let ifRevision: Int?
-        }
         guard case let .object(fields) = try decode(body) as JSONValue else { throw invalid("Send a JSON object.") }
-        let allowed: Set = ["title", "layout", "data", "alert", "staleAfter", "endAfter", "relevance", "ifRevision"]
+        let allowed = Set(ActivityRequest.CodingKeys.allCases.map(\.rawValue))
         if let key = fields.keys.first(where: { !allowed.contains($0) }) {
             throw invalid("Unknown key \"\(key)\"; expected \(allowed.sorted().joined(separator: ", ")).")
         }
-        let request: Body = try decode(body)
+        let request: ActivityRequest = try decode(body)
         guard request.title.map({ (1...120).contains($0.count) }) != false else { throw invalid("title must be 1 to 120 characters.") }
         guard request.alert.map({ (1...200).contains($0.body.count) && ($0.title?.count ?? 0) <= 120 }) != false else {
             throw invalid("alert title must be at most 120 characters and body 1 to 200.")
@@ -194,9 +184,7 @@ struct API: Sendable {
         guard request.endAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("endAfter must be 1 to 28800 seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         guard request.ifRevision.map({ $0 >= 1 }) != false else { throw invalid("ifRevision must be a revision from GET /v1/activities/{name}.") }
-        return ActivityRequest(title: request.title, layout: request.layout, data: request.data, alert: request.alert,
-                               staleAfter: request.staleAfter, endAfter: request.endAfter, relevance: request.relevance,
-                               ifRevision: request.ifRevision)
+        return request
     }
 
     private static func invalid(_ message: String) -> APIError {
@@ -216,5 +204,75 @@ struct API: Sendable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         return HTTPResponse(status: status, contentType: "application/json", body: Array(try! encoder.encode(value)))
+    }
+}
+
+struct ActionRecord: Encodable, Sendable {
+    let seq: Int64
+    let activity: ActivityName
+    let input: Action.Input
+    let at: Date
+
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        activity = try row.text("name", as: ActivityName.init(rawValue:))
+        input = if let button = try row.optionalString("button") {
+            .button(button)
+        } else {
+            .toggle(try row.string("toggle"), isOn: try row.integer("is_on") != 0)
+        }
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")))
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(seq, forKey: .seq)
+        try fields.encode(activity, forKey: .activity)
+        try input.encode(to: encoder)
+        try fields.encode(at, forKey: .at)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case seq, activity, at
+    }
+}
+
+struct StoredEvent: Encodable, Sendable {
+    let seq: Int64
+    let device: UUID
+    let activity: UUID?
+    let source: String
+    let name: String
+    let at: Date
+    let receivedAt: Date
+    let detail: JSONValue
+
+    init(_ row: Row) throws {
+        seq = try row.integer("seq")
+        device = try row.text("device_id", as: UUID.init(uuidString:))
+        activity = try row.optionalText("activity_id", as: UUID.init(uuidString:))
+        source = try row.string("source")
+        name = try row.string("name")
+        at = Date(timeIntervalSince1970: Double(try row.integer("at")) / 1000)
+        receivedAt = Date(timeIntervalSince1970: Double(try row.integer("received_at")) / 1000)
+        detail = try JSONDecoder().decode(JSONValue.self, from: Data(try row.string("detail").utf8))
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(seq, forKey: .seq)
+        try fields.encode(device, forKey: .device)
+        try fields.encode(activity, forKey: .activity)
+        try fields.encode(source, forKey: .source)
+        try fields.encode(name, forKey: .name)
+        try fields.encode(at.formatted(Self.time), forKey: .at)
+        try fields.encode(receivedAt.formatted(Self.time), forKey: .receivedAt)
+        try fields.encode(detail, forKey: .detail)
+    }
+
+    private static let time = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+    private enum CodingKeys: String, CodingKey {
+        case seq, device, activity, source, name, at, receivedAt, detail
     }
 }

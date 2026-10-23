@@ -1,6 +1,28 @@
 import Foundation
 import LyktaCore
 
+struct Job: Sendable {
+    enum Kind: String, Sendable { case start, update, end, deleteChannel }
+
+    let kind: Kind
+    let activity: Activity
+    let environment: PushEnvironment
+    let pushToken: PushToken?
+}
+
+enum Outcome: Sendable {
+    case accepted
+    case retry(String, throttled: Bool)
+    case failed(String, clearsPushToken: Bool)
+    case unknown(String)
+    case channelGone
+}
+
+struct Attempt: Sendable {
+    let outcome: Outcome
+    let detail: [String: JSONValue]
+}
+
 struct Delivery: Sendable {
     let store: Store
     let push: any PushService
