@@ -172,7 +172,7 @@ private final class Signer: Sendable {
 }
 
 extension Activity {
-    func payload(_ event: Payload.Event, now: Int, channel: String? = nil, alert: Alert? = nil) throws -> Data {
+    func payload(_ event: Payload.Event, now: Int, channel: String? = nil) throws -> Data {
         var aps = Payload.APS(timestamp: now, event: event,
                               contentState: try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)))
         if event == .start {

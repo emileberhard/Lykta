@@ -27,7 +27,7 @@ struct Delivery: Sendable {
     let store: Store
     let push: any PushService
     let shutdown: Shutdown
-    var concurrency = 4
+    let concurrency = 4
 
     func run() async throws {
         try await store.recover()
@@ -79,14 +79,14 @@ struct Delivery: Sendable {
                     }
                 }
                 detail["channel"] = .string(channel)
-                let payload = try activity.payload(.start, now: now, channel: channel, alert: activity.alert)
+                let payload = try activity.payload(.start, now: now, channel: channel)
                 detail["payloadBytes"] = .number(Double(payload.count))
                 detail["uniqueID"] = try await push.start(payload, deviceToken: token, environment: job.environment, id: id).map(JSONValue.string)
             case .update, .end:
                 guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
                 let priority = job.kind == .end || activity.alert != nil ? 10 : 5
-                let payload = try activity.payload(event, now: now, alert: activity.alert)
+                let payload = try activity.payload(event, now: now)
                 detail["channel"] = .string(channel)
                 detail["priority"] = .number(Double(priority))
                 detail["alert"] = .bool(activity.alert != nil)

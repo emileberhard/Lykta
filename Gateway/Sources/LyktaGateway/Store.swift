@@ -518,7 +518,7 @@ actor Store {
 
     private static func payloadSize(of activity: Activity, now: Int) throws -> Int {
         let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
-                                        channel: String(repeating: "x", count: 64), alert: activity.alert).count
+                                        channel: String(repeating: "x", count: 64)).count
         guard size <= maximumPayloadBytes else {
             throw APIError(.payloadTooLarge,
                            "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). Simplify the layout or shorten its text.")
