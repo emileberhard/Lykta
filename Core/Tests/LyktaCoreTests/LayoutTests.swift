@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import LyktaCore
 
-func layout(_ lockScreen: String, extra: String = "") -> String {
+func layoutJSON(_ lockScreen: String, extra: String = "") -> String {
     #"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"\#(extra)}"#
 }
 
@@ -25,15 +25,15 @@ struct LayoutTests {
         (#"{"svg": "<svg viewBox='0 0 9 9'><path d='M0 0' fill='tomato'/></svg>"}"#, "lockScreen.svg: <path> #1: fill: expected none, currentColor"),
     ])
     func rejectsInvalidNodesAtTheirPath(lockScreen: String, message: String) {
-        #expect(error(in: layout(lockScreen)).hasPrefix(message))
+        #expect(error(in: layoutJSON(lockScreen)).hasPrefix(message))
     }
 
     @Test func rejectsMissingPresentationsAndUnsafeLinks() {
         #expect(error(in: #"{"lockScreen": "a"}"#) == #"missing "compactLeading""#)
         for url in ["http://example.com", "javascript:alert(1)", "file:///etc/hosts"] {
-            #expect(error(in: layout(#""a""#, extra: #", "link": "\#(url)""#)) == "link: expected an https URL or an app URL such as shortcuts://")
+            #expect(error(in: layoutJSON(#""a""#, extra: #", "link": "\#(url)""#)) == "link: expected an https URL or an app URL such as shortcuts://")
         }
-        #expect(error(in: layout(#""a""#, extra: #", "link": "shortcuts://run-shortcut?name=Lights""#)) == "no error")
+        #expect(error(in: layoutJSON(#""a""#, extra: #", "link": "shortcuts://run-shortcut?name=Lights""#)) == "no error")
     }
 
     @Test func placesControlsOnlyWhereTheyWork() {
@@ -42,7 +42,7 @@ struct LayoutTests {
     }
 
     @Test func collectsTheControlsAnActionMayName() throws {
-        let json = layout(#"{"vstack": [{"button": "retry", "label": "Retry"}, {"toggle": "items.0.done", "isOn": true, "label": "Milk"}]}"#,
+        let json = layoutJSON(#"{"vstack": [{"button": "retry", "label": "Retry"}, {"toggle": "items.0.done", "isOn": true, "label": "Milk"}]}"#,
                           extra: #", "expanded": {"bottom": {"button": "stop", "label": "Stop", "style": "borderedProminent"}}"#)
         let layout = try Layout(json: Array(json.utf8))
         #expect(Set(layout.buttons.keys) == ["retry", "stop"])
@@ -50,20 +50,20 @@ struct LayoutTests {
     }
 
     @Test func onlyControlsTheDataShowsCanBePressed() throws {
-        let json = layout(#"{"if": true, "then": {"button": "pause", "label": "Pause"}, "else": {"button": "play", "label": "Play"}}"#,
+        let json = layoutJSON(#"{"if": true, "then": {"button": "pause", "label": "Pause"}, "else": {"button": "play", "label": "Play"}}"#,
                           extra: #", "expanded": {"bottom": {"if": "dark", "then": {"button": "dim", "label": "Dim"}}}"#)
         #expect(Set(try Layout(json: Array(json.utf8)).buttons.keys) == ["pause", "dim"])
     }
 
     @Test func buttonsWithOneNameChangeTheDataAlike() {
-        let json = layout(#"{"vstack": [{"button": "go", "label": "Go", "add": {"n": 1}}, {"button": "go", "label": "Go", "add": {"n": -1}}]}"#)
+        let json = layoutJSON(#"{"vstack": [{"button": "go", "label": "Go", "add": {"n": 1}}, {"button": "go", "label": "Go", "add": {"n": -1}}]}"#)
         #expect(error(in: json) == "buttons named go change the data differently")
-        #expect(error(in: layout(#"{"button": "go", "label": "Go", "set": {"a": {"b": 100}, "a-": 0}, "add": {"a.b": 1}}"#))
+        #expect(error(in: layoutJSON(#"{"button": "go", "label": "Go", "set": {"a": {"b": 100}, "a-": 0}, "add": {"a.b": 1}}"#))
             == #"lockScreen: "a" contains "a.b"; change each value once"#)
     }
 
     @Test func numbersFromDataRenderAsText() throws {
-        let layout = try Layout(json: Array(layout(#"{"hstack": [3, {"text": 0.5}]}"#).utf8))
+        let layout = try Layout(json: Array(layoutJSON(#"{"hstack": [3, {"text": 0.5}]}"#).utf8))
         guard case let .hstack(nodes, _, _) = layout.lockScreen.content else {
             Issue.record("not an hstack")
             return
@@ -73,11 +73,11 @@ struct LayoutTests {
 
     @Test func boundsNesting() {
         let nested = (0..<16).reduce(#""a""#) { node, _ in #"{"vstack": [\#(node)]}"# }
-        #expect(error(in: layout(nested)) == "nodes nest deeper than 16 levels")
+        #expect(error(in: layoutJSON(nested)) == "nodes nest deeper than 16 levels")
     }
 
     @Test func unreadableLayoutsFallBackToTheTitle() throws {
-        let future = Data(try Deflate.compress(Array(layout(#"{"hologram": true}"#).utf8)))
+        let future = Data(try Deflate.compress(Array(layoutJSON(#"{"hologram": true}"#).utf8)))
         let wire = Data(#"{"title": "Build", "layout": "\#(future.base64EncodedString())"}"#.utf8)
         let state = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: wire)
         #expect(state.title == "Build")
@@ -191,7 +191,7 @@ struct TemplateTests {
 
     private func button(_ effects: String) throws -> Effects {
         let lockScreen = #"{"button": "go", "label": "Go", \#(effects.dropFirst())"#
-        return try #require(Layout(json: Array(layout(lockScreen).utf8))
+        return try #require(Layout(json: Array(layoutJSON(lockScreen).utf8))
             .buttons["go"])
     }
 
