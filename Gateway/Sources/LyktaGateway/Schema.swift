@@ -32,12 +32,10 @@ enum Schema {
           id TEXT PRIMARY KEY,
           secret_hash TEXT NOT NULL UNIQUE,
           agent_hash TEXT NOT NULL UNIQUE,
-          attestation_key TEXT,
           environment TEXT NOT NULL CHECK (environment IN ('development', 'production')),
           push_token TEXT,
           bundle_instance TEXT,
           app_version TEXT NOT NULL,
-          layout_version TEXT,
           created_at INTEGER NOT NULL
         ) STRICT;
         CREATE TABLE IF NOT EXISTS activities (
@@ -50,7 +48,6 @@ enum Schema {
           data TEXT NOT NULL,
           content TEXT NOT NULL,
           stale_after INTEGER,
-          ends_at INTEGER,
           relevance REAL,
           alert TEXT,
           dismiss_at INTEGER,
