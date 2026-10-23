@@ -94,4 +94,6 @@ app cannot draw, while a newer app on an older gateway cannot use its new
 features. Build the new tag and replace the container; all state is in the
 volume, and `GET /v1/version` reports the running release. On stop, the
 gateway finishes pushes in flight before it exits. Releases only add columns,
-so the previous image runs on the newer database if you roll back.
+so the previous image runs on the newer database if you roll back. An app
+build set up before the Xcode project moved into `iOS/` keeps its settings in
+`Config/Local.xcconfig`; move that file to `iOS/Config/`.

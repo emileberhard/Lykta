@@ -1,7 +1,7 @@
 .build/
 .swiftpm/
 xcuserdata/
-iOS/Config/Local.xcconfig
+Local.xcconfig
 *.sqlite*
 *.p8
 .local/
