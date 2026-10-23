@@ -1,0 +1,7 @@
+services:
+  main:
+    depends_on: [lykta]
+  lykta:
+    image: lykta-gateway
+    pull_policy: never
+    command: [simulate]
