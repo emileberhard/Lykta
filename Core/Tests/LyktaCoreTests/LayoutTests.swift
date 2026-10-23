@@ -2,6 +2,10 @@ import Foundation
 import Testing
 @testable import LyktaCore
 
+func layout(_ lockScreen: String, extra: String = "") -> String {
+    #"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"\#(extra)}"#
+}
+
 struct LayoutTests {
     @Test(arguments: [
         (#"{"hstack": ["a", {"txt": "b"}]}"#, "lockScreen.hstack[1]: a node is a string or an object with one of"),
@@ -78,10 +82,6 @@ struct LayoutTests {
         let state = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: wire)
         #expect(state.title == "Build")
         #expect(state.layout == nil)
-    }
-
-    private func layout(_ lockScreen: String, extra: String = "") -> String {
-        #"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"\#(extra)}"#
     }
 
     private func error(in json: String) -> String {
@@ -191,7 +191,7 @@ struct TemplateTests {
 
     private func button(_ effects: String) throws -> Effects {
         let lockScreen = #"{"button": "go", "label": "Go", \#(effects.dropFirst())"#
-        return try #require(Layout(json: Array(#"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"}"#.utf8))
+        return try #require(Layout(json: Array(layout(lockScreen).utf8))
             .buttons["go"])
     }
 

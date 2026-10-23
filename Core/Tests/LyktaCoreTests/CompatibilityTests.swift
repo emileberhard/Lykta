@@ -39,24 +39,24 @@ struct CompatibilityTests {
 
     @Test func detectsFeaturesAtTheirVersion() throws {
         for (feature, lockScreen) in Self.fixtures {
-            let layout = try Layout(json: Array(Self.layout(lockScreen).utf8))
+            let layout = try Layout(json: Array(layout(lockScreen).utf8))
             #expect(layout.features.contains(feature), "\(feature)")
             #expect(layout.requirement?.version == Layout.introduced[feature], "\(feature)")
         }
-        let appLink = try Layout(json: Array(Self.layout(#""a""#, extra: #", "link": "shortcuts://run""#).utf8))
+        let appLink = try Layout(json: Array(layout(#""a""#, extra: #", "link": "shortcuts://run""#).utf8))
         #expect(appLink.requirement == .init(version: Version(0, 2, 3), feature: "layout.link.appURL", path: "link"))
     }
 
     @Test func reportsTheNewestFeatureAtItsPath() throws {
-        let layout = try Layout(json: Array(Self.layout(#"{"vstack": [{"text": "a", "modifiers": [{"blur": 1}]}, {"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}]}"#).utf8))
-        #expect(layout.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
-        let baseline = try Layout(json: Array(Self.layout(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
+        let newest = try Layout(json: Array(layout(#"{"vstack": [{"text": "a", "modifiers": [{"blur": 1}]}, {"svg": "<svg viewBox='0 0 1 1'><rect width='1' height='1'/></svg>"}]}"#).utf8))
+        #expect(newest.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
+        let baseline = try Layout(json: Array(layout(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
         #expect(baseline.requirement == nil)
         #expect(Layout.version == Version(0, 5, 0))
     }
 
     @Test func recordsEveryWayAValueIsNamed() throws {
-        let layout = try Layout(json: Array(Self.layout(#"""
+        let layout = try Layout(json: Array(layout(#"""
             {"vstack": [{"text": "a", "modifiers": [{"foreground": "red"}, {"background": "secondary"}]}, {"chart": [{"bar": [1], "color": "blue"}]}]}
             """#).utf8))
         #expect(Set(["ColorValue.Name.red", "Paint.Level.secondary", "Node.Content.Chart.Mark.Kind.bar", "chart.bar.color", "ColorValue.Name.blue"])
@@ -72,9 +72,5 @@ struct CompatibilityTests {
             #expect(Version(leading: text) == nil, "\(text)")
         }
         #expect(Version(0, 10, 0) > Version(0, 9, 9))
-    }
-
-    private static func layout(_ lockScreen: String, extra: String = "") -> String {
-        #"{"lockScreen": \#(lockScreen), "compactLeading": "a", "compactTrailing": "b", "minimal": "c"\#(extra)}"#
     }
 }

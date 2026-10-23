@@ -263,13 +263,14 @@ struct GatewayTests {
     @Test func everyFeatureTheSkillUsesHasAVersion() throws {
         let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
         let snippets = try markdown.components(separatedBy: "```json\n").dropFirst().map { block in
-            try JSONDecoder().decode(JSONValue.self, from: Data(block.components(separatedBy: "\n```")[0].utf8))
+            try JSONDecoder().decode([String: JSONValue].self, from: Data(block.components(separatedBy: "\n```")[0].utf8))
         }
-        let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
-        let examples = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
-            .map { try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: directory.appending(path: $0))) }
+        #expect(!snippets.isEmpty)
+        let examples = try Self.exampleFiles().map {
+            try JSONDecoder().decode([String: JSONValue].self, from: Data(contentsOf: Self.exampleDirectory.appending(path: $0)))
+        }
         var features: Set<String> = []
-        for case let .object(fields) in snippets + examples {
+        for fields in snippets + examples {
             let layout: JSONValue = if let layout = fields["layout"] {
                 try layout.filled(with: fields["data"] ?? .object([:]))
             } else {
@@ -360,33 +361,14 @@ struct GatewayTests {
         #expect(response.status == 401)
     }
 
-    @Test func skillExamplesCompile() throws {
-        let markdown = String(decoding: PackageResources.layout_md, as: UTF8.self)
-        let blocks = markdown.components(separatedBy: "```json\n").dropFirst().map { $0.components(separatedBy: "\n```")[0] }
-        #expect(blocks.count == 11)
-        for block in blocks {
-            guard case let .object(fields) = try JSONDecoder().decode(JSONValue.self, from: Data(block.utf8)) else {
-                Issue.record("not an object: \(block)")
-                continue
-            }
-            let layout: JSONValue = if let layout = fields["layout"] {
-                try layout.filled(with: fields["data"] ?? .object([:]))
-            } else {
-                Self.layout(try JSONValue.object(fields).filled(with: Self.snippetData))
-            }
-            _ = try Layout(json: layout.json)
-        }
-    }
-
     @Test func everyExampleIsServedListedAndStarts() async throws {
-        let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
-        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+        let files = try Self.exampleFiles()
         let skill = String(decoding: PackageResources.SKILL_md, as: UTF8.self)
         #expect(!files.isEmpty)
         for file in files {
             let served = await api.handle(HTTPRequest(method: "GET", target: "/skill/examples/\(file)", headers: [:], body: []))
             #expect(served.status == 200, "\(file)")
-            #expect(Data(served.body) == (try Data(contentsOf: directory.appending(path: file))), "\(file)")
+            #expect(Data(served.body) == (try Data(contentsOf: Self.exampleDirectory.appending(path: file))), "\(file)")
             #expect(skill.contains("examples/\(file)"), "\(file)")
             try await put("example", try JSONDecoder().decode(JSONValue.self, from: Data(served.body)))
             _ = try await send("DELETE", "/v1/activities/example")
@@ -394,6 +376,12 @@ struct GatewayTests {
     }
 
     // MARK: Helpers
+
+    static let exampleDirectory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
+
+    static func exampleFiles() throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: exampleDirectory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+    }
 
     static let snippetData: JSONValue = [
         "steps": .array([["name": "Build"], ["name": "Test"]]), "items": .array([["name": "Milk", "done": .bool(false)]]), "step": "Mix", "index": .number(1),
@@ -406,52 +394,37 @@ struct GatewayTests {
 
     static let start: JSONValue = [
         "title": "Build",
-        "layout": ["lockScreen": "{{step}}", "compactLeading": "a", "compactTrailing": "b", "minimal": "c"],
+        "layout": layout("{{step}}"),
         "data": ["step": "Compile"],
     ]
 
     static let checklist: JSONValue = [
         "title": "Shopping",
-        "layout": [
-            "lockScreen": ["vstack": .array([["each": "items", "as": "item", "do": ["toggle": "item.done", "label": "{{item.name}}"]]])],
-            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
-        ],
+        "layout": layout(["vstack": .array([["each": "items", "as": "item", "do": ["toggle": "item.done", "label": "{{item.name}}"]]])]),
         "data": ["items": .array([["name": "Milk", "done": .bool(false)]])],
     ]
 
     static let question: JSONValue = [
         "title": "Deploy failed",
-        "layout": [
-            "lockScreen": ["hstack": .array([["button": "retry", "label": "Retry"], ["button": "stop", "label": "Stop"]])],
-            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
-        ],
+        "layout": layout(["hstack": .array([["button": "retry", "label": "Retry"], ["button": "stop", "label": "Stop"]])]),
     ]
 
     static let film: JSONValue = [
         "title": "Film",
-        "layout": [
-            "lockScreen": ["if": "{{playing}}",
-                           "then": ["button": "pause", "label": "Pause", "now": ["pausedAt": .number(0)], "set": ["playing": .bool(false)]],
-                           "else": ["button": "play", "label": "Play", "set": ["pausedAt": .null, "playing": .bool(true)],
-                                    "add": ["start": ["since": "pausedAt"]]]],
-            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
-        ],
+        "layout": layout(["if": "{{playing}}",
+                          "then": ["button": "pause", "label": "Pause", "now": ["pausedAt": .number(0)], "set": ["playing": .bool(false)]],
+                          "else": ["button": "play", "label": "Play", "set": ["pausedAt": .null, "playing": .bool(true)],
+                                   "add": ["start": ["since": "pausedAt"]]]]),
         "data": ["playing": .bool(true), "pausedAt": .null, "start": .number(1_793_000_000)],
     ]
 
     static let recipe: JSONValue = [
         "title": "Recipe",
-        "layout": [
-            "lockScreen": ["vstack": .array(["{{steps[step]}}", ["button": "next", "label": "Next", "add": ["step": .number(1)]]])],
-            "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
-        ],
+        "layout": layout(["vstack": .array(["{{steps[step]}}", ["button": "next", "label": "Next", "add": ["step": .number(1)]]])]),
         "data": ["step": .number(1), "steps": ["1": "Chop", "2": "Fry"]],
     ]
 
-    static let oversized: JSONValue = [
-        "lockScreen": .object(["vstack": .array((0..<200).map { _ in .string(UUID().uuidString) })]),
-        "compactLeading": "a", "compactTrailing": "b", "minimal": "c",
-    ]
+    static let oversized = layout(["vstack": .array((0..<200).map { _ in .string(UUID().uuidString) })])
 
     @discardableResult
     private func put(_ name: String, _ body: JSONValue) async throws -> Identified {
