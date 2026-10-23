@@ -375,8 +375,6 @@ struct GatewayTests {
         }
     }
 
-    // MARK: Helpers
-
     static let exampleDirectory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
 
     static func exampleFiles() throws -> [String] {

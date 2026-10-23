@@ -68,8 +68,6 @@ actor Store {
         try Database(path: database).run("VACUUM INTO ?", path)
     }
 
-    // MARK: Devices
-
     func registerDevice(environment: PushEnvironment, appVersion: String, admission: Admission, now: Int) throws -> Credentials {
         try db.transaction {
             guard try count(db.query("SELECT count(*) AS n FROM devices")) < maximumDevices else {
@@ -167,8 +165,6 @@ actor Store {
     func deleteDevice(_ device: Device) throws {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
-
-    // MARK: Activities
 
     func put(_ device: Device, name: ActivityName, request: ActivityRequest, now: Int) throws -> ActivityStatus {
         try db.transaction {
@@ -269,8 +265,6 @@ actor Store {
         return activity.status(layoutReadable: observed[try activity.fingerprint()])
     }
 
-    // MARK: Actions
-
     func act(_ device: Device, _ action: Action, now: Int) throws {
         try db.transaction {
             guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return }
@@ -323,8 +317,6 @@ actor Store {
         try db.query("SELECT COALESCE(MAX(seq), 0) AS seq FROM actions WHERE device_id = ?", device.id)[0].integer("seq")
     }
 
-    // MARK: Delivery
-
     func recover() throws {
         try db.execute("""
             UPDATE activities SET phase = 'live', delivery = 'unknown', error = 'The gateway restarted while starting this activity.'
@@ -367,8 +359,6 @@ actor Store {
               SELECT seq, SUM(bytes) OVER (PARTITION BY device_id ORDER BY seq DESC) AS total FROM events) WHERE total > ?)
             """, Self.maximumEventBytesPerDevice)
     }
-
-    // MARK: Events
 
     func ingest(_ device: Device, _ batch: EventBatch) throws {
         let receivedAt = Self.milliseconds(.now)
@@ -504,8 +494,6 @@ actor Store {
             try db.run("UPDATE activities SET in_flight = 0 WHERE id = ?", id)
         }
     }
-
-    // MARK: Helpers
 
     private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> LyktaActivity.ContentState {
         do {
