@@ -34,11 +34,7 @@ struct HTTPResponse: Sendable {
     let contentType: String
     let body: [UInt8]
 
-    init(status: Int, contentType: String, body: [UInt8]) {
-        self.status = status
-        self.contentType = contentType
-        self.body = body
-    }
+    static let noContent = HTTPResponse(status: 204, contentType: "text/plain", body: [])
 }
 
 final class HTTPServer: Sendable {

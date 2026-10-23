@@ -79,21 +79,18 @@ struct API: Sendable {
             return Self.json(200, SyncResult(end: try await store.sync(device, report: report, now: now)))
         case ("DELETE", "v1/device"):
             try await store.deleteDevice(try await phone(request))
-            return HTTPResponse(status: 204, contentType: "text/plain", body: [])
+            return .noContent
         case ("POST", "v1/device/actions"):
             let device = try await phone(request)
             try await store.act(device, try Self.decode(request.body), now: now)
-            return HTTPResponse(status: 204, contentType: "text/plain", body: [])
+            return .noContent
         case ("GET", "v1/actions"):
             let device = try await agent(request)
             let wait = try request.query["wait"].map { text in
                 guard let seconds = Int(text), (0...25).contains(seconds) else { throw Self.invalid("wait must be 0 to 25 seconds.") }
                 return seconds
             } ?? 0
-            let after = try request.query["after"].map { text in
-                guard let seq = Int64(text), seq >= 0 else { throw Self.invalid("after must be an action seq.") }
-                return seq
-            }
+            let after = try Self.cursor(request, of: "action")
             let cursor = if let after { after } else { try await store.latestAction(device) }
             let deadline = ContinuousClock.now.advanced(by: .seconds(wait))
             while true {
@@ -106,13 +103,10 @@ struct API: Sendable {
         case ("POST", "v1/device/events"):
             let device = try await phone(request)
             try await store.ingest(device, try Self.decode(request.body))
-            return HTTPResponse(status: 204, contentType: "text/plain", body: [])
+            return .noContent
         case ("GET", "v1/events"):
             let device = try await agent(request)
-            let after = try request.query["after"].map { text in
-                guard let seq = Int64(text), seq >= 0 else { throw Self.invalid("after must be an event seq.") }
-                return seq
-            }
+            let after = try Self.cursor(request, of: "event")
             let limit = try request.query["limit"].map { text in
                 guard let limit = Int(text), (1...1000).contains(limit) else { throw Self.invalid("limit must be 1 to 1000.") }
                 return limit
@@ -185,6 +179,13 @@ struct API: Sendable {
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         guard request.ifRevision.map({ $0 >= 1 }) != false else { throw invalid("ifRevision must be a revision from GET /v1/activities/{name}.") }
         return request
+    }
+
+    private static func cursor(_ request: HTTPRequest, of record: String) throws -> Int64? {
+        try request.query["after"].map { text in
+            guard let seq = Int64(text), seq >= 0 else { throw invalid("after must be an \(record) seq.") }
+            return seq
+        }
     }
 
     private static func invalid(_ message: String) -> APIError {
