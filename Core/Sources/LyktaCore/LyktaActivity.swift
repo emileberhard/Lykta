@@ -35,7 +35,7 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
             title = try fields.decode(String.self, forKey: .title)
             packed = try fields.decode(Data.self, forKey: .layout)
-            layout = try? Layout(json: Deflate.decompress(Array(packed), limit: Layout.maximumBytes))
+            layout = Deflate.decompress(Array(packed), limit: Layout.maximumBytes).flatMap { try? Layout(json: $0) }
         }
 
         public func encode(to encoder: any Encoder) throws {

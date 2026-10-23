@@ -5,31 +5,29 @@ import CZlib
 #endif
 
 enum Deflate {
-    enum Failure: Error {
-        case zlib(Int32)
-        case malformed
-        case exceedsLimit
+    struct Failure: Error {
+        let status: Int32
     }
 
     static func compress(_ input: [UInt8]) throws(Failure) -> [UInt8] {
         var stream = z_stream()
-        try check(deflateInit2_(&stream, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY,
-                                ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)))
+        let initialized = deflateInit2_(&stream, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY,
+                                        ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+        guard initialized == Z_OK else { throw Failure(status: initialized) }
         defer { deflateEnd(&stream) }
         var output = [UInt8](repeating: 0, count: Int(deflateBound(&stream, uLong(input.count))))
         let status = run(&stream, input: input, output: &output) { deflate(&$0, Z_FINISH) }
-        guard status == Z_STREAM_END else { throw .zlib(status) }
+        guard status == Z_STREAM_END else { throw Failure(status: status) }
         return Array(output.prefix(Int(stream.total_out)))
     }
 
-    static func decompress(_ input: [UInt8], limit: Int) throws(Failure) -> [UInt8] {
+    static func decompress(_ input: [UInt8], limit: Int) -> [UInt8]? {
         var stream = z_stream()
-        try check(inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)))
+        guard inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return nil }
         defer { inflateEnd(&stream) }
         var output = [UInt8](repeating: 0, count: limit + 1)
         let status = run(&stream, input: input, output: &output) { inflate(&$0, Z_FINISH) }
-        guard Int(stream.total_out) <= limit else { throw .exceedsLimit }
-        guard status == Z_STREAM_END, stream.avail_in == 0 else { throw .malformed }
+        guard status == Z_STREAM_END, stream.avail_in == 0, Int(stream.total_out) <= limit else { return nil }
         return Array(output.prefix(Int(stream.total_out)))
     }
 
@@ -45,9 +43,5 @@ enum Deflate {
                 return step(&stream)
             }
         }
-    }
-
-    private static func check(_ status: Int32) throws(Failure) {
-        guard status == Z_OK else { throw .zlib(status) }
     }
 }

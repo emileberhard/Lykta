@@ -257,7 +257,7 @@ extension Node {
             public static let maximumMarks = 8
             public static let maximumValues = 100
 
-            public struct Mark: Sendable {
+            public struct Mark: Decodable, Sendable {
                 public enum Kind: String, Choice { case line, area, bar, point, rule, sector }
                 public enum Interpolation: String, Choice { case linear, monotone, catmullRom, cardinal, stepStart, stepCenter, stepEnd }
 
@@ -389,13 +389,13 @@ extension Node {
                 self = .grid(try fields.required(kind), alignment: try fields.optional("alignment") ?? .center,
                              horizontalSpacing: try fields.optional("horizontalSpacing"), verticalSpacing: try fields.optional("verticalSpacing"))
             case "chart":
-                let marks: [ChartMark] = try fields.required(kind)
+                let marks: [Chart.Mark] = try fields.required(kind)
                 guard (1...Chart.maximumMarks).contains(marks.count) else { throw fields.invalid("expected 1 to \(Chart.maximumMarks) marks", at: kind) }
                 let minimum: Double? = try fields.optional("min")
                 let maximum: Double? = try fields.optional("max")
                 guard (minimum == nil) == (maximum == nil) else { throw fields.invalid("give both min and max, or neither") }
                 guard minimum.map({ $0 < maximum! }) != false else { throw fields.invalid("min must be less than max", at: "max") }
-                self = .chart(Chart(marks: marks.map(\.mark), range: minimum.map { $0...maximum! }, axes: try fields.optional("axes") ?? false))
+                self = .chart(Chart(marks: marks, range: minimum.map { $0...maximum! }, axes: try fields.optional("axes") ?? false))
             default: self = .conditional(try fields.required(kind), then: try fields.required("then"), else: try fields.optional("else"))
             }
         }
@@ -421,15 +421,12 @@ extension Node {
     }
 }
 
-private struct ChartMark: Decodable {
-    let mark: Node.Content.Chart.Mark
-
-    init(from decoder: any Decoder) throws {
-        typealias Mark = Node.Content.Chart.Mark
+extension Node.Content.Chart.Mark {
+    public init(from decoder: any Decoder) throws {
         let fields = try decoder.container(keyedBy: Key.self)
-        let kinds = fields.allKeys.compactMap { Mark.Kind(rawValue: $0.stringValue) }
+        let kinds = fields.allKeys.compactMap { Kind(rawValue: $0.stringValue) }
         guard kinds.count == 1, let kind = kinds.first else {
-            throw fields.invalid("a mark is an object with one of \(Mark.Kind.allCases.map(\.rawValue).joined(separator: ", "))")
+            throw fields.invalid("a mark is an object with one of \(Kind.allCases.map(\.rawValue).joined(separator: ", "))")
         }
         let allowed: Set<String> = switch kind {
         case .line: ["color", "lineWidth", "interpolation"]
@@ -440,7 +437,7 @@ private struct ChartMark: Decodable {
         case .sector: ["colors", "innerRadius"]
         }
         try fields.allowOnly(allowed.union([kind.rawValue]))
-        Mark.Kind.record(kind, at: fields.codingPath + [Key(stringValue: kind.rawValue)])
+        Kind.record(kind, at: fields.codingPath + [Key(stringValue: kind.rawValue)])
         fields.recordKeys(in: "chart.\(kind.rawValue)", except: [kind.rawValue])
         let values: [Double] = if kind == .rule { [try fields.required(kind.rawValue)] } else { try fields.required(kind.rawValue) }
         guard (1...Node.Content.Chart.maximumValues).contains(values.count), values.allSatisfy(\.isFinite) else {
@@ -451,9 +448,9 @@ private struct ChartMark: Decodable {
         guard colors.isEmpty || colors.count == values.count else { throw fields.invalid("give one color per value", at: "colors") }
         let innerRadius: Double = try fields.optional("innerRadius") ?? 0
         guard (0..<1).contains(innerRadius) else { throw fields.invalid("expected a fraction from 0 up to 1", at: "innerRadius") }
-        mark = Mark(kind: kind, values: values, color: try fields.optional("color"), colors: colors,
-                    lineWidth: try fields.optional("lineWidth") ?? 2, interpolation: try fields.optional("interpolation") ?? .linear,
-                    cornerRadius: try fields.optional("cornerRadius") ?? 0, innerRadius: innerRadius)
+        self.init(kind: kind, values: values, color: try fields.optional("color"), colors: colors,
+                  lineWidth: try fields.optional("lineWidth") ?? 2, interpolation: try fields.optional("interpolation") ?? .linear,
+                  cornerRadius: try fields.optional("cornerRadius") ?? 0, innerRadius: innerRadius)
     }
 }
 
