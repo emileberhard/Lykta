@@ -73,13 +73,13 @@ jobs:
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
         run: |
           printf 'DEVELOPMENT_TEAM = %s\nLYKTA_BUNDLE_ID = %s\nLYKTA_GATEWAY_HOST = %s\n' \
-            "$DEVELOPMENT_TEAM" "$LYKTA_BUNDLE_ID" "$LYKTA_GATEWAY_HOST" > Config/Local.xcconfig
-          plutil -insert teamID -string "$DEVELOPMENT_TEAM" Config/ExportOptions.plist
+            "$DEVELOPMENT_TEAM" "$LYKTA_BUNDLE_ID" "$LYKTA_GATEWAY_HOST" > iOS/Config/Local.xcconfig
+          plutil -insert teamID -string "$DEVELOPMENT_TEAM" iOS/Config/ExportOptions.plist
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Archive
         run: |
-          xcodebuild archive -quiet -project Lykta.xcodeproj -scheme Lykta -configuration Release \
+          xcodebuild archive -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Lykta.xcarchive" \
             MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
 
@@ -108,7 +108,7 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist Config/ExportOptions.plist -allowProvisioningUpdates \
+            -exportOptionsPlist iOS/Config/ExportOptions.plist -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
 
   github-release:

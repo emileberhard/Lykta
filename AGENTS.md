@@ -10,15 +10,16 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | Path | Owns |
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
-| `Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
-| `Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `App` | Registration, Keychain credentials, ActivityKit observation, device reports, the in-app Lock Screen cards and the example gallery |
-| `App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
+| `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
+| `iOS/Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
+| `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
+| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, device reports, the in-app Lock Screen cards and the example gallery |
+| `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
-| `AppStore` | The App Store screenshot fixture activities and slide composer |
-| `scripts/render`, `Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
+| `iOS/AppStore` | The App Store screenshot fixture activities and slide composer |
+| `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
 
 ## Invariants
 
@@ -146,18 +147,18 @@ launch it with a one-time invite from `lykta-gateway invite` as
 `SIMCTL_CHILD_LYKTA_INVITE=<invite> xcrun simctl launch <device> <bundle ID>`,
 because simulators cannot use App Attest, tap Copy Agent Setup, start the
 fixture activities with
-`LYKTA_URL=… LYKTA_TOKEN=… python3 AppStore/activities.py --quiet`, and capture
+`LYKTA_URL=… LYKTA_TOKEN=… python3 iOS/AppStore/activities.py --quiet`, and capture
 with `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
 Island is missing without a mask. Name the captures `1-lock`, `2-compact`,
 `3-expanded` and `4-app`, compose them with
-`swift AppStore/compose.swift <captures> <slides>`, which also holds the
+`swift iOS/AppStore/compose.swift <captures> <slides>`, which also holds the
 captions, and flatten each slide with
 `magick <slide> -background black -alpha remove -alpha off PNG24:<slide>`.
 Tap Reset in the app afterwards to delete the simulator from the gateway.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own
-`Config/Local.xcconfig`. Gateway state lives in SQLite, so replacing the
+`iOS/Config/Local.xcconfig`. Gateway state lives in SQLite, so replacing the
 container is safe. On SIGTERM the gateway stops claiming pushes and starts no
 further request for a claimed one, finishes the requests in flight within
 APNs' 15-second timeout while still accepting API requests, then closes its

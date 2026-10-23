@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 STAGE = ROOT / ".local" / "render"
 OUTPUT = ROOT / ".local" / "renders"
-PROJECT = ROOT / "Lykta.xcodeproj"
+PROJECT = ROOT / "iOS" / "Lykta.xcodeproj"
 PREVIEW = "Widgets/RenderPreviews.swift"
 DEADLINE = 360
 STYLES = {

@@ -21,4 +21,4 @@ image:
 
 # Compile the app and widgets for iOS without signing
 ios:
-    xcodebuild -project Lykta.xcodeproj -scheme Lykta -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+    xcodebuild -project iOS/Lykta.xcodeproj -scheme Lykta -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build

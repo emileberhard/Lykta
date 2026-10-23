@@ -130,8 +130,8 @@ requires; the container image ships that libcurl.
 
 **Two packages and a plain Xcode project.** `Core` has no dependencies and is
 the only package the app links; `Gateway` adds SwiftNIO, swift-certificates
-for App Attest and, on Linux, swift-crypto. The app uses Xcode's JSON project format directly instead of a
-generator.
+for App Attest and, on Linux, swift-crypto. The app's project in `iOS` uses Xcode's JSON project format directly
+instead of a generator.
 
 **Credentials.** Each phone gets a device secret and an agent token, both 256
 random bits stored as SHA-256 hashes. Registration needs proof, so a script

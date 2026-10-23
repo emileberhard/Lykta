@@ -10,14 +10,14 @@
   "packages": [
     {
       "kind": "local",
-      "path": "Core",
+      "path": "../Core",
     },
   ],
   "files": [
     { "kind": "folder", "path": "App", "target-membership": [ "Lykta" ] },
     { "kind": "folder", "path": "Widgets", "target-membership": [ "LyktaWidgets" ] },
     { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets" ] },
-    { "path": "Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },
+    { "path": "../Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },
     {
       "kind": "group",
       "path": "Config",

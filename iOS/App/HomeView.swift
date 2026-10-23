@@ -45,7 +45,7 @@ struct HomeView: View {
         switch model.phase {
         case .unconfigured:
             ContentUnavailableView("No Gateway", systemImage: "network.slash",
-                                   description: Text("Set LYKTA_GATEWAY_HOST in Config/Local.xcconfig."))
+                                   description: Text("Set LYKTA_GATEWAY_HOST in iOS/Config/Local.xcconfig."))
                 .listRowBackground(Color.clear)
         case .connecting:
             ProgressView()

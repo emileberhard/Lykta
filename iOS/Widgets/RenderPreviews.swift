@@ -5,7 +5,7 @@ import SwiftUI
 import WidgetKit
 
 private enum Staged {
-    private static let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../.local/render")
+    private static let directory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../.local/render")
     static let attributes = LyktaActivity(id: UUID(), name: "render")
 
     private struct Input: Decodable {

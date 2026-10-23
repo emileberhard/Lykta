@@ -56,9 +56,9 @@ just test   # core and gateway tests
 just ios    # compile the app and widgets
 ```
 
-`Core` holds the layout language, `Rendering` draws it for the widget and the
-app, `App` registers the phone, and `Gateway` serves the API and delivers
-pushes. See [AGENTS.md](AGENTS.md) for ownership and invariants and the
+`Core` holds the layout language, `Gateway` serves the API and delivers
+pushes, and `iOS` holds the app, its widgets and the `Rendering` they share.
+See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
 
 ## License and security
