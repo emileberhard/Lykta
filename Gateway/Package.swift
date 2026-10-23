@@ -2,20 +2,6 @@
 import PackageDescription
 
 let linux = TargetDependencyCondition.when(platforms: [.linux])
-let examples = [
-    "agent-question",
-    "app-review",
-    "homelab",
-    "jira-release",
-    "movie-night",
-    "orion-return",
-    "pr-inbox",
-    "printer",
-    "puppy-potty",
-    "recipe-steps",
-    "shopping-list",
-    "solar-eclipse",
-]
 
 let package = Package(
     name: "LyktaGateway",
@@ -41,8 +27,7 @@ let package = Package(
                 .product(name: "X509", package: "swift-certificates"),
                 .target(name: "CSQLite", condition: linux),
             ],
-            resources: [.embedInCode("Skill/SKILL.md"), .embedInCode("Skill/references/layout.md")]
-                + examples.map { .embedInCode("Skill/examples/\($0).json") }
+            resources: [.embedInCode("Skill")]
         ),
         .testTarget(name: "LyktaGatewayTests", dependencies: ["LyktaGateway"]),
     ]
