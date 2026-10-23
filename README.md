@@ -37,7 +37,7 @@ channel. Timers and progress run on the phone, so agents only send changes.
 In the app, Copy Agent Setup copies the gateway address, an agent token and a link
 to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
 the API, and its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
-covers every node and modifier. Twelve [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
+covers every node and modifier. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping
 list. The app shows each one on the Lock Screen and in the Dynamic Island, and
 sends any of them to your phone to try live.

@@ -11,11 +11,11 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
-| `iOS/Rendering` | SwiftUI for every node and modifier, and the Lock Screen view; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
+| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, device reports, the in-app Lock Screen cards and the example gallery |
+| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, device reports and telemetry, the in-app Lock Screen cards and the example gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
-| `Gateway` | HTTP API, `Store` (all durable state), delivery and APNs |
+| `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `iOS/AppStore` | The App Store screenshot fixture activities and slide composer |
@@ -60,7 +60,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.
 - Migrations are additive, so the previous release runs on the new schema and
-  a rollback needs no restore. Bump `Store.schemaVersion` only for a change the
+  a rollback needs no restore. Bump `Schema.version` only for a change the
   previous release cannot read; older gateways then refuse to start.
 - Never run a second gateway with another gateway's APNs keys, even briefly:
   its channel cleanup deletes every channel its own database does not know.
@@ -152,8 +152,7 @@ with `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
 Island is missing without a mask. Name the captures `1-lock`, `2-compact`,
 `3-expanded` and `4-app`, compose them with
 `swift iOS/AppStore/compose.swift <captures> <slides>`, which also holds the
-captions, and flatten each slide with
-`magick <slide> -background black -alpha remove -alpha off PNG24:<slide>`.
+captions and writes opaque slides as App Store Connect requires.
 Tap Reset in the app afterwards to delete the simulator from the gateway.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
