@@ -38,6 +38,14 @@ iOS budgets how many activities an app may start by push. Once the budget is
 spent it silently drops new starts for a while, so keep one name per purpose and
 update it; never end and restart an activity to refresh it.
 
+A PUT shows the activity right away, and Lykta cannot start one later by
+itself. To show something at a later time, have a scheduler that outlives your
+session send the PUT then, such as your harness's scheduled tasks or one the
+user already uses, and tell the user what you set up. If you know of none, say
+so and ask the user how to schedule it instead of leaving a process running. A
+reminder that only needs to alert the user at a time belongs in their reminders
+or calendar app.
+
 Updates normally send only `data`; the title and layout keep their last values.
 Timers and timer-driven progress run on the phone, so send them once instead of
 updating every second. The phone shows at most one update per second per
