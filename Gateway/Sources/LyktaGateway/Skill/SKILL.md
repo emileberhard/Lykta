@@ -11,8 +11,9 @@ and a notification, which tells the user about one moment. You send JSON to
 the user's gateway; the gateway validates it and pushes it to the phone. The
 Lykta app does not need to be open.
 
-You need the gateway URL and agent token from the setup the user copied out of
-the Lykta app. Send the token as `Authorization: Bearer <token>`.
+You need the gateway URL and agent token: `LYKTA_URL` and `LYKTA_TOKEN` when
+they are set, as the examples assume, and otherwise the setup the user copied
+out of the Lykta app. Send the token as `Authorization: Bearer <token>`.
 
 ## Choose the form
 
