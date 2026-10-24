@@ -60,6 +60,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       VERSION: ${{ github.ref_name }}
+      ENTITLED: PlugIns/LyktaNotifications.appex=Notifications .=Lykta
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -78,10 +79,18 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Archive
+        env:
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
         run: |
           xcodebuild archive -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Lykta.xcarchive" \
             MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+          app="$RUNNER_TEMP/Lykta.xcarchive/Products/Applications/Lykta.app"
+          codesign --force --sign - "$app/PlugIns/LyktaWidgets.appex"
+          for bundle in $ENTITLED; do
+            sed "s/\$(LYKTA_BUNDLE_ID)/$LYKTA_BUNDLE_ID/g" "iOS/Config/${bundle#*=}.entitlements" > "$RUNNER_TEMP/${bundle#*=}.entitlements"
+            codesign --force --sign - --entitlements "$RUNNER_TEMP/${bundle#*=}.entitlements" "$app/${bundle%=*}"
+          done
 
       - name: Wait for the production gateway to run this version
         timeout-minutes: 30
@@ -102,14 +111,28 @@ jobs:
             sleep 15
           done
 
-      - name: Sign and upload to TestFlight
+      - name: Sign, check the entitlements and upload to TestFlight
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist iOS/Config/ExportOptions.plist -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+          export_archive() {
+            xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/$1" \
+              -exportOptionsPlist "$RUNNER_TEMP/$1.plist" -allowProvisioningUpdates \
+              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
+          }
+          plutil -replace destination -string export -o "$RUNNER_TEMP/check.plist" iOS/Config/ExportOptions.plist
+          cp iOS/Config/ExportOptions.plist "$RUNNER_TEMP/upload.plist"
+          export_archive check
+          unzip -q "$RUNNER_TEMP/check/Lykta.ipa" -d "$RUNNER_TEMP/check"
+          for bundle in $ENTITLED; do
+            want=$(plutil -convert json -o - "$RUNNER_TEMP/${bundle#*=}.entitlements" |
+              jq 'if has("aps-environment") then ."aps-environment" = "production" else . end')
+            codesign -d --entitlements - --xml "$RUNNER_TEMP/check/Payload/Lykta.app/${bundle%=*}" | plutil -convert json -o - - |
+              jq -e --argjson want "$want" 'contains($want)' > /dev/null ||
+              { echo "::error::The exported ${bundle%=*} does not claim ${bundle#*=}.entitlements."; exit 1; }
+          done
+          export_archive upload
 
   github-release:
     needs: [admit, testflight]

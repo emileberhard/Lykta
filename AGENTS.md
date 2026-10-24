@@ -218,14 +218,18 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    `scripts/check-feature-table` (rows newer than the previous release must
    equal the tag, which must then be `X.Y.0`) and waits for `main`'s CI run on
    the same commit, without running the tests again.
-2. Meanwhile `testflight` builds an unsigned archive with the tag as its
-   version.
+2. Meanwhile `testflight` builds an archive with the tag as its version on a
+   hosted runner without certificates and signs its bundles ad hoc with their
+   entitlements files, because the export keeps only the capabilities the
+   archive's signatures request. A target that gains an entitlements file
+   joins `ENTITLED` in the workflow.
 3. The production gateway's host polls for admitted tags and deploys them
    itself, with a database backup and an automatic rollback.
 4. Once `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag, `testflight`
-   uploads the archive through Xcode's cloud signing with the `testflight`
-   environment's App Store Connect key. App Store Connect picks the build
-   number.
+   exports the archive through Xcode's cloud signing with the `testflight`
+   environment's App Store Connect key, fails unless every bundle in `ENTITLED`
+   claims its entitlements file with the production push environment, and then
+   uploads it. App Store Connect picks the build number.
 5. The GitHub release is titled with the bare version, and its notes are the
    annotated tag's message verbatim: a Markdown list of user-visible changes
    since the previous version, one short sentence per item, with no heading or
