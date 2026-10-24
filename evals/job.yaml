@@ -6,6 +6,6 @@ agents:
     kwargs:
       reasoning_effort: medium
   - name: claude-code
-    model_name: claude-haiku-5-5
+    model_name: claude-opus-5-5
     kwargs:
-      reasoning_effort: xhigh
+      reasoning_effort: medium

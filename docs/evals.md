@@ -14,13 +14,13 @@ installed with `uv tool install --python 3.13 harbor`.
 ```bash
 just evals
 just evals --include-task-name train --n-attempts 4
-just evals --agent claude-code --model claude-opus-5-5 --ak reasoning_effort=high
+just evals --agent claude-code --model claude-sonnet-5-5 --ak reasoning_effort=high
 harbor view .local/evals
 ```
 
 `just evals` runs the agents in `evals/job.yaml` twice on every task: Codex
-with GPT-6.1 Sol at medium effort and Claude Code with Claude Haiku 5.5 at
-extra-high effort, 20 trials at once. Options after it override the job;
+with GPT-6.1 Sol and Claude Code with Claude Opus 5.5, both at medium effort,
+20 trials at once. Options after it override the job;
 `--model` takes effect only with `--agent`, which replaces the job's agents
 and their efforts.
 
