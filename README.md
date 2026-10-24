@@ -25,6 +25,10 @@ curl -X PUT "$LYKTA_URL/v1/activities/build" \
     },
     "data": {"done": 0.4, "percent": 40}
   }'
+
+curl -X PUT "$LYKTA_URL/v1/notifications/print-42-done" \
+  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
+  -d '{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}'
 ```
 
 ## How it works
@@ -42,11 +46,13 @@ tells the gateway what it showed.
 
 In the app, Copy Agent Setup copies the gateway address, an agent token and a link
 to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
-the API, and its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
-covers every node and modifier. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
+the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
+covers every node and modifier, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
+covers senders, sounds and images. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping
-list. The app shows each one on the Lock Screen and in the Dynamic Island, and
-sends any of them to your phone to try live.
+list, and the [example notifications](Gateway/Sources/LyktaGateway/Skill/examples/notifications)
+range from a CI run to a doorbell with its own chime. The app shows each one
+and sends any of them to your phone to try live.
 
 ## Self-host
 

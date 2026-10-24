@@ -20,7 +20,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
-| `iOS/AppStore` | The App Store screenshot fixture activities and slide composer |
+| `iOS/AppStore` | The App Store screenshot fixture activities and notification and the slide composer |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
@@ -233,16 +233,18 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.
 
-The App Store screenshots are four 1206 × 2622 slides, the required 6.3-inch
+The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size. Capture them from a Debug build on an iPhone 18 Pro simulator:
 launch it with a one-time invite from `lykta-gateway invite` as
 `SIMCTL_CHILD_LYKTA_INVITE=<invite> xcrun simctl launch <device> <bundle ID>`,
 because simulators cannot use App Attest, tap Copy Agent Setup, start the
 fixture activities with
-`LYKTA_URL=… LYKTA_TOKEN=… python3 iOS/AppStore/activities.py --quiet`, and capture
-with `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
-Island is missing without a mask. Name the captures `1-lock`, `2-compact`,
-`3-expanded` and `4-app`, compose them with
+`LYKTA_URL=… LYKTA_TOKEN=… python3 iOS/AppStore/activities.py --quiet`, and
+send the Printer notification onto the locked simulator with
+`python3 iOS/AppStore/activities.py printer`. Capture with
+`xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
+Island is missing without a mask. Name the captures `1-lock`,
+`2-notification`, `3-compact`, `4-expanded` and `5-app`, compose them with
 `swift iOS/AppStore/compose.swift <captures> <slides>`, which also holds the
 captions and writes opaque slides as App Store Connect requires.
 Tap Reset in the app afterwards to delete the simulator from the gateway.

@@ -1,10 +1,12 @@
-import json, os, sys, time, urllib.request
+import json, os, pathlib, sys, time, urllib.request
 token = os.environ["LYKTA_TOKEN"]
-base = os.environ["LYKTA_URL"].rstrip("/") + "/v1/activities/"
+root = os.environ["LYKTA_URL"].rstrip("/")
+examples = pathlib.Path(__file__).resolve().parents[2] / "Gateway/Sources/LyktaGateway/Skill/examples/notifications"
 now = int(time.time())
 
-def call(method, name, body=None):
-    req = urllib.request.Request(base + name, method=method, data=json.dumps(body).encode() if body else None,
+def call(method, path, body=None, raw=None):
+    data = raw if raw is not None else json.dumps(body).encode() if body else None
+    req = urllib.request.Request(root + path, method=method, data=data,
                                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req) as r:
@@ -89,6 +91,17 @@ quiet = "--quiet" in sys.argv
 which = [a for a in sys.argv[1:] if a != "--quiet"] or ["deploy", "tests", "refactor"]
 if quiet:
     [b.pop("alert", None) for b in (deploy, tests, refactor)]
+def notify(example):
+    request = json.loads((examples / f"{example}.json").read_text())
+    for fields, key in ((request["sender"], "avatar"), (request, "sound"), (request, "image")):
+        if isinstance(fields.get(key), str):
+            fields[key] = call("POST", "/v1/media", raw=(examples / fields[key]).read_bytes())[1]["id"]
+    return call("PUT", f"/v1/notifications/screenshot-{example}-{now}", request)
+
 for name in which:
-    status, body = call("PUT", name, {"deploy": deploy, "tests": tests, "refactor": refactor}[name])
+    if name == "printer":
+        status, body = notify("print-finished")
+        print(name, status, body.get("state"), body.get("error"), body.get("message"))
+        continue
+    status, body = call("PUT", "/v1/activities/" + name, {"deploy": deploy, "tests": tests, "refactor": refactor}[name])
     print(name, status, body.get("delivery"), body.get("error"), body.get("message"))

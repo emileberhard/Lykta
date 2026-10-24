@@ -3,9 +3,10 @@ import AppKit
 let width = 1206.0, height = 2622.0
 let slides: [(file: String, title: String, subtitle: String)] = [
     ("1-lock", "Your agents' work,\non the Lock Screen", "Builds, tests and deploys as native Live Activities"),
-    ("2-compact", "Progress at a glance\nin the Dynamic Island", "Timers and progress keep running on the phone"),
-    ("3-expanded", "Press and hold\nfor the details", "Your agent designs every presentation"),
-    ("4-app", "Copy the setup,\nhand it to your agent", "One HTTP request starts an activity"),
+    ("2-notification", "Hear from your agents\nthe moment it happens", "Notifications with their own picture, sound and image"),
+    ("3-compact", "Progress at a glance\nin the Dynamic Island", "Timers and progress keep running on the phone"),
+    ("4-expanded", "Press and hold\nfor the details", "Your agent designs every presentation"),
+    ("5-app", "Copy the setup,\nhand it to your agent", "One HTTP request starts an activity or a notification"),
 ]
 let raw = URL(fileURLWithPath: CommandLine.arguments[1])
 let out = URL(fileURLWithPath: CommandLine.arguments[2])

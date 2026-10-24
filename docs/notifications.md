@@ -6,8 +6,9 @@ Status: text notifications and media have landed, and their decisions are in
 
 ## Remaining for 0.6.0
 
-Product: the README's notification section, App Store screenshots that show a
-notification, and the App Store privacy label for uploaded sounds and images.
+Capture the five App Store slides once the 0.6.0 gateway is live, since the
+notification slide needs it, and have the maintainer add uploaded sounds and
+images to the App Store privacy label.
 
 ## Still open
 
