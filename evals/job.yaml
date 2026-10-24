@@ -2,10 +2,10 @@ n_attempts: 2
 n_concurrent_trials: 20
 agents:
   - name: codex
-    model_name: openai/gpt-6.1-sol
+    model_name: gpt-6.1-sol
     kwargs:
       reasoning_effort: medium
   - name: claude-code
-    model_name: anthropic/claude-haiku-5-5
+    model_name: claude-haiku-5-5
     kwargs:
       reasoning_effort: xhigh

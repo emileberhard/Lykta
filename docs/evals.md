@@ -14,7 +14,7 @@ installed with `uv tool install --python 3.13 harbor`.
 ```bash
 just evals
 just evals --include-task-name train --n-attempts 4
-just evals --agent claude-code --model anthropic/claude-opus-5-5 --ak reasoning_effort=high
+just evals --agent claude-code --model claude-opus-5-5 --ak reasoning_effort=high
 harbor view .local/evals
 ```
 
@@ -59,15 +59,16 @@ scripts/eval-metrics .local/evals/<job> .local/evals/<other job>
 scripts/eval-metrics --json .local/evals/<job>
 ```
 
-Agents take their usual credentials from the environment: `OPENAI_API_KEY`
-for Codex and `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` with
+Agents take their usual credentials from the environment: `OPENAI_API_KEY` for
+Codex and `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` with
 `CLAUDE_FORCE_OAUTH=1`, for Claude Code. `OPENAI_BASE_URL` and
-`ANTHROPIC_BASE_URL`, with `ANTHROPIC_AUTH_TOKEN` as the proxy's key, send
-them to a proxy instead of the vendor's API. Codex tries a Responses
-WebSocket first and falls back to HTTP only when the proxy answers 426. To
-keep these out of your shell, put them in `~/.config/lykta/evals.env`, which
-`just evals` passes to Harbor as `--env-file` when it exists; its values win
-over the shell's.
+`ANTHROPIC_BASE_URL`, with `ANTHROPIC_AUTH_TOKEN` as the proxy's key, send them
+to a proxy instead of the vendor's API; name models without a provider prefix,
+because Harbor hands a proxy the name as written. Codex tries a Responses
+WebSocket first and falls back to HTTP only when the proxy answers 426. To keep
+these out of your shell, put them in `~/.config/lykta/evals.env`, which `just
+evals` passes to Harbor as `--env-file` when it exists; its values win over the
+shell's.
 
 A task is a folder in `evals/tasks`: the request in `instruction.md`, which
 may be empty, a time limit and the event collection in `task.toml`,
