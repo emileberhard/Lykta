@@ -126,8 +126,8 @@ GET /v1/notifications/{name}
   `POST /v1/media`. `HTTPResponse` gains `Location` and `Retry-After`, and an
   oversized body answers in the JSON error shape.
 - `Core` adds the notification and media request types, the `lykta` payload
-  object the extension decodes, and two optional device report fields: the
-  notification token and the notification authorization status.
+  object the extension decodes, and three optional device report fields: the
+  notification token, the authorization status and the alert style.
 - The app asks for notification permission when the user taps Copy Agent
   Setup, registers for remote notifications and reports the token and status
   in its existing report. It never schedules local notifications; the gateway
@@ -143,7 +143,8 @@ GET /v1/notifications/{name}
   the incoming interaction and passes the result of `updating(from:)` on
   unchanged. It sends its report before handing over the content, with a
   timeout inside its budget, so a lost report never delays the notification.
-  It degrades in steps: initials without an avatar, a plain notification with
+  Without an avatar it draws the sender's initials on a circle whose color
+  derives from `sender.id`. It degrades in steps: a plain notification with
   the custom sound when the intent fails, and the original alert when time
   runs out.
 - The gateway derives a notification's state from its row and events, as it
@@ -178,20 +179,34 @@ GET /v1/notifications/{name}
   avatar and the communication style's system treatment, such as breaking
   through summaries; they remain the fallback if App Review objects.
 
-## Assumptions to check in slice 0
+## Slice 0 results
 
-- A custom sound set before `updating(from:)` still plays.
-- A communication notification without an avatar shows the sender's initials.
-- A 25-second clip plays in full while the phone is unlocked. In April a
-  10.4-second clip was cut off unlocked and played in full when locked.
-- Which targets need the Communication Notifications capability, and whether
-  SiriKit is needed, as Apple's sample enables it.
-- Whether Siri announces these notifications on AirPods by default, as WWDC21
-  says, or needs the older intent handling the `INSendMessageIntent` reference
-  still lists.
+A throwaway app on an iPhone with iOS 27.0.1, 2026-10-24:
 
-App Review's view of communication notifications for agent messages cannot be
-tested before submission; plain notifications are the fallback.
+- A sound copied into the app group's `Library/Sounds` under a new name and
+  set before `updating(from:)` plays, with the avatar, the sender's name and
+  the app icon as a badge. An image attachment shows as a thumbnail beside the
+  avatar and in full when the notification is expanded.
+- The Communication Notifications capability on the app alone suffices; the
+  extension needs no entitlement and nothing needs SiriKit. App Store
+  Connect's API refuses to enable the capability, so it is enabled once in the
+  developer portal.
+- A 25-second clip plays in full while the phone is locked. While it is
+  unlocked, the sound stops when a Temporary banner slides away, after about
+  nine seconds; with Banner Style set to Persistent it plays in full. Only the
+  user can change the style. The app reports `alertStyle` in the device report,
+  a phone's status shows it, the app offers a button to its notification
+  settings while banners are Temporary, and the skill keeps clips under eight
+  seconds unless the phone reports Persistent.
+- Without an avatar, iOS shows the app icon in the avatar's place, even with
+  name components and a new sender; it never draws initials. An avatar the
+  extension draws, white initials on a circle, looks like a contact's.
+
+Still open: whether Siri announces these notifications on AirPods by default,
+as WWDC21 says, or needs the older intent handling the `INSendMessageIntent`
+reference still lists. App Review's view of communication notifications for
+agent messages cannot be tested before submission; plain notifications are the
+fallback.
 
 ## Expensive to change once shipped
 
@@ -208,7 +223,7 @@ tested before submission; plain notifications are the fallback.
 0. Throwaway device test of the assumptions above.
 1. Text notifications end to end: the device report fields, `PUT` and `GET`
    `/v1/notifications`, delivery with claim-time fetch tokens, the extension's
-   communication notification with initials and the default sound, its report
+   communication notification with drawn initials and the default sound, its report
    route, `SimulatedPhone`, the setup paste, the skill's notification
    reference, `PRIVACY.md` and one eval.
 2. Media: `/v1/media` and the listener's larger limit, validation, storage and
