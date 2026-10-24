@@ -11,20 +11,23 @@ nonisolated struct Media: Sendable {
 }
 
 nonisolated final class MediaCache: Sendable {
-    static let shared = MediaCache(appGroup: Bundle.main.object(forInfoDictionaryKey: "LyktaAppGroup") as? String)
+    static let shared = MediaCache()
 
     private static let maximumFiles = 64
     private static let maximumBytes = 64 << 20
 
-    let sounds: URL?
-    let avatars: URL?
+    let sounds: URL
+    let avatars: URL
     private let leases = Mutex<[String: Int]>([:])
 
-    private init(appGroup: String?) {
-        let container = appGroup.flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
-        sounds = container?.appending(path: "Library/Sounds", directoryHint: .isDirectory)
-        avatars = container?.appending(path: "Library/Caches/Avatars", directoryHint: .isDirectory)
-        for directory in [sounds, avatars].compactMap(\.self) {
+    private init() {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "LyktaAppGroup") as? String,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) else {
+            preconditionFailure("The notification extension is not signed with its app group.")
+        }
+        sounds = container.appending(path: "Library/Sounds", directoryHint: .isDirectory)
+        avatars = container.appending(path: "Library/Caches/Avatars", directoryHint: .isDirectory)
+        for directory in [sounds, avatars] {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
     }
@@ -57,7 +60,7 @@ nonisolated final class MediaCache: Sendable {
 
     private func trim(keeping leased: Set<String>) {
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
-        let files = [sounds, avatars].compactMap(\.self).flatMap {
+        let files = [sounds, avatars].flatMap {
             (try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: Array(keys))) ?? []
         }
         let entries = files.compactMap { file -> (file: URL, date: Date, size: Int)? in
@@ -95,8 +98,8 @@ nonisolated final class MediaLoader: Sendable {
         self.payload = payload
         self.host = host
         self.cache = cache
-        avatar = payload.avatar.flatMap { id in cache.avatars?.appending(path: "\(id.rawValue).png") }
-        sound = payload.sound.flatMap { id in cache.sounds?.appending(path: "\(id.rawValue).wav") }
+        avatar = payload.avatar.map { id in cache.avatars.appending(path: "\(id.rawValue).png") }
+        sound = payload.sound.map { id in cache.sounds.appending(path: "\(id.rawValue).wav") }
         cached = cache.lease([avatar, sound].compactMap(\.self))
     }
 

@@ -193,7 +193,9 @@ within 20 seconds, all at once, and moves each file into place: sounds into
 `Library/Sounds` in the app group's container, the only place outside the
 bundle where `UNNotificationSound` finds a downloaded sound, avatars decoded
 by ImageIO to 256 pixels into the group's caches, and the image into a
-temporary file that becomes the notification's attachment. One cache owner
+temporary file that becomes the notification's attachment. An extension
+signed without the app group stops at its first notification rather than
+dropping sounds and avatars unseen. One cache owner
 in the extension process places every file and leases the ones each
 notification needs until it is handed to iOS, so overlapping notifications
 never evict each other's, and keeps sounds and avatars within 64 files and
