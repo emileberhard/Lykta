@@ -109,7 +109,8 @@
                 ]
               }
             ],
-            "spacing": 8
+            "spacing": 8,
+            "modifiers": [{"padding": {"horizontal": 12}}]
           }
         ],
         "spacing": 6,

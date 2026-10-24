@@ -37,7 +37,7 @@
                       }
                     }
                   ],
-                  "modifiers": [{"font": "caption"}, {"foreground": "#9C93B8"}, {"padding": {"horizontal": 4}}]
+                  "modifiers": [{"font": "caption"}, {"foreground": "#9C93B8"}, {"padding": {"leading": 12}}]
                 },
                 {
                   "vstack": [

@@ -127,7 +127,7 @@
         "hstack": [
           {
             "concat": [{"symbol": "moon.zzz.fill"}, " Nap till ", {"date": "{{napUntil}}"}, " · {{trips}} trips"],
-            "modifiers": [{"font": "caption"}, {"foreground": "#6B6A55"}]
+            "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]
           },
           {"spacer": true},
           {
