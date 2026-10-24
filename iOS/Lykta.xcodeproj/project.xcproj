@@ -16,6 +16,7 @@
   "files": [
     { "kind": "folder", "path": "App", "target-membership": [ "Lykta" ] },
     { "kind": "folder", "path": "Widgets", "target-membership": [ "LyktaWidgets" ] },
+    { "kind": "folder", "path": "Notifications", "target-membership": [ "LyktaNotifications" ] },
     { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     { "path": "../Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },
     {
@@ -25,6 +26,7 @@
         { "path": "Lykta.xcconfig" },
         { "path": "App.plist" },
         { "path": "Widgets.plist" },
+        { "path": "Notifications.plist" },
         { "path": "Lykta.entitlements" },
       ],
     }, {
@@ -33,6 +35,7 @@
       "children": [
         { "path": "Lykta.app", "id": "LYKTAAPPPRODUCT000000001", "type": "wrapper.application" },
         { "path": "LyktaWidgets.appex", "id": "LYKTAWIDGETSPRODUCT00001", "type": "wrapper.app-extension", "target-membership": [ { "build-phase": "Lykta/copy/Embed Foundation Extensions", "code-sign-on-copy": true } ] },
+        { "path": "LyktaNotifications.appex", "id": "LYKTANOTIFSPRODUCT000001", "type": "wrapper.app-extension", "target-membership": [ { "build-phase": "Lykta/copy/Embed Foundation Extensions", "code-sign-on-copy": true } ] },
       ],
     },
   ],
@@ -44,6 +47,7 @@
       "product-type": "application",
       "dependencies": [
         "LyktaWidgets",
+        "LyktaNotifications",
         { "kind": "package", "product-name": "LyktaCore" },
       ],
       "build-phases": [
@@ -107,6 +111,36 @@
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": "$(LYKTA_BUNDLE_ID).widgets",
         "PRODUCT_NAME": "LyktaWidgets",
+        "SKIP_INSTALL": "YES",
+      },
+    }, {
+      "name": "LyktaNotifications",
+      "id": "LYKTANOTIFSTARGET0000001",
+      "product": "Products/LyktaNotifications.appex",
+      "product-type": "app-extension",
+      "dependencies": [
+        { "kind": "package", "product-name": "LyktaCore" },
+      ],
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+      ],
+      "package-product-members": [
+        {
+          "product-name": "LyktaCore",
+          "build-phase": { "build-phase": "frameworks" },
+        },
+      ],
+      "build-settings": {
+        "INFOPLIST_FILE": "Config/Notifications.plist",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/Frameworks",
+          "@executable_path/../../Frameworks",
+        ],
+        "PRODUCT_BUNDLE_IDENTIFIER": "$(LYKTA_BUNDLE_ID).notifications",
+        "PRODUCT_NAME": "LyktaNotifications",
         "SKIP_INSTALL": "YES",
       },
     },

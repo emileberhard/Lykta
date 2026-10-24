@@ -1,3 +1,4 @@
+import LyktaCore
 import SwiftUI
 import UIKit
 
@@ -7,6 +8,36 @@ struct ActivitiesOffNotice: View {
     var body: some View {
         Notice(Label("Live Activities Are Off", systemImage: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor),
                action: "Turn On") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
+    }
+}
+
+struct NotificationsNotice: View {
+    let authorization: NotificationSettings.Authorization
+    let alertStyle: NotificationSettings.AlertStyle
+    let allow: () async -> Void
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        switch (authorization, alertStyle) {
+        case (.notDetermined, _):
+            Section {
+                Notice(Label("Agent Notifications", systemImage: "bell.badge.fill"), action: "Allow") { Task { await allow() } }
+            }
+        case (.denied, _):
+            Section {
+                Notice(Label("Notifications Are Off", systemImage: "bell.slash.fill"), action: "Turn On") { openSettings() }
+            }
+        case (_, .banner):
+            Section {
+                Notice(Label("Temporary Banners Cut Sounds Short", systemImage: "bell.badge.waveform.fill"), action: "Change") { openSettings() }
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func openSettings() {
+        openURL(URL(string: UIApplication.openNotificationSettingsURLString)!)
     }
 }
 

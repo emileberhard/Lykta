@@ -4,6 +4,8 @@
 
 - An agent shows a native Live Activity with one HTTP request, in nearly any
   layout ActivityKit can display, without an app update per layout.
+- An agent tells the user about a moment with one HTTP request, as a
+  notification from a sender it names.
 - One person can self-host the gateway. Apple Push Notification service is the
   only external service.
 - The codebase stays small: two Swift packages, Apple frameworks first, and
@@ -29,6 +31,10 @@ sequenceDiagram
     Phone->>Gateway: report activity states
     Phone->>Gateway: button press or toggle
     Agent->>Gateway: GET actions after cursor
+    Agent->>Gateway: PUT notification
+    Gateway->>APNs: alert push with a fetch token
+    APNs->>Phone: notification extension
+    Phone->>Gateway: report with the fetch token
 ```
 
 ## Decisions
@@ -117,6 +123,56 @@ agent that writes data a tap may have changed reads the activity and sends
 most 1,000 per phone. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip.
 
+**Notifications arrive as messages from their sender.** The gateway sends an
+alert push at priority 10 with the sender's name as the title, the body,
+`sound: "default"` when the agent asked for a sound, `mutable-content`,
+`thread-id` from `sender.id`, and a `lykta` object with the notification's
+UUID, the sender ID and a fetch token. The `LyktaNotifications` extension
+draws the sender's initials on a circle colored by `sender.id`, because iOS
+shows the app icon rather than initials for a sender without an image. It
+builds an `INPerson` with an app-specific handle and no contact suggestion
+and an incoming `INSendMessageIntent` whose conversation is the sender ID,
+donates it and passes the result of `updating(from:)` on unchanged, so iOS
+shows the avatar and name with the app icon as a badge. The Communication
+Notifications capability on the app is all this needs, with no extension
+entitlement and no SiriKit. If the intent fails, the extension delivers the
+plain alert; if the extension runs out of time, iOS does. The push reads
+correctly without the extension. The app asks for permission when the user
+taps Copy Agent Setup, or Allow on the home screen for installs set up
+earlier, registers for remote notifications, and reports the authorization,
+the banner style and the token in its device report. A phone whose report
+lacks them predates notifications and gets `app_update_required`.
+
+**A notification is one event for a day.** Its name follows the activity
+name rules and stays reserved until `expires`, a day after it was accepted;
+the push's `apns-expiration` and the fetch token end then too. Within that
+day the same request returns the notification before any readiness or
+quota check, so an agent retries a lost response by repeating it, and a
+different request under the name is a conflict. Phones take 60 an hour, and
+the refusal carries `Retry-After`. States are `queued`, `sent`, `received`,
+`failed` and `unknown`. A send whose APNs outcome is uncertain, or that was in
+flight when the gateway stopped, becomes `unknown` and is never sent again;
+429 and 5xx answers guarantee no delivery and are retried with backoff until
+expiry, and `BadDeviceToken` or `Unregistered` clears the phone's notification
+token and fails what waited for it. The extension's report sets `received`
+and wins over an APNs outcome that completes after it; the first report wins.
+Notifications never coalesce, unlike activity updates.
+
+**A fetch token per send.** Claiming a notification for a send creates a
+random fetch token, stores its hash and hands the plaintext only to that push.
+It authorizes only `POST /v1/device/notifications/{uuid}/report` for that
+notification until it expires, so the extension never needs the device
+secret, which would mean sharing the Keychain item with it. The extension
+reports to its own gateway, follows no redirect, and waits at most three
+seconds for the answer before handing the notification to iOS, since iOS may
+stop the extension once it has. A retried send gets a new token.
+
+**The extension prepares synchronously.** iOS calls the extension with a
+content handler that is not `Sendable`, so Swift 6 cannot move it into a task
+without silencing isolation, which Lykta does not do. The extension draws,
+donates without waiting, as Apple's sample does, and waits for its report
+with a semaphore on the thread iOS called it on; every wait is bounded.
+
 **One actor owns durable state.** `Store` owns the SQLite database; every
 mutation is one transaction. Delivery claims jobs from rows, so a restart
 resumes pending work. A start whose outcome is unknown becomes a live activity
@@ -151,7 +207,8 @@ limit bounds.
   they describe: puts, ends, syncs, failed requests, and each APNs attempt with
   the gateway's request ID, Apple's `apns-unique-id` for the Push Notifications
   Console delivery log, the outcome and the latency.
-- The app records launches, scene phases, push-to-start tokens, authorization,
+- The app records launches, scene phases, push-to-start and notification
+  tokens, Live Activity and notification authorization, the banner style,
   each activity it observes with the content fingerprint it received, and
   MetricKit's crash, hang and daily metric reports. A bounded file queue holds
   them until a batch upload, so events from background wakes and offline
@@ -159,8 +216,12 @@ limit bounds.
   observes rendered content through ActivityKit instead.
 - Agents read their phone's events through `GET /v1/events`; operators read
   every phone with `lykta-gateway events`.
+- Notifications add `notification.put`, `push.notification`,
+  `notification.received` from the extension's report, and
+  `notification.unknown` and `notification.expired`; `device.sync` records the
+  phone's notification authorization, banner style and token fingerprint.
 - Events hold IDs, states, fingerprints and errors, never tokens or activity
-  content. They are kept 14 days, at most 8 MB per phone.
+  or notification content. They are kept 14 days, at most 8 MB per phone.
 
 ## Expensive to change
 
@@ -176,3 +237,8 @@ limit bounds.
 - The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
   including the action report that installed apps send.
 - The `GET /v1/actions` cursor and record format, which agents poll.
+- The `/v1/notifications` contract, its states, lifetime and error codes, the
+  `lykta` payload object and the report route, which installed extensions use,
+  and the notification fields of the device report.
+- `sender.id` and what derives from it: Notification Center threads, Focus's
+  allowed people and Siri's suggestions key on the handle and conversation.

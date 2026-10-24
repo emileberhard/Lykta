@@ -13,6 +13,9 @@ struct APIError: Error, Encodable, Sendable {
         case tooManyActivities = "too_many_activities"
         case payloadTooLarge = "payload_too_large"
         case appUpdateRequired = "app_update_required"
+        case notificationsNotAllowed = "notifications_not_allowed"
+        case notificationsNotSetUp = "notifications_not_set_up"
+        case tooManyNotifications = "too_many_notifications"
         case `internal`
 
         var status: Int {
@@ -21,8 +24,9 @@ struct APIError: Error, Encodable, Sendable {
             case .unauthorized: 401
             case .registrationClosed, .registrationRefused: 403
             case .notFound: 404
-            case .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired: 409
+            case .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired, .notificationsNotAllowed, .notificationsNotSetUp: 409
             case .payloadTooLarge: 413
+            case .tooManyNotifications: 429
             case .internal: 500
             }
         }
@@ -30,6 +34,7 @@ struct APIError: Error, Encodable, Sendable {
 
     let code: Code
     let message: String
+    var retryAfter: Int?
 
     init(_ code: Code, _ message: String) {
         self.code = code

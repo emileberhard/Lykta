@@ -2,11 +2,14 @@
 
 [![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/kDAjDvfD)
 
-Lykta lets AI agents put native Live Activities on your iPhone. An agent sends
-a JSON layout to your Lykta gateway, and the phone shows it on the Lock Screen
-and in the Dynamic Island, rendered with SwiftUI and kept current as the agent
-sends updates. Any layout works without an app update, including buttons,
-toggles and links that report back to the agent.
+Lykta lets AI agents put native Live Activities on your iPhone and send you
+notifications. An agent sends a JSON layout to your Lykta gateway, and the
+phone shows it on the Lock Screen and in the Dynamic Island, rendered with
+SwiftUI and kept current as the agent sends updates. Any layout works without
+an app update, including buttons, toggles and links that report back to the
+agent. For a single moment, such as a finished job, the agent sends a
+notification that arrives like a message from a person, with the sender's
+name and avatar.
 
 ```bash
 curl -X PUT "$LYKTA_URL/v1/activities/build" \
@@ -31,6 +34,8 @@ genuine copy, and shares its push-to-start token. When an agent starts an
 activity, the gateway validates the layout with the same Swift code the widget
 renders it with, then starts it through APNs and updates it over a broadcast
 channel. Timers and progress run on the phone, so agents only send changes.
+Notifications go out as alert pushes, and the app's notification extension
+draws the sender's avatar and tells the gateway what it showed.
 
 ## Use it from an agent
 
@@ -53,12 +58,13 @@ as a skill for coding agents.
 
 ```bash
 just test   # core and gateway tests
-just ios    # compile the app and widgets
+just ios    # compile the app and its extensions
 just evals  # fresh agents against a simulated phone
 ```
 
 `Core` holds the layout language, `Gateway` serves the API and delivers
-pushes, and `iOS` holds the app, its widgets and the `Rendering` they share.
+pushes, and `iOS` holds the app, its widgets, its notification extension and
+the `Rendering` the app and widgets share.
 See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
 

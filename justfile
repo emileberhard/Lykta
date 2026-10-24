@@ -35,6 +35,6 @@ evals *args: image
     [ -d ".local/evals/$job" ] && scripts/eval-metrics ".local/evals/$job"
     exit $status
 
-# Compile the app and widgets for iOS without signing
+# Compile the app and its extensions for iOS without signing
 ios:
     xcodebuild -project iOS/Lykta.xcodeproj -scheme Lykta -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build

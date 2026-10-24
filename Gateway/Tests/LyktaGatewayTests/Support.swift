@@ -81,11 +81,14 @@ final class FakePush: PushService {
     private struct State {
         var sent: [String] = []
         var failures: [String: APNsError] = [:]
+        var alerts: [(payload: JSONValue, expiration: Int)] = []
     }
 
     private let state = Mutex(State())
 
     var sent: [String] { state.withLock { $0.sent } }
+
+    var alerts: [(payload: JSONValue, expiration: Int)] { state.withLock { $0.alerts } }
 
     func fail(_ call: String, _ error: APNsError) {
         state.withLock { $0.failures[call] = error }
@@ -101,6 +104,12 @@ final class FakePush: PushService {
         }
         let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
         try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body")
+        return "unique-\(id)"
+    }
+
+    func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        state.withLock { $0.alerts.append(((try? JSONDecoder().decode(JSONValue.self, from: payload)) ?? .null, expiration)) }
+        try record("notify")
         return "unique-\(id)"
     }
 

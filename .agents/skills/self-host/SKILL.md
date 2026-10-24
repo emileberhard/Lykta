@@ -12,10 +12,13 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
 ## Apple Developer
 
 1. Pick a bundle ID the user owns, such as `com.example.lykta`; the widget
-   extension uses `<bundle ID>.widgets`. Xcode's automatic signing registers
-   both App IDs and enables Push Notifications.
-2. In Certificates, IDs & Profiles > Identifiers, open the app's App ID and
-   enable Broadcast Capability under Push Notifications.
+   extension uses `<bundle ID>.widgets` and the notification extension
+   `<bundle ID>.notifications`. Xcode's automatic signing registers the three
+   App IDs and enables Push Notifications.
+2. In Certificates, IDs & Profiles > Identifiers, open the app's App ID,
+   enable Broadcast Capability under Push Notifications, and enable
+   Communication Notifications, which lets notifications show their sender's
+   avatar.
 3. Under Keys, create an Apple Push Notifications service key per environment
    the user needs: Sandbox for builds run from Xcode, Production for TestFlight
    and App Store builds. Record each Key ID; the `.p8` file downloads once.
@@ -86,6 +89,11 @@ gateway needs the matching key.
 3. With the agent token from Copy Agent Setup, `GET /v1/activities/example`
    reports `"delivery": "accepted"`. Gateway logs go to stderr
    (`docker logs lykta`).
+4. Allow notifications when Copy Agent Setup asks, then
+   `PUT /v1/notifications/hello` with
+   `{"sender": {"id": "setup", "name": "Setup"}, "body": "Hello"}`. It arrives
+   with the initials S on a colored circle, and
+   `GET /v1/notifications/hello` reports `"state": "received"`.
 
 ## Upgrade
 

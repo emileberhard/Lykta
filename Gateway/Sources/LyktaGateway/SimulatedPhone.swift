@@ -9,6 +9,7 @@ final class SimulatedPhone: PushService {
     let environments: Set<PushEnvironment> = [.development]
     private let channels = Mutex<[String: UUID]>([:])
     private let pushes: AsyncStream<Push>.Continuation
+    private let notifications: AsyncStream<Data>.Continuation
 
     private struct Push {
         let aps: Payload.APS
@@ -27,6 +28,18 @@ final class SimulatedPhone: PushService {
         _ = try await store.sync(device, report: Self.report([:], install: install), now: now)
         let (received, pushes) = AsyncStream.makeStream(of: Push.self)
         self.pushes = pushes
+        let (alerts, notifications) = AsyncStream.makeStream(of: Data.self)
+        self.notifications = notifications
+        Task {
+            for await payload in alerts {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                    try await Self.present(payload, in: store)
+                } catch {
+                    log("The simulated phone failed to present a notification: \(error)")
+                }
+            }
+        }
         Task {
             var shown: [UUID: ObservedState] = [:]
             for await push in received {
@@ -42,6 +55,12 @@ final class SimulatedPhone: PushService {
 
     deinit {
         pushes.finish()
+        notifications.finish()
+    }
+
+    func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        notifications.yield(payload)
+        return id.uuidString.lowercased()
     }
 
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
@@ -95,10 +114,23 @@ final class SimulatedPhone: PushService {
         }
     }
 
+    private static func present(_ payload: Data, in store: Store) async throws {
+        struct Alert: Decodable {
+            struct APS: Decodable { let sound: String? }
+            let aps: APS
+            let lykta: NotificationPayload
+        }
+        let alert = try JSONDecoder().decode(Alert.self, from: payload)
+        try await store.reportNotification(alert.lykta.id, token: alert.lykta.token,
+                                           NotificationReport(style: .communication(.initials), sound: alert.aps.sound == nil ? .none : .default),
+                                           now: Int(Date().timeIntervalSince1970))
+    }
+
     private static func report(_ shown: [UUID: ObservedState], install: UUID) -> DeviceReport {
         DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)), appVersion: Layout.version.description,
                      layoutVersion: Layout.version, bundleInstance: install,
-                     activities: shown.map { .init(id: $0.key, state: $0.value) })
+                     activities: shown.map { .init(id: $0.key, state: $0.value) },
+                     notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner, token: PushToken(Data(repeating: 8, count: 32))))
     }
 
     private static func decode(_ payload: Data) -> Payload.APS {

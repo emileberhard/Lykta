@@ -464,7 +464,7 @@ struct GatewayTests {
 
     private func report(_ activities: [DeviceReport.Observed]) async throws -> SyncResult {
         let report = DeviceReport(pushToStartToken: PushToken(hex: "abcdef"), appVersion: "1.0 (1)", layoutVersion: Layout.version, bundleInstance: bundleInstance,
-                                  activities: activities)
+                                  activities: activities, notifications: NotificationSettings(authorization: .notDetermined, alertStyle: .banner, token: nil))
         return try await api.handle(HTTPRequest(method: "PUT", target: "/v1/device",
                                                 headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
                                                 body: Self.json(report))).decoded()

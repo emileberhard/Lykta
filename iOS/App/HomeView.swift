@@ -59,6 +59,11 @@ struct HomeView: View {
             if !model.areActivitiesEnabled {
                 Section { ActivitiesOffNotice() }
             }
+            if let notifications = model.notifications {
+                NotificationsNotice(authorization: notifications.authorization, alertStyle: notifications.alertStyle) {
+                    await model.allowNotifications()
+                }
+            }
             if let error = model.error {
                 Section { Problem(error) }
             }
@@ -115,7 +120,7 @@ private struct Actions: View {
         GlassEffectContainer {
             VStack(spacing: 10) {
                 ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", done: "Copied") {
-                    model.copySetup()
+                    await model.copySetup()
                 }
                 .disabled(!model.phase.isReady)
 
@@ -169,6 +174,18 @@ private struct Actions: View {
 
 #Preview("Live Activities Off") {
     HomeView(model: .preview(.ready, areActivitiesEnabled: false))
+}
+
+#Preview("Notifications Not Allowed Yet") {
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .notDetermined, alertStyle: .banner, token: nil)))
+}
+
+#Preview("Notifications Off") {
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, token: nil)))
+}
+
+#Preview("Temporary Banners") {
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner, token: nil)))
 }
 
 #Preview("Unavailable") {

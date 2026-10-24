@@ -5,6 +5,9 @@ enum Schema {
         (table: "activities", column: "ends_at", type: "INTEGER"),
         (table: "devices", column: "layout_version", type: "TEXT"),
         (table: "devices", column: "attestation_key", type: "TEXT"),
+        (table: "devices", column: "notification_authorization", type: "TEXT"),
+        (table: "devices", column: "alert_style", type: "TEXT"),
+        (table: "devices", column: "notification_token", type: "TEXT"),
     ]
 
     static func migrate(_ db: Database) throws {
@@ -92,6 +95,21 @@ enum Schema {
         ) STRICT;
         CREATE INDEX IF NOT EXISTS device_actions ON actions(device_id, seq);
         CREATE INDEX IF NOT EXISTS event_age ON events(received_at);
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          request TEXT NOT NULL,
+          state TEXT NOT NULL CHECK (state IN ('queued', 'sending', 'sent', 'received', 'failed', 'unknown')),
+          token_hash TEXT,
+          retry_at INTEGER NOT NULL DEFAULT 0,
+          failures INTEGER NOT NULL DEFAULT 0,
+          error TEXT,
+          phone TEXT,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL
+        ) STRICT;
+        CREATE UNIQUE INDEX IF NOT EXISTS notification_names ON notifications(device_id, name);
         CREATE TABLE IF NOT EXISTS invites (
           hash TEXT PRIMARY KEY,
           expires_at INTEGER NOT NULL

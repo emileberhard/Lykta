@@ -1,7 +1,7 @@
 import Foundation
 import LyktaCore
 
-struct Name: RawRepresentable, Hashable, Sendable, Encodable, CustomStringConvertible {
+struct Name: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     let rawValue: String
 
     init?(rawValue: String) {

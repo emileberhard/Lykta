@@ -1,8 +1,8 @@
 # Lykta
 
-Lykta shows server-defined native Live Activities on iPhone. Agents send JSON
-layouts to a self-hosted gateway, which validates them and delivers them over
-APNs. Read the [architecture record](docs/architecture.md) before changing a
+Lykta shows server-defined native Live Activities and notifications on
+iPhone. Agents send JSON to a self-hosted gateway, which validates it and
+delivers it over APNs. Read the [architecture record](docs/architecture.md) before changing a
 boundary below. `CLAUDE.md` is a symlink to this file.
 
 ## Ownership
@@ -13,7 +13,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
 | `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, device reports and telemetry, the in-app Lock Screen cards and the example gallery |
+| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, notification permission and token, device reports and telemetry, the in-app Lock Screen cards and the example gallery |
+| `iOS/Notifications` | The notification service extension: the sender's drawn avatar, the communication notification and the report to the gateway |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -47,16 +48,16 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   Core's `movingExampleTimes` moves them to the present for the gallery and
   `just render`.
 - The gateway is the only content writer. The app never calls
-  `Activity.request` or updates content; it ends an activity only when the
-  gateway reports it ended, or on Reset.
+  `Activity.request`, updates content or schedules local notifications; it
+  ends an activity only when the gateway reports it ended, or on Reset.
 - A tap changes data only through the gateway, in the transaction that logs
   it: a toggle sets its boolean and a button applies its `set`, `add` and
   `now`, all read from the data before the tap. A tap counts only for a
   control the current data shows, and a result that fails to fill, fit or
   pass the phone's decoder version changes nothing.
-- Unknown stays unknown. A start with an unknown outcome is never retried. A
-  missing report never ends an activity, except when the activity is absent
-  from the first report of a new app install or update.
+- Unknown stays unknown. A start or notification with an unknown outcome is
+  never sent again. A missing report never ends an activity, except when the
+  activity is absent from the first report of a new app install or update.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.
@@ -72,9 +73,15 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   over a challenge this gateway signed, or with a one-time invite an operator
   created. Never add a registration path without such proof.
 - Tokens are stored only as hashes. Never log tokens, push tokens or payloads.
+- The notification extension talks only to its own gateway, with the fetch
+  token its push carries, and follows no redirect. A fetch token is created
+  when a notification is claimed for sending and authorizes only that
+  notification's device routes until the notification expires; the extension
+  never holds the device secret.
 - Every state change, push attempt and phone observation becomes an event in
   `Store`, so a phone's problems can be debugged from the gateway alone. Events
-  carry IDs, states, fingerprints and errors, never tokens or activity content.
+  carry IDs, states, fingerprints and errors, never tokens or activity or
+  notification content.
 - Boundaries decode into validated types: enums for states, UUIDs for ids,
   `PushToken`, `Name` and `APIError.Code`. Invalid input fails at the
   decoder with a JSON path; stored rows that fail to parse throw rather than
@@ -116,7 +123,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 
 ## Swift and SwiftUI
 
-- The app and widget targets default to main-actor isolation with approachable
+- The app and extension targets default to main-actor isolation with approachable
   concurrency, so their code, async functions included, runs on the main actor
   unless marked. Move work off it with a `nonisolated` type and a `@concurrent`
   function, as `Example.bundled` does, never with `Task.detached`.
@@ -126,6 +133,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   its owner can cancel it. Code runs uninterrupted only between `await`s, so
   recheck what the next step relies on, as `Model.sync` rechecks the
   credentials on a 401.
+- The notification extension is `nonisolated` and prepares each notification
+  on the thread iOS calls it on, because its content handler is not `Sendable`
+  and cannot move into a task. Every wait there, such as the report, is
+  bounded so the notification arrives within iOS's budget.
 - A tap intent may run right after the system launches the app in the
   background for it, so intents only forward the action through `ActionSender`,
   which `LyktaApp.init` registers; register new intent dependencies there too.
@@ -173,7 +184,7 @@ maintainer, because the App Store privacy label must match.
 | Command | Use |
 | --- | --- |
 | `just test` | Core and gateway tests; CI runs them on Linux |
-| `just ios` | Compile the app and widgets without signing |
+| `just ios` | Compile the app and its extensions without signing |
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |
 | `just evals <options>` | Run the fresh agents in `evals/job.yaml`, twice each, on every task in `evals/tasks` against a simulated phone and check each trial; options go to `harbor run` and override the job, such as `--include-task-name train` or `--agent codex --model gpt-6.1-sol`, and `~/.config/lykta/evals.env` sets endpoints and keys. Transcripts, rewards and the gateway's events land in `.local/evals`, and the run ends with each agent's tokens and timings from `scripts/eval-metrics`; read the trials with `harbor view .local/evals` |

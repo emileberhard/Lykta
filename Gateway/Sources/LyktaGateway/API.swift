@@ -27,12 +27,15 @@ struct API: Sendable {
                 log("Recording a failed request failed: \(error)")
             }
         }
-        return Self.json(failure.code.status, failure)
+        var response = Self.json(failure.code.status, failure)
+        if let retryAfter = failure.retryAfter { response.headers["retry-after"] = String(retryAfter) }
+        return response
     }
 
     private static let skill: [String: HTTPResponse] = [
         "skill/SKILL.md": PackageResources.SKILL_md,
         "skill/references/layout.md": PackageResources.layout_md,
+        "skill/references/notifications.md": PackageResources.notifications_md,
     ].mapValues { HTTPResponse(status: 200, contentType: "text/markdown; charset=utf-8", body: $0) }.merging([
         "skill/examples/agent-question.json": PackageResources.agent_question_json,
         "skill/examples/app-review.json": PackageResources.app_review_json,
@@ -53,8 +56,7 @@ struct API: Sendable {
         if request.method == "GET", let file = Self.skill[path.joined(separator: "/")] {
             return file
         }
-        let isActivity = path.count == 3 && path[0] == "v1" && path[1] == "activities"
-        switch (request.method, isActivity ? "v1/activities/{name}" : path.joined(separator: "/")) {
+        switch (request.method, Self.route(path)) {
         case ("GET", "v1/version"):
             return Self.json(200, ["version": version?.description])
         case ("GET", "v1/devices/challenge"):
@@ -115,6 +117,17 @@ struct API: Sendable {
                 return limit
             } ?? 200
             return Self.json(200, ["events": try await store.events(device: device.id, after: after, limit: limit)])
+        case ("PUT", "v1/notifications/{name}"):
+            let device = try await agent(request)
+            let (status, created) = try await store.putNotification(device, name: try Self.name(path[2]),
+                                                                    request: try NotificationRequest.decode(try Self.decode(request.body)), now: now)
+            return Self.json(created ? 201 : 200, status)
+        case ("GET", "v1/notifications/{name}"):
+            return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
+        case ("POST", "v1/device/notifications/{id}/report"):
+            guard let id = UUID(uuidString: path[3]) else { throw APIError(.notFound, "No notification has the id \(path[3]).") }
+            try await store.reportNotification(id, token: try Self.bearer(request), try Self.decode(request.body), now: now)
+            return .noContent
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -135,6 +148,14 @@ struct API: Sendable {
             return Self.json(200, try await store.end(device, name: try Self.name(path[2]), dismissAfter: dismissAfter, now: now))
         default:
             throw APIError(.notFound, "No route for \(request.method) /\(path.joined(separator: "/")).")
+        }
+    }
+
+    private static func route(_ path: [String]) -> String {
+        switch path.count {
+        case 3 where path[0] == "v1" && ["activities", "notifications"].contains(path[1]): "v1/\(path[1])/{name}"
+        case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"
+        default: path.joined(separator: "/")
         }
     }
 

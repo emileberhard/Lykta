@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct LyktaApp: App {
     private let model = Model()
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @Environment(\.scenePhase) private var scenePhase
 
     init() {

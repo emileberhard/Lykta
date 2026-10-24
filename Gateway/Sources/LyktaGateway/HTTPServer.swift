@@ -33,6 +33,7 @@ struct HTTPResponse: Sendable {
     let status: Int
     let contentType: String
     let body: [UInt8]
+    var headers: [String: String] = [:]
 
     static let noContent = HTTPResponse(status: 204, contentType: "text/plain", body: [])
 }
@@ -114,6 +115,7 @@ final class HTTPServer: Sendable {
                         ? HTTPResponse(status: 413, contentType: "text/plain", body: Array("Request body too large".utf8))
                         : await handler(HTTPRequest(method: head.method.rawValue, target: head.uri, headers: headers, body: body))
                     var responseHeaders = HTTPHeaders([("content-type", response.contentType), ("content-length", String(response.body.count))])
+                    responseHeaders.add(contentsOf: response.headers.sorted { $0.key < $1.key })
                     let closes = !head.isKeepAlive || shutdown.isRequested
                     if closes { responseHeaders.add(name: "connection", value: "close") }
                     try await outbound.write(.head(HTTPResponseHead(version: head.version, status: .init(statusCode: response.status), headers: responseHeaders)))

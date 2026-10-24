@@ -37,6 +37,7 @@ enum APNsError: Error, Sendable, CustomStringConvertible {
 protocol PushService: Sendable {
     var environments: Set<PushEnvironment> { get }
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
+    func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError)
@@ -68,6 +69,14 @@ final class APNs: PushService {
 
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         let headers = ["apns-topic": "\(bundleID).push-type.liveactivity", "apns-push-type": "liveactivity", "apns-priority": "10",
+                       "apns-id": id.uuidString.lowercased()]
+        let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment,
+                                           headers: headers, body: payload)
+        return response.value(forHTTPHeaderField: "apns-unique-id")
+    }
+
+    func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        let headers = ["apns-topic": bundleID, "apns-push-type": "alert", "apns-priority": "10", "apns-expiration": String(expiration),
                        "apns-id": id.uuidString.lowercased()]
         let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment,
                                            headers: headers, body: payload)

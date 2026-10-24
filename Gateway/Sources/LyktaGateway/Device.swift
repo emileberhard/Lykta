@@ -7,6 +7,7 @@ struct Device: Sendable {
     let pushToken: PushToken?
     let appVersion: String
     let layoutVersion: Version?
+    let notifications: NotificationSettings?
 }
 
 enum Admission: Sendable {

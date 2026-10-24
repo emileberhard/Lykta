@@ -36,8 +36,8 @@ task's collect hook saves the gateway's events as `artifacts/events.json`.
 agent, version and model, with a median row:
 
 - `accepted`: seconds from the start of Harbor's agent phase to the first
-  activity the gateway accepted, or `none` when it accepted none, as the
-  reminder expects.
+  activity or notification the gateway accepted, or `none` when it accepted
+  none, as the reminder expects.
 - `agent`: seconds the agent phase took, including the harness's startup and
   exit.
 - `model calls` and `tool calls`, counted in the transcript.
@@ -75,8 +75,9 @@ may be empty, a time limit and the event collection in `task.toml`,
 `environment` linking the shared `evals/environment` and its check in
 `tests/test.sh`. Harbor accepts only tests inside the task, so the tasks that
 should show something carry the same check, which passes when the phone drew
-an activity the agent sent; the reminder's passes when the agent started none
-now.
+an activity the agent sent. The reminder's passes when the agent sent nothing
+now, and tests-done's when the phone received a notification and the agent
+started no activity.
 
 ## Flow
 

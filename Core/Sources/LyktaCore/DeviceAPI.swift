@@ -120,13 +120,16 @@ public struct DeviceReport: Codable, Sendable {
     public let layoutVersion: Version?
     public let bundleInstance: UUID
     public let activities: [Observed]
+    public let notifications: NotificationSettings?
 
-    public init(pushToStartToken: PushToken?, appVersion: String, layoutVersion: Version, bundleInstance: UUID, activities: [Observed]) {
+    public init(pushToStartToken: PushToken?, appVersion: String, layoutVersion: Version, bundleInstance: UUID, activities: [Observed],
+                notifications: NotificationSettings) {
         self.pushToStartToken = pushToStartToken
         self.appVersion = appVersion
         self.layoutVersion = layoutVersion
         self.bundleInstance = bundleInstance
         self.activities = activities
+        self.notifications = notifications
     }
 
     public init(from decoder: any Decoder) throws {
@@ -136,6 +139,7 @@ public struct DeviceReport: Codable, Sendable {
         layoutVersion = try fields.optional("layoutVersion")
         bundleInstance = try fields.required("bundleInstance")
         activities = try fields.required("activities")
+        notifications = try fields.optional("notifications")
         guard activities.count <= Self.maximumActivities else {
             throw fields.invalid("must list at most \(Self.maximumActivities) activities", at: "activities")
         }
@@ -198,5 +202,89 @@ public struct Action: Codable, Equatable, Sendable {
         try fields.encode(id, forKey: Key(stringValue: "id"))
         try fields.encode(activity, forKey: Key(stringValue: "activity"))
         try input.encode(to: encoder)
+    }
+}
+
+public struct NotificationSettings: Codable, Equatable, Sendable {
+    public enum Authorization: String, Choice, Encodable {
+        case notDetermined, denied, authorized, provisional, ephemeral
+    }
+
+    public enum AlertStyle: String, Choice, Encodable {
+        case none, banner, alert
+    }
+
+    public let authorization: Authorization
+    public let alertStyle: AlertStyle
+    public let token: PushToken?
+
+    public init(authorization: Authorization, alertStyle: AlertStyle, token: PushToken?) {
+        self.authorization = authorization
+        self.alertStyle = alertStyle
+        self.token = token
+    }
+}
+
+public struct NotificationPayload: Codable, Sendable {
+    public static let key = "lykta"
+
+    public let id: UUID
+    public let sender: String
+    public let token: String
+
+    public init(id: UUID, sender: String, token: String) {
+        self.id = id
+        self.sender = sender
+        self.token = token
+    }
+}
+
+public struct NotificationReport: Codable, Equatable, Sendable {
+    public enum Style: Equatable, Sendable {
+        case communication(Avatar)
+        case plain
+    }
+
+    public enum Avatar: String, Choice, Encodable {
+        case image, initials
+    }
+
+    public enum Sound: String, Choice, Encodable {
+        case custom, `default`, none
+    }
+
+    public let style: Style
+    public let sound: Sound
+
+    public init(style: Style, sound: Sound) {
+        self.style = style
+        self.sound = sound
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: Key.self)
+        sound = try fields.required("sound")
+        switch try fields.required("style") as String {
+        case "communication":
+            try fields.allowOnly(["style", "avatar", "sound"])
+            style = .communication(try fields.required("avatar"))
+        case "plain":
+            try fields.allowOnly(["style", "sound"])
+            style = .plain
+        default:
+            throw fields.invalid("must be communication or plain", at: "style")
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: Key.self)
+        switch style {
+        case let .communication(avatar):
+            try fields.encode("communication", forKey: Key(stringValue: "style"))
+            try fields.encode(avatar, forKey: Key(stringValue: "avatar"))
+        case .plain:
+            try fields.encode("plain", forKey: Key(stringValue: "style"))
+        }
+        try fields.encode(sound, forKey: Key(stringValue: "sound"))
     }
 }

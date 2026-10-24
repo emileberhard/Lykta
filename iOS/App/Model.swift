@@ -6,6 +6,7 @@ import LyktaCore
 import Observation
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @Observable
 final class Model {
@@ -18,6 +19,7 @@ final class Model {
     private(set) var activities: [LiveActivity] = []
     private(set) var examples: [Example] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
+    private(set) var notifications: NotificationSettings?
     private(set) var error: String?
 
     private let gateway: GatewayClient?
@@ -28,6 +30,7 @@ final class Model {
     private var syncFailures = 0
     private var runTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
+    private var registrationObservation: NotificationCenter.ObservationToken?
 
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -38,6 +41,9 @@ final class Model {
         self.environment = environment
         gateway = host.isEmpty ? nil : URL(string: "https://\(host)").map(GatewayClient.init)
         phase = gateway == nil ? .unconfigured : .connecting
+        registrationObservation = NotificationCenter.default.addObserver(for: NotificationRegistration.self) { [weak self] in
+            self?.registered($0)
+        }
     }
 
     func start() {
@@ -62,7 +68,10 @@ final class Model {
         }
         telemetry.record("app.scene", ["phase": .string(name)])
         if scenePhase == .active, phase.isReady {
-            Task { await sync() }
+            Task {
+                await refreshNotifications()
+                await sync()
+            }
         }
     }
 
@@ -70,16 +79,28 @@ final class Model {
         examples = await Example.bundled(at: .now)
     }
 
-    func copySetup() -> Bool {
+    func copySetup() async -> Bool {
         guard let gateway, let credentials else { return false }
         telemetry.record("app.copySetup")
         UIPasteboard.general.string = """
-            Show Live Activities on my iPhone with Lykta.
+            Show Live Activities and send notifications on my iPhone with Lykta.
             Gateway: \(gateway.url.absoluteString)
             Token: \(credentials.agentToken)
             Instructions: \(gateway.url.appending(path: "skill/SKILL.md").absoluteString)
             """
+        await allowNotifications()
         return true
+    }
+
+    func allowNotifications() async {
+        guard notifications?.authorization == .notDetermined else { return }
+        do {
+            _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        } catch {
+            telemetry.record("app.error", ["operation": .string("allowNotifications"), "error": .string(error.localizedDescription)])
+        }
+        await refreshNotifications()
+        await sync()
     }
 
     func show(_ example: Example) async -> Bool {
@@ -137,6 +158,7 @@ final class Model {
 
     private func run() async {
         guard let gateway else { return }
+        await refreshNotifications()
         let credentials: Credentials
         do {
             if let saved = try Keychain.load() {
@@ -234,13 +256,38 @@ final class Model {
         }
     }
 
+    private func refreshNotifications() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        let current = NotificationSettings(authorization: .init(settings.authorizationStatus), alertStyle: .init(settings.alertStyle),
+                                           token: notifications?.token)
+        if current.token == nil, [.authorized, .provisional, .ephemeral].contains(current.authorization) {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+        guard current != notifications else { return }
+        notifications = current
+        telemetry.record("app.notifications", ["authorization": .string(current.authorization.rawValue), "alertStyle": .string(current.alertStyle.rawValue)])
+    }
+
+    private func registered(_ registration: NotificationRegistration) {
+        switch registration {
+        case let .registered(token):
+            guard let current = notifications, current.token != token else { return }
+            notifications = NotificationSettings(authorization: current.authorization, alertStyle: current.alertStyle, token: token)
+            telemetry.record("app.notificationToken", ["fingerprint": .string(fingerprint(token.description.utf8))])
+            Task { await sync() }
+        case let .failed(error):
+            telemetry.record("app.error", ["operation": .string("registerForNotifications"), "error": .string(error)])
+        }
+    }
+
     private func sync() async {
-        guard let gateway, let credentials else { return }
+        guard let gateway, let credentials, let notifications else { return }
         let observed = Activity<LyktaActivity>.activities
         activities = observed.map(LiveActivity.init)
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, layoutVersion: Layout.version,
                                         bundleInstance: Self.bundleInstance,
-                                        activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) })
+                                        activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) },
+                                        notifications: notifications)
         retryTask?.cancel()
         do {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
@@ -361,11 +408,13 @@ private extension LiveActivity {
 
 #if DEBUG
 extension Model {
-    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true) -> Model {
+    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true,
+                        notifications: NotificationSettings = NotificationSettings(authorization: .authorized, alertStyle: .alert, token: nil)) -> Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
         model.areActivitiesEnabled = areActivitiesEnabled
+        model.notifications = notifications
         return model
     }
 }
@@ -380,6 +429,30 @@ private extension ObservedState {
         case .ended: .ended
         case .dismissed: .dismissed
         @unknown default: .unknown
+        }
+    }
+}
+
+private extension NotificationSettings.Authorization {
+    init(_ status: UNAuthorizationStatus) {
+        self = switch status {
+        case .notDetermined: .notDetermined
+        case .authorized: .authorized
+        case .provisional: .provisional
+        case .ephemeral: .ephemeral
+        case .denied: .denied
+        @unknown default: .denied
+        }
+    }
+}
+
+private extension NotificationSettings.AlertStyle {
+    init(_ style: UNAlertStyle) {
+        self = switch style {
+        case .none: .none
+        case .alert: .alert
+        case .banner: .banner
+        @unknown default: .banner
         }
     }
 }

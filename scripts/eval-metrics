@@ -37,9 +37,9 @@ def accepted(path, started):
     except (OSError, ValueError, KeyError) as error:
         print(f"{path.name}: no gateway events in artifacts/events.json ({type(error).__name__}), so accepted is unknown.", file=sys.stderr)
         return None
-    at = next((event["at"] for event in events if event["name"] == "activity.put"), None)
+    at = next((event["at"] for event in events if event["name"] in ("activity.put", "notification.put")), None)
     if at is None and len(events) == 1000:
-        print(f"{path.name}: the first 1000 gateway events hold no accepted activity, so accepted is unknown.", file=sys.stderr)
+        print(f"{path.name}: the first 1000 gateway events hold no accepted activity or notification, so accepted is unknown.", file=sys.stderr)
         return None
     return "none" if at is None else (moment(at) - started).total_seconds()
 

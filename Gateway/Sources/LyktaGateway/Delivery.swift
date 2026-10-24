@@ -1,13 +1,29 @@
 import Foundation
 import LyktaCore
 
-struct Job: Sendable {
+enum Job: Sendable {
+    case activity(ActivityJob)
+    case notification(NotificationJob)
+}
+
+struct ActivityJob: Sendable {
     enum Kind: String, Sendable { case start, update, end, deleteChannel }
 
     let kind: Kind
     let activity: Activity
     let environment: PushEnvironment
     let pushToken: PushToken?
+}
+
+struct NotificationJob: Sendable {
+    let id: UUID
+    let deviceID: UUID
+    let name: Name
+    let request: NotificationRequest
+    let environment: PushEnvironment
+    let token: PushToken
+    let fetchToken: String
+    let expiresAt: Int
 }
 
 enum Outcome: Sendable {
@@ -20,7 +36,7 @@ enum Outcome: Sendable {
 
 struct Attempt: Sendable {
     let outcome: Outcome
-    let detail: [String: JSONValue]
+    var detail: [String: JSONValue]
 }
 
 struct Delivery: Sendable {
@@ -48,10 +64,36 @@ struct Delivery: Sendable {
     }
 
     func send(_ job: Job, now: Int) async throws -> Attempt {
-        let activity = job.activity
         let id = UUID()
         let clock = ContinuousClock()
         let started = clock.now
+        var attempt = switch job {
+        case let .activity(job): try await send(job, id: id, now: now)
+        case let .notification(job): try await send(job, id: id)
+        }
+        let elapsed = started.duration(to: clock.now).components
+        attempt.detail["ms"] = .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
+        return attempt
+    }
+
+    private func send(_ job: NotificationJob, id: UUID) async throws -> Attempt {
+        let payload = try job.request.payload(id: job.id, token: job.fetchToken)
+        var detail: [String: JSONValue] = [
+            "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
+            "notification": .string(job.id.uuidString), "name": .string(job.name.rawValue),
+            "notificationToken": .string(fingerprint(job.token.description.utf8)), "payloadBytes": .number(Double(payload.count)),
+        ]
+        do {
+            detail["uniqueID"] = try await push.notify(payload, deviceToken: job.token, expiration: job.expiresAt, environment: job.environment, id: id)
+                .map(JSONValue.string)
+            return Attempt(outcome: .accepted, detail: detail)
+        } catch {
+            return Attempt(outcome: Self.outcome(of: error), detail: detail)
+        }
+    }
+
+    private func send(_ job: ActivityJob, id: UUID, now: Int) async throws -> Attempt {
+        let activity = job.activity
         var detail: [String: JSONValue] = [
             "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
             "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
@@ -102,8 +144,6 @@ struct Delivery: Sendable {
         } catch let error as APNsError {
             outcome = Self.outcome(of: error)
         }
-        let elapsed = started.duration(to: clock.now).components
-        detail["ms"] = .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
         return Attempt(outcome: outcome, detail: detail)
     }
 

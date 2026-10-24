@@ -1,21 +1,41 @@
 ---
 name: lykta
-description: Show live status on the user's iPhone Lock Screen and Dynamic Island as a Live Activity through their Lykta gateway. Use for countdowns, progress, builds, deliveries, checklists, questions answered with a tap or any ongoing task the user wants to glance at; not for one-off notifications.
+description: Reach the user's iPhone through their Lykta gateway, with Live Activities on the Lock Screen and Dynamic Island and with notifications. Use for countdowns, progress, builds, deliveries, checklists and questions answered with a tap, and to tell the user the moment something happens, such as a finished job or a failure.
 ---
 
 # Lykta
 
-Lykta shows a Live Activity on the user's iPhone. You send a JSON layout to the
-user's gateway; the gateway validates it and pushes it to the phone, where it
-renders natively. The Lykta app does not need to be open.
+Lykta reaches the user's iPhone in two forms: a Live Activity, which stays on
+the Lock Screen and in the Dynamic Island and changes while something goes on,
+and a notification, which tells the user about one moment. You send JSON to
+the user's gateway; the gateway validates it and pushes it to the phone. The
+Lykta app does not need to be open.
+
+You need the gateway URL and agent token from the setup the user copied out of
+the Lykta app. Send the token as `Authorization: Bearer <token>`.
+
+## Choose the form
+
+Pick the form from what the user asked for:
+
+- **Notification** for "tell me when": one moment, such as a finished job, a
+  failure or an answer that arrived. Read the
+  [notifications reference](references/notifications.md); a notification needs
+  nothing else from this file.
+- **Live Activity** for "keep me posted": something ongoing worth a glance,
+  such as a countdown, progress, a delivery or a checklist. The rest of this
+  file covers activities.
+- **An activity's `alert`** when an activity about the subject is already
+  showing and a moment in it needs attention, such as a failed step of a
+  deploy it tracks. Update the activity rather than sending a notification
+  beside it.
+
+## Live Activities
 
 A layout nests native views, such as text, SF Symbols, live timers, progress,
 charts, buttons and toggles, the way SwiftUI code would. For icons, diagrams
 and artwork, embed ordinary SVG markup in an `svg` node; the phone draws it as
 sharp vector graphics, and `{{placeholders}}` inside it update with the data.
-
-You need the gateway URL and agent token from the setup the user copied out of
-the Lykta app. Send the token as `Authorization: Bearer <token>`.
 
 ## Design
 
