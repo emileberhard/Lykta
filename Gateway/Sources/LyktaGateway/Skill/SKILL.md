@@ -77,8 +77,9 @@ subject, so treat them as a vocabulary of techniques rather than templates:
 combine them, go beyond them, and let your own subject decide the design.
 [Fitting](references/layout.md#fitting) gives margins and sizes. Before
 sending, check every presentation: does each show something live, do related
-elements share a leading edge, does text clear every drawing, and would it be
-recognizable without its title?
+elements share a leading edge, does text clear every drawing, do the expanded
+rows add up to less than about 145 points, and would it be recognizable
+without its title?
 
 ## Start or update
 
