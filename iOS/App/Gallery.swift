@@ -9,9 +9,14 @@ struct Gallery: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: GalleryCard.spacing) {
+            VStack(alignment: .leading, spacing: GalleryCard.spacing) {
+                Heading("Live Activities")
                 ForEach(model.examples) { example in
                     GalleryCard(example: example, transition: transition)
+                }
+                Heading("Notifications")
+                ForEach(model.notificationExamples) { example in
+                    NotificationCard(example: example, transition: transition)
                 }
             }
         }
@@ -25,13 +30,51 @@ struct Gallery: View {
                     .navigationTransition(.zoom(sourceID: id, in: transition))
             }
         }
+        .navigationDestination(for: NotificationExample.Route.self) { route in
+            if let example = model.notificationExamples.first(where: { $0.route == route }) {
+                NotificationExampleView(example: example, model: model)
+                    .navigationTransition(.zoom(sourceID: route, in: transition))
+            }
+        }
+    }
+}
+
+private struct Heading: View {
+    let title: LocalizedStringKey
+
+    init(_ title: LocalizedStringKey) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .padding(.top, GalleryCard.spacing)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+private struct NotificationCard: View {
+    let example: NotificationExample
+    let transition: Namespace.ID
+
+    var body: some View {
+        NavigationLink(value: example.route) {
+            NotificationBanner(example: example)
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: GalleryCard.shape)
+                .contentShape(GalleryCard.shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .matchedTransitionSource(id: example.route, in: transition) { $0.clipShape(GalleryCard.shape) }
     }
 }
 
 private struct GalleryCard: View {
     static let spacing: CGFloat = 12
     static let margin: CGFloat = 16
-    private static let shape = RoundedRectangle(cornerRadius: 26)
+    static let shape = RoundedRectangle(cornerRadius: 26)
 
     let example: Example
     let transition: Namespace.ID

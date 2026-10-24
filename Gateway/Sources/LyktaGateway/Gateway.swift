@@ -66,7 +66,7 @@ enum Gateway {
                           enrolment: Enrolment(appID: appID), version: version, shutdown: shutdown)
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
-            let server = HTTPServer(host: host, port: port, maximumBodyBytes: 1 << 20, shutdown: shutdown) { await api.handle($0) }
+            let server = HTTPServer(host: host, port: port, bodyLimit: API.bodyLimit, shutdown: shutdown) { await api.handle($0) }
             try await server.run {
                 log("Lykta gateway \(version?.description ?? "of unknown version") listening on \(host):\(port)")
                 try await Delivery(store: store, push: push, shutdown: shutdown).run()

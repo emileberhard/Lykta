@@ -121,8 +121,10 @@ final class SimulatedPhone: PushService {
             let lykta: NotificationPayload
         }
         let alert = try JSONDecoder().decode(Alert.self, from: payload)
-        try await store.reportNotification(alert.lykta.id, token: alert.lykta.token,
-                                           NotificationReport(style: .communication(.initials), sound: alert.aps.sound == nil ? .none : .default),
+        let lykta = alert.lykta
+        let sound: NotificationReport.Sound = lykta.sound != nil ? .custom : alert.aps.sound == nil ? .none : .default
+        try await store.reportNotification(lykta.id, token: lykta.token,
+                                           NotificationReport(style: .communication(lykta.avatar == nil ? .initials : .image), sound: sound),
                                            now: Int(Date().timeIntervalSince1970))
     }
 

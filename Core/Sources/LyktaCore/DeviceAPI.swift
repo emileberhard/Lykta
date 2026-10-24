@@ -225,17 +225,48 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     }
 }
 
+public struct MediaID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
+    public let rawValue: String
+
+    public init?(rawValue: String) {
+        guard rawValue.hasPrefix("m_"), rawValue.utf8.count == 34,
+              rawValue.utf8.dropFirst(2).allSatisfy({ (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }) else { return nil }
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let text = try decoder.singleValueContainer().decode(String.self)
+        guard let id = MediaID(rawValue: text) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "\(text) is not a media id"))
+        }
+        self = id
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var description: String { rawValue }
+}
+
 public struct NotificationPayload: Codable, Sendable {
     public static let key = "lykta"
 
     public let id: UUID
     public let sender: String
     public let token: String
+    public let avatar: MediaID?
+    public let sound: MediaID?
+    public let image: MediaID?
 
-    public init(id: UUID, sender: String, token: String) {
+    public init(id: UUID, sender: String, token: String, avatar: MediaID?, sound: MediaID?, image: MediaID?) {
         self.id = id
         self.sender = sender
         self.token = token
+        self.avatar = avatar
+        self.sound = sound
+        self.image = image
     }
 }
 

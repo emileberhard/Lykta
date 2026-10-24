@@ -18,6 +18,7 @@ final class Model {
     private(set) var phase: Phase
     private(set) var activities: [LiveActivity] = []
     private(set) var examples: [Example] = []
+    private(set) var notificationExamples: [NotificationExample] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
     private(set) var notifications: NotificationSettings?
     private(set) var error: String?
@@ -76,7 +77,9 @@ final class Model {
     }
 
     func loadExamples() async {
+        async let notificationExamples = NotificationExample.bundled()
         examples = await Example.bundled(at: .now)
+        self.notificationExamples = await notificationExamples
     }
 
     func copySetup() async -> Bool {
@@ -113,6 +116,25 @@ final class Model {
                 try await gateway.endActivity(name, agentToken: credentials.agentToken)
             }
             try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
+        }
+    }
+
+    func send(_ example: NotificationExample) async -> Bool {
+        guard let gateway, let credentials else { return false }
+        telemetry.record("app.notificationExample", ["example": .string(example.id)])
+        return await showingErrors("notificationExample") {
+            let token = credentials.agentToken
+            let ids = try await withThrowingTaskGroup(of: (String, MediaID).self) { group in
+                for (path, medium) in example.media {
+                    group.addTask { (path, try await gateway.upload(medium, agentToken: token)) }
+                }
+                var ids: [String: MediaID] = [:]
+                for try await (path, id) in group {
+                    ids[path] = id
+                }
+                return ids
+            }
+            try await gateway.putNotification("example-\(UUID().uuidString.lowercased())", try example.request(with: ids), agentToken: credentials.agentToken)
         }
     }
 

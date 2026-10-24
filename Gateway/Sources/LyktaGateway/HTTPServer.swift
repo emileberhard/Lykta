@@ -41,16 +41,16 @@ struct HTTPResponse: Sendable {
 final class HTTPServer: Sendable {
     private let host: String
     private let port: Int
-    private let maximumBodyBytes: Int
+    private let bodyLimit: @Sendable (_ method: String, _ target: String) -> Int
     private let shutdown: Shutdown
     private let handler: @Sendable (HTTPRequest) async -> HTTPResponse
     private let inFlight = Atomic<Int>(0)
 
-    init(host: String, port: Int, maximumBodyBytes: Int, shutdown: Shutdown,
+    init(host: String, port: Int, bodyLimit: @escaping @Sendable (_ method: String, _ target: String) -> Int, shutdown: Shutdown,
          handler: @escaping @Sendable (HTTPRequest) async -> HTTPResponse) {
         self.host = host
         self.port = port
-        self.maximumBodyBytes = maximumBodyBytes
+        self.bodyLimit = bodyLimit
         self.shutdown = shutdown
         self.handler = handler
     }
@@ -96,15 +96,17 @@ final class HTTPServer: Sendable {
         try await connection.executeThenClose { inbound, outbound in
             var head: HTTPRequestHead?
             var body: [UInt8] = []
+            var limit = 0
             var tooLarge = false
             for try await part in inbound {
                 switch part {
                 case let .head(value):
                     head = value
                     body = []
+                    limit = bodyLimit(value.method.rawValue, value.uri)
                     tooLarge = false
                 case let .body(chunk):
-                    tooLarge = tooLarge || body.count + chunk.readableBytes > maximumBodyBytes
+                    tooLarge = tooLarge || body.count + chunk.readableBytes > limit
                     if !tooLarge { body += chunk.readableBytesView }
                 case .end:
                     guard let head else { return }
@@ -112,7 +114,7 @@ final class HTTPServer: Sendable {
                     defer { inFlight.subtract(1, ordering: .acquiringAndReleasing) }
                     let headers = Dictionary(head.headers.map { ($0.name.lowercased(), $0.value) }) { _, last in last }
                     let response = tooLarge
-                        ? HTTPResponse(status: 413, contentType: "text/plain", body: Array("Request body too large".utf8))
+                        ? HTTPResponse(APIError(.payloadTooLarge, "The request body is over \(limit >> 20) MiB, the most this route takes."))
                         : await handler(HTTPRequest(method: head.method.rawValue, target: head.uri, headers: headers, body: body))
                     var responseHeaders = HTTPHeaders([("content-type", response.contentType), ("content-length", String(response.body.count))])
                     responseHeaders.add(contentsOf: response.headers.sorted { $0.key < $1.key })

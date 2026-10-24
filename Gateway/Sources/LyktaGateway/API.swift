@@ -27,29 +27,48 @@ struct API: Sendable {
                 log("Recording a failed request failed: \(error)")
             }
         }
-        var response = Self.json(failure.code.status, failure)
-        if let retryAfter = failure.retryAfter { response.headers["retry-after"] = String(retryAfter) }
-        return response
+        return HTTPResponse(failure)
     }
 
-    private static let skill: [String: HTTPResponse] = [
-        "skill/SKILL.md": PackageResources.SKILL_md,
-        "skill/references/layout.md": PackageResources.layout_md,
-        "skill/references/notifications.md": PackageResources.notifications_md,
-    ].mapValues { HTTPResponse(status: 200, contentType: "text/markdown; charset=utf-8", body: $0) }.merging([
-        "skill/examples/agent-question.json": PackageResources.agent_question_json,
-        "skill/examples/app-review.json": PackageResources.app_review_json,
-        "skill/examples/homelab.json": PackageResources.homelab_json,
-        "skill/examples/jira-release.json": PackageResources.jira_release_json,
-        "skill/examples/movie-night.json": PackageResources.movie_night_json,
-        "skill/examples/orion-return.json": PackageResources.orion_return_json,
-        "skill/examples/pr-inbox.json": PackageResources.pr_inbox_json,
-        "skill/examples/printer.json": PackageResources.printer_json,
-        "skill/examples/puppy-potty.json": PackageResources.puppy_potty_json,
-        "skill/examples/recipe-steps.json": PackageResources.recipe_steps_json,
-        "skill/examples/shopping-list.json": PackageResources.shopping_list_json,
-        "skill/examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
-    ].mapValues { HTTPResponse(status: 200, contentType: "application/json", body: $0) }) { $1 }
+    static func bodyLimit(method: String, target: String) -> Int {
+        method == "POST" && HTTPRequest(method: method, target: target, headers: [:], body: []).path == ["v1", "media"] ? Medium.maximumBytes : 1 << 20
+    }
+
+    private static let skill: [String: HTTPResponse] = Dictionary(uniqueKeysWithValues: [
+        "SKILL.md": PackageResources.SKILL_md,
+        "references/layout.md": PackageResources.layout_md,
+        "references/notifications.md": PackageResources.notifications_md,
+        "examples/agent-question.json": PackageResources.agent_question_json,
+        "examples/app-review.json": PackageResources.app_review_json,
+        "examples/homelab.json": PackageResources.homelab_json,
+        "examples/jira-release.json": PackageResources.jira_release_json,
+        "examples/movie-night.json": PackageResources.movie_night_json,
+        "examples/orion-return.json": PackageResources.orion_return_json,
+        "examples/pr-inbox.json": PackageResources.pr_inbox_json,
+        "examples/printer.json": PackageResources.printer_json,
+        "examples/puppy-potty.json": PackageResources.puppy_potty_json,
+        "examples/recipe-steps.json": PackageResources.recipe_steps_json,
+        "examples/shopping-list.json": PackageResources.shopping_list_json,
+        "examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
+        "examples/notifications/benchy.jpg": PackageResources.benchy_jpg,
+        "examples/notifications/doorbell.json": PackageResources.doorbell_json,
+        "examples/notifications/doorbell.wav": PackageResources.doorbell_wav,
+        "examples/notifications/front-door-avatar.jpg": PackageResources.front_door_avatar_jpg,
+        "examples/notifications/front-door.jpg": PackageResources.front_door_jpg,
+        "examples/notifications/print-finished.json": PackageResources.print_finished_json,
+        "examples/notifications/print-finished.wav": PackageResources.print_finished_wav,
+        "examples/notifications/printer-avatar.jpg": PackageResources.printer_avatar_jpg,
+        "examples/notifications/tests-passed.json": PackageResources.tests_passed_json,
+    ].map { path, body in
+        let type = switch path.split(separator: ".").last {
+        case "md": "text/markdown; charset=utf-8"
+        case "json": "application/json"
+        case "jpg": "image/jpeg"
+        case "wav": "audio/wav"
+        default: preconditionFailure("The skill serves no file like \(path)")
+        }
+        return ("skill/\(path)", HTTPResponse(status: 200, contentType: type, body: body))
+    })
 
     private func route(_ request: HTTPRequest, now: Int) async throws -> HTTPResponse {
         let path = request.path
@@ -125,9 +144,16 @@ struct API: Sendable {
         case ("GET", "v1/notifications/{name}"):
             return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
         case ("POST", "v1/device/notifications/{id}/report"):
-            guard let id = UUID(uuidString: path[3]) else { throw APIError(.notFound, "No notification has the id \(path[3]).") }
-            try await store.reportNotification(id, token: try Self.bearer(request), try Self.decode(request.body), now: now)
+            try await store.reportNotification(try Self.notification(path[3]), token: try Self.bearer(request), try Self.decode(request.body), now: now)
             return .noContent
+        case ("GET", "v1/device/notifications/{id}/media/{media}"):
+            guard let medium = MediaID(rawValue: path[5]) else { throw APIError(.notFound, "No medium has the id \(path[5]).") }
+            let (bytes, contentType) = try await store.notificationMedium(try Self.notification(path[3]), token: try Self.bearer(request),
+                                                                          medium: medium, now: now)
+            return HTTPResponse(status: 200, contentType: contentType, body: bytes)
+        case ("POST", "v1/media"):
+            let (status, created) = try await store.putMedium(try await agent(request), bytes: request.body, now: now)
+            return Self.json(created ? 201 : 200, status)
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -155,6 +181,7 @@ struct API: Sendable {
         switch path.count {
         case 3 where path[0] == "v1" && ["activities", "notifications"].contains(path[1]): "v1/\(path[1])/{name}"
         case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"
+        case 6 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "media": "v1/device/notifications/{id}/media/{media}"
         default: path.joined(separator: "/")
         }
     }
@@ -179,6 +206,11 @@ struct API: Sendable {
     private static func bearer(_ request: HTTPRequest) throws -> String {
         guard let value = request.headers["authorization"], value.hasPrefix("Bearer ") else { throw unauthorized }
         return String(value.dropFirst(7))
+    }
+
+    private static func notification(_ text: String) throws -> UUID {
+        guard let id = UUID(uuidString: text) else { throw APIError(.notFound, "No notification has the id \(text).") }
+        return id
     }
 
     private static func name(_ text: String) throws -> Name {
@@ -225,11 +257,18 @@ struct API: Sendable {
         }
     }
 
-    private static func json(_ status: Int, _ value: some Encodable) -> HTTPResponse {
+    fileprivate static func json(_ status: Int, _ value: some Encodable) -> HTTPResponse {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         return HTTPResponse(status: status, contentType: "application/json", body: Array(try! encoder.encode(value)))
+    }
+}
+
+extension HTTPResponse {
+    init(_ error: APIError) {
+        self = API.json(error.code.status, error)
+        if let retryAfter = error.retryAfter { headers["retry-after"] = String(retryAfter) }
     }
 }
 

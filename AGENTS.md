@@ -14,7 +14,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
 | `iOS/App` | Registration, Keychain credentials, ActivityKit observation, notification permission and token, device reports and telemetry, the in-app Lock Screen cards and the example gallery |
-| `iOS/Notifications` | The notification service extension: the sender's drawn avatar, the communication notification and the report to the gateway |
+| `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
+| `iOS/Avatars` | The initials avatar for a sender without a picture, drawn by both the extension and the app's gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -26,8 +27,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 ## Invariants
 
 - A layout change touches `Core`, `Rendering` and the skill's `layout.md`
-  together. Gateway tests compile every JSON example in `layout.md` and start
-  every activity in the skill's `examples`. Look at a layout change with
+  together. Gateway tests compile every JSON example in `layout.md`, start
+  every activity in the skill's `examples` and send every notification in
+  `examples/notifications`. Look at a layout change with
   `just render` before shipping it.
 - Every layout feature (node, key, enum case and value form the decoder
   accepts) is recorded while decoding and has a row, by exact name, in
@@ -44,7 +46,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   the widget makes no network requests, and view bodies never parse JSON.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
-  from the same commit. Example times stay within two days of 1793000000;
+  from the same commit. A notification example names its media files, kept
+  beside it, where the ids go. File names are unique across the skill, because
+  the gateway embeds them under flattened names. Example times stay within two days of 1793000000;
   Core's `movingExampleTimes` moves them to the present for the gallery and
   `just render`.
 - The gateway is the only content writer. The app never calls
@@ -76,12 +80,16 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - The notification extension talks only to its own gateway, with the fetch
   token its push carries, and follows no redirect. A fetch token is created
   when a notification is claimed for sending and authorizes only that
-  notification's device routes until the notification expires; the extension
-  never holds the device secret.
+  notification's device routes, its report and the media it names, until the
+  notification expires; the extension never holds the device secret.
+- Media belongs to the phone that uploaded it: a notification may name only
+  its own phone's media, of the kind its field expects, and `Store` removes a
+  file a day after its last upload or reference, never sooner, within the
+  per-phone cap.
 - Every state change, push attempt and phone observation becomes an event in
   `Store`, so a phone's problems can be debugged from the gateway alone. Events
-  carry IDs, states, fingerprints and errors, never tokens or activity or
-  notification content.
+  carry IDs, states, fingerprints and errors, never tokens, activity or
+  notification content, or media.
 - Boundaries decode into validated types: enums for states, UUIDs for ids,
   `PushToken`, `Name` and `APIError.Code`. Invalid input fails at the
   decoder with a JSON path; stored rows that fail to parse throw rather than
@@ -135,8 +143,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   credentials on a 401.
 - The notification extension is `nonisolated` and prepares each notification
   on the thread iOS calls it on, because its content handler is not `Sendable`
-  and cannot move into a task. Every wait there, such as the report, is
-  bounded so the notification arrives within iOS's budget.
+  and cannot move into a task. Every wait there, the media downloads and the
+  report, is bounded so the notification arrives within iOS's budget.
 - A tap intent may run right after the system launches the app in the
   background for it, so intents only forward the action through `ActionSender`,
   which `LyktaApp.init` registers; register new intent dependencies there too.

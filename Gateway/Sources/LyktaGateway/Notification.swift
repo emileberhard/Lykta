@@ -5,19 +5,57 @@ struct NotificationRequest: Codable, Equatable, Sendable {
     struct Sender: Codable, Equatable, Sendable {
         let id: Name
         let name: String
+        let avatar: MediaID?
+    }
+
+    enum Sound: Equatable, Sendable, Codable {
+        case `default`
+        case medium(MediaID)
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let isOn = try? container.decode(Bool.self), isOn {
+                self = .default
+            } else {
+                self = .medium(try container.decode(MediaID.self))
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .default: try container.encode(true)
+            case let .medium(id): try container.encode(id)
+            }
+        }
+    }
+
+    struct Reference: Sendable {
+        let path: String
+        let id: MediaID
+        let kind: Medium.Kind
     }
 
     let sender: Sender
     let body: String
-    let sound: Bool?
+    let sound: Sound?
+    let image: MediaID?
+
+    var references: [Reference] {
+        var references: [Reference] = []
+        if let avatar = sender.avatar { references.append(Reference(path: "sender.avatar", id: avatar, kind: .image)) }
+        if case let .medium(id)? = sound { references.append(Reference(path: "sound", id: id, kind: .sound)) }
+        if let image { references.append(Reference(path: "image", id: image, kind: .image)) }
+        return references
+    }
 
     static func decode(_ value: JSONValue) throws(APIError) -> NotificationRequest {
         guard case let .object(fields) = value else { throw invalid("Send a JSON object.") }
-        try allowOnly(["sender", "body", "sound"], in: fields, at: nil)
+        try allowOnly(["sender", "body", "sound", "image"], in: fields, at: nil)
         guard case let .object(sender)? = fields["sender"] else {
             throw invalid("sender must be an object with the sender's id and name.")
         }
-        try allowOnly(["id", "name"], in: sender, at: "sender")
+        try allowOnly(["id", "name", "avatar"], in: sender, at: "sender")
         guard case let .string(id)? = sender["id"], let senderID = Name(rawValue: id) else {
             throw invalid("sender.id names the sender: 1 to 64 lowercase letters, digits, '-', '_' or '.', the same for every notification it sends.")
         }
@@ -27,13 +65,25 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         guard case let .string(body)? = fields["body"], (1...500).contains(body.count) else {
             throw invalid("body must be 1 to 500 characters.")
         }
-        let sound: Bool?
+        let sound: Sound?
         switch fields["sound"] {
         case nil: sound = nil
-        case .bool(true)?: sound = true
-        default: throw invalid("sound must be true for the default sound; leave it out for a silent notification.")
+        case .bool(true)?: sound = .default
+        case let .string(text)? where MediaID(rawValue: text) != nil: sound = .medium(MediaID(rawValue: text)!)
+        default: throw invalid("sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence.")
         }
-        return NotificationRequest(sender: Sender(id: senderID, name: name), body: body, sound: sound)
+        return NotificationRequest(sender: Sender(id: senderID, name: name, avatar: try medium(sender["avatar"], at: "sender.avatar")),
+                                   body: body, sound: sound, image: try medium(fields["image"], at: "image"))
+    }
+
+    private static func medium(_ value: JSONValue?, at path: String) throws(APIError) -> MediaID? {
+        switch value {
+        case nil: return nil
+        case let .string(text)?:
+            if let id = MediaID(rawValue: text) { return id }
+            fallthrough
+        default: throw invalid("\(path) must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef.")
+        }
     }
 
     var canonical: String {
@@ -46,8 +96,12 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
         return try encoder.encode(Payload(
-            aps: .init(alert: .init(title: sender.name, body: body), sound: sound == true ? "default" : nil, threadID: sender.id.rawValue),
-            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token)))
+            aps: .init(alert: .init(title: sender.name, body: body), sound: sound == nil ? nil : "default", threadID: sender.id.rawValue),
+            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token, avatar: sender.avatar, sound: soundMedium, image: image)))
+    }
+
+    private var soundMedium: MediaID? {
+        if case let .medium(id)? = sound { id } else { nil }
     }
 
     private struct Payload: Encodable {

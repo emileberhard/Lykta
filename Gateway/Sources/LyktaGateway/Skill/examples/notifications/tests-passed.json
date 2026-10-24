@@ -1,0 +1,5 @@
+{
+  "sender": {"id": "ci", "name": "CI"},
+  "body": "All 214 tests passed on main. Ready to ship 2.4.0.",
+  "sound": true
+}

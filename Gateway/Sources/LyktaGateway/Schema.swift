@@ -111,6 +111,16 @@ enum Schema {
           expires_at INTEGER NOT NULL
         ) STRICT;
         CREATE UNIQUE INDEX IF NOT EXISTS notification_names ON notifications(device_id, name);
+        CREATE TABLE IF NOT EXISTS media (
+          id TEXT PRIMARY KEY,
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          hash TEXT NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('sound', 'image')),
+          content_type TEXT NOT NULL,
+          bytes BLOB NOT NULL,
+          used_at INTEGER NOT NULL
+        ) STRICT;
+        CREATE UNIQUE INDEX IF NOT EXISTS media_hashes ON media(device_id, hash);
         CREATE TABLE IF NOT EXISTS invites (
           hash TEXT PRIMARY KEY,
           expires_at INTEGER NOT NULL

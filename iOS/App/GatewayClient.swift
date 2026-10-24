@@ -37,6 +37,16 @@ struct GatewayClient: Sendable {
         _ = try await send("PUT", url.appending(path: "v1/activities/\(name)"), token: agentToken, body: request)
     }
 
+    func upload(_ medium: Data, agentToken: String) async throws -> MediaID {
+        struct Uploaded: Decodable { let id: MediaID }
+        let response = try await send("POST", url.appending(path: "v1/media"), token: agentToken, body: medium, type: "application/octet-stream")
+        return try JSONDecoder().decode(Uploaded.self, from: response).id
+    }
+
+    func putNotification(_ name: String, _ request: JSONValue, agentToken: String) async throws {
+        _ = try await send("PUT", url.appending(path: "v1/notifications/\(name)"), token: agentToken, body: request)
+    }
+
     func endActivity(_ name: String, agentToken: String) async throws {
         let target = url.appending(path: "v1/activities/\(name)").appending(queryItems: [URLQueryItem(name: "dismissAfter", value: "0")])
         do {
@@ -45,12 +55,16 @@ struct GatewayClient: Sendable {
     }
 
     private func send(_ method: String, _ target: URL, token: String?, body: (any Encodable)?) async throws -> Data {
+        try await send(method, target, token: token, body: try body.map { try JSONEncoder().encode($0) }, type: "application/json")
+    }
+
+    private func send(_ method: String, _ target: URL, token: String?, body: Data?, type: String) async throws -> Data {
         var request = URLRequest(url: target, timeoutInterval: 20)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(body)
+            request.setValue(type, forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
         }
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0

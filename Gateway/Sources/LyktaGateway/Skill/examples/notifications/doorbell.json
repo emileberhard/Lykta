@@ -1,0 +1,6 @@
+{
+  "sender": {"id": "front-door", "name": "Front Door", "avatar": "front-door-avatar.jpg"},
+  "body": "A courier left a package by the door.",
+  "sound": "doorbell.wav",
+  "image": "front-door.jpg"
+}

@@ -6,7 +6,7 @@ extension JSONValue {
         return try template.fill(self, at: "", in: [:])
     }
 
-    func value(at path: String) throws(LayoutError) -> JSONValue {
+    public func value(at path: String) throws(LayoutError) -> JSONValue {
         var value = self
         for part in path.split(separator: ".", omittingEmptySubsequences: false) {
             switch value {

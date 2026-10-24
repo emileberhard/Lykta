@@ -2,8 +2,9 @@
 
 A notification tells the user about one moment, such as a print that finished
 or a deploy that failed. It arrives like a message from a person: the sender's
-name as the title, a round avatar with the sender's initials, and the body.
-Notifications from one sender gather in one thread.
+name as the title, a round avatar with the sender's picture or initials, and
+the body, optionally with its own sound and an image. Notifications from one
+sender gather in one thread.
 
 ## Send
 
@@ -21,8 +22,10 @@ curl -sS -X PUT "$LYKTA_URL/v1/notifications/printer-job-42-done" \
 | --- | --- |
 | `sender.id` | Who sends it, in the name format. Keep it the same for every notification from this sender: the phone groups them in one thread and colors the avatar by it. |
 | `sender.name` | The title, up to 64 characters, such as `Printer` or `Deploy bot`. |
+| `sender.avatar` | Optional id of an image to show as the sender's round picture instead of initials. Reuse the same image for every notification from the sender. |
 | `body` | Up to 500 characters. Say what happened and what the user can do about it. |
-| `sound` | `true` plays the default sound. Leave it out for a silent notification, for news the user can read later. |
+| `sound` | `true` plays the default sound, the id of a sound plays that sound. Leave it out for a silent notification, for news the user can read later. |
+| `image` | Optional id of an image shown as a thumbnail and in full when the user expands the notification, such as a photo of the finished print. |
 
 The gateway answers `201` with the notification's status. It keeps a
 notification and reserves its name for a day, until `expires`. Within that
@@ -35,6 +38,40 @@ A PUT sends at once; Lykta cannot send one later by itself. To tell the user
 something at a later time, have a scheduler that outlives your session send
 the PUT then, as the main skill describes for activities.
 
+## Media
+
+Upload each sound or image once with `POST /v1/media`, the file as the raw
+body, and put the returned `id` in the notification:
+
+```bash
+curl -sS -X POST "$LYKTA_URL/v1/media" -H "Authorization: Bearer $LYKTA_TOKEN" \
+  --data-binary @chime.wav
+```
+
+The gateway answers `201` with `{"id": "m_…", "type": "sound", "durationSeconds": 1.6}`,
+or `200` with the same id when this phone already has the file. An id works
+only for the phone whose token uploaded it, and the gateway removes a file a
+day after its last upload or use, so upload again when a notification names
+an id it no longer knows.
+
+- **Sounds** are WAV files with linear PCM audio, shorter than 30 seconds.
+  Convert other audio first, such as `ffmpeg -i in.m4a -ac 1 -c:a pcm_s16le out.wav`.
+  Keep a sound under eight seconds: while the phone is unlocked, a temporary
+  banner stops it when the banner slides away. Longer sounds play in full when
+  an earlier notification's status shows `"banners": "persistent"`.
+- **Images** are PNG or JPEG files of at most 4096 pixels on each side. A
+  square image of 256 pixels or more makes a sharp avatar; the phone crops it
+  to a circle.
+- Each file is at most 4 MiB, and the gateway keeps at most 32 MiB per phone.
+
+Make a sound or picture fit the sender: a short chime for a finished job, a
+spoken sentence for something urgent, the printer's own camera snapshot as the
+image. The examples in [`examples/notifications`](../examples/notifications)
+show each field: [`print-finished.json`](../examples/notifications/print-finished.json)
+and [`doorbell.json`](../examples/notifications/doorbell.json) name their
+media files next to them where the ids go, so upload each and put its id there;
+[`tests-passed.json`](../examples/notifications/tests-passed.json) uses no media.
+
 ## Status
 
 `GET /v1/notifications/{name}` returns:
@@ -43,7 +80,7 @@ the PUT then, as the main skill describes for activities.
 | --- | --- |
 | `state` | `queued`, `sent` (Apple accepted it), `received` (the phone prepared it), `failed`, `unknown` |
 | `error` | Why it failed or is unknown, or `null` |
-| `phone` | What the phone prepared, such as `{"style": "communication", "avatar": "initials", "sound": "default"}`, or `null` before it reports. `"style": "plain"` means it showed the title and body without the avatar |
+| `phone` | What the phone prepared, such as `{"style": "communication", "avatar": "image", "sound": "custom"}`, or `null` before it reports. `"avatar": "initials"` means it drew initials, because the notification had no avatar or the phone could not fetch it; `"sound": "default"` for a requested sound means it played the default sound instead. `"style": "plain"` means it showed the title and body without the avatar |
 | `banners` | The phone's banner style: `temporary`, `persistent` or `off`, or `null` before the phone reports it |
 | `createdAt`, `expires` | When the gateway accepted it and when it forgets it |
 
@@ -64,13 +101,19 @@ should you.
 - `too_many_notifications`: a phone takes at most 60 notifications an hour.
   The `Retry-After` header says how many seconds to wait.
 - `conflict`: another notification used the name in the past day.
-- `invalid_request`: the message names the field to fix.
+- `invalid_request`: the message names the field to fix, including a media id
+  this phone does not have or of the wrong type.
+- `unsupported_media`: the file is not a WAV, PNG or JPEG the phone can use;
+  the message says how to convert it.
+- `payload_too_large`: the file is over 4 MiB, the phone's media would exceed
+  32 MiB, or the push would exceed Apple's size limit.
 
 ## Debug
 
 `GET /v1/events`, described in the main skill, also records notifications:
-`notification.put` when the gateway accepted one, `push.notification` with
-Apple's outcome, `notification.received` when the phone prepared it, and
-`notification.unknown` or `notification.expired`. The phone's `device.sync`
+`media.put` for each new file, `notification.put` when the gateway accepted
+one, `push.notification` with Apple's outcome, `notification.media` for each
+file the phone fetched, `notification.received` when the phone prepared it,
+and `notification.unknown` or `notification.expired`. The phone's `device.sync`
 event shows its notification `authorization`, `alertStyle` and whether it has
 a notification `token`.

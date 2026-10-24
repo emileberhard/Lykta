@@ -9,7 +9,7 @@ SwiftUI and kept current as the agent sends updates. Any layout works without
 an app update, including buttons, toggles and links that report back to the
 agent. For a single moment, such as a finished job, the agent sends a
 notification that arrives like a message from a person, with the sender's
-name and avatar.
+name and picture, a sound of the agent's choosing and an image.
 
 ```bash
 curl -X PUT "$LYKTA_URL/v1/activities/build" \
@@ -35,7 +35,8 @@ activity, the gateway validates the layout with the same Swift code the widget
 renders it with, then starts it through APNs and updates it over a broadcast
 channel. Timers and progress run on the phone, so agents only send changes.
 Notifications go out as alert pushes, and the app's notification extension
-draws the sender's avatar and tells the gateway what it showed.
+fetches the sender's picture, the sound and the image the agent uploaded, and
+tells the gateway what it showed.
 
 ## Use it from an agent
 

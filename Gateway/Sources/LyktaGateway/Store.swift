@@ -54,6 +54,8 @@ actor Store {
     static let inviteLifetime = 3600
     static let notificationLifetime = 86400
     static let maximumNotificationsPerHour = 60
+    static let mediaRetention = 86400
+    static let maximumMediaBytesPerDevice = 32 << 20
 
     private let db: Database
 
@@ -283,6 +285,16 @@ actor Store {
                 }
                 return (try notificationStatus(row, of: device), false)
             }
+            for reference in request.references {
+                guard let medium = try db.query("SELECT kind FROM media WHERE id = ? AND device_id = ?", reference.id.rawValue, device.id).first else {
+                    throw APIError(.invalidRequest, "\(reference.path) is \(reference.id), which this phone has not uploaded or the gateway removed "
+                                   + "a day after its last use. Upload the file with POST /v1/media and use the id it returns.")
+                }
+                guard try medium.string("kind") == reference.kind.rawValue else {
+                    throw APIError(.invalidRequest, "\(reference.path) must be \(reference.kind == .image ? "an image" : "a sound"); "
+                                   + "\(reference.id) is \(reference.kind == .image ? "a sound" : "an image").")
+                }
+            }
             try Self.admitNotifications(on: device)
             let recent = try db.query("SELECT count(*) AS n, min(created_at) AS oldest FROM notifications WHERE device_id = ? AND created_at > ?",
                                       device.id, now - 3600)
@@ -301,9 +313,18 @@ actor Store {
             try db.run("""
                 INSERT INTO notifications (id, device_id, name, request, state, created_at, expires_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)
                 """, id, device.id, name, canonical, now, now + Self.notificationLifetime)
+            for reference in request.references {
+                try db.run("UPDATE media SET used_at = ? WHERE id = ?", now, reference.id.rawValue)
+            }
+            let sound = switch request.sound {
+            case nil: "none"
+            case .default?: "default"
+            case let .medium(id)?: id.rawValue
+            }
             try record("notification.put", device: device.id, activity: nil, [
                 "notification": .string(id.uuidString), "name": .string(name.rawValue), "sender": .string(request.sender.id.rawValue),
-                "sound": .string(request.sound == true ? "default" : "none"), "fingerprint": .string(fingerprint(canonical.utf8)),
+                "avatar": request.sender.avatar.map { .string($0.rawValue) } ?? .null, "sound": .string(sound),
+                "image": request.image.map { .string($0.rawValue) } ?? .null, "fingerprint": .string(fingerprint(canonical.utf8)),
                 "payloadBytes": .number(Double(size)),
             ])
             return (try notificationStatus(db.query("SELECT * FROM notifications WHERE id = ?", id)[0], of: device), true)
@@ -315,6 +336,54 @@ actor Store {
             throw APIError(.notFound, "No notification is named \(name); the gateway keeps notifications for a day.")
         }
         return try notificationStatus(row, of: device)
+    }
+
+    func putMedium(_ device: Device, bytes: [UInt8], now: Int) throws -> (status: MediumStatus, created: Bool) {
+        let medium = try Medium.validate(bytes)
+        let hash = Self.hex(Array(SHA256.hash(data: Data(bytes))))
+        return try db.transaction {
+            try db.run("DELETE FROM media WHERE device_id = ? AND used_at <= ?", device.id, now - Self.mediaRetention)
+            if let row = try db.query("SELECT id FROM media WHERE device_id = ? AND hash = ?", device.id, hash).first {
+                let id = try row.text("id", as: MediaID.init(rawValue:))
+                try db.run("UPDATE media SET used_at = ? WHERE id = ?", now, id.rawValue)
+                return (MediumStatus(id: id, type: medium.kind, durationSeconds: medium.seconds), false)
+            }
+            let stored = try db.query("SELECT coalesce(sum(length(bytes)), 0) AS total FROM media WHERE device_id = ?", device.id)[0].integer("total")
+            guard Int(stored) + bytes.count <= Self.maximumMediaBytesPerDevice else {
+                throw APIError(.payloadTooLarge, "This phone's media would take \(Self.megabytes(Int(stored) + bytes.count)) MiB; the gateway keeps at most "
+                               + "\(Self.maximumMediaBytesPerDevice >> 20) MiB per phone, each file until a day after its last upload or use. "
+                               + "Reuse the ids of files you uploaded, or send smaller files.")
+            }
+            let id = MediaID.random()
+            try db.run("""
+                INSERT INTO media (id, device_id, hash, kind, content_type, bytes, used_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, id.rawValue, device.id, hash, medium.kind.rawValue, medium.contentType, bytes, now)
+            try record("media.put", device: device.id, activity: nil, [
+                "media": .string(id.rawValue), "type": .string(medium.kind.rawValue), "bytes": .number(Double(bytes.count)),
+                "durationSeconds": medium.seconds.map(JSONValue.number) ?? .null, "fingerprint": .string(String(hash.prefix(16))),
+            ])
+            return (MediumStatus(id: id, type: medium.kind, durationSeconds: medium.seconds), true)
+        }
+    }
+
+    func notificationMedium(_ id: UUID, token: String, medium mediaID: MediaID, now: Int) throws -> (bytes: [UInt8], contentType: String) {
+        try db.transaction {
+            guard let row = try db.query("SELECT device_id, request FROM notifications WHERE id = ? AND token_hash = ? AND expires_at > ?",
+                                         id, Self.hash(token), now).first else {
+                throw APIError(.unauthorized, "The notification is unknown, expired or belongs to another push.")
+            }
+            let request = try JSONDecoder().decode(NotificationRequest.self, from: Data(try row.string("request").utf8))
+            let device = try row.text("device_id", as: UUID.init(uuidString:))
+            guard request.references.contains(where: { $0.id == mediaID }),
+                  let medium = try db.query("SELECT bytes, content_type FROM media WHERE id = ? AND device_id = ?", mediaID.rawValue, device).first else {
+                throw APIError(.notFound, "The notification has no medium \(mediaID).")
+            }
+            let bytes = try medium.blob("bytes")
+            try record("notification.media", source: "app", device: device, activity: nil, [
+                "notification": .string(id.uuidString), "media": .string(mediaID.rawValue), "bytes": .number(Double(bytes.count)),
+            ])
+            return (bytes, try medium.string("content_type"))
+        }
     }
 
     func reportNotification(_ id: UUID, token: String, _ report: NotificationReport, now: Int) throws {
@@ -473,6 +542,7 @@ actor Store {
             try expireNotifications(now: now)
             try db.run("DELETE FROM notifications WHERE expires_at <= ? AND in_flight = 0", now)
         }
+        try db.run("DELETE FROM media WHERE used_at <= ?", now - Self.mediaRetention)
         try db.run("""
             DELETE FROM actions WHERE seq IN (SELECT seq FROM (
               SELECT seq, ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY seq DESC) AS n FROM actions) WHERE n > ?)
@@ -815,6 +885,10 @@ actor Store {
 
     static func hash(_ token: String) -> String {
         hex(Array(SHA256.hash(data: Data(token.utf8))))
+    }
+
+    private static func megabytes(_ bytes: Int) -> String {
+        String(format: "%.1f", Double(bytes) / Double(1 << 20))
     }
 
     private static func hex(_ bytes: [UInt8]) -> String {

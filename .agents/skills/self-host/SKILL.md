@@ -19,10 +19,14 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
    enable Broadcast Capability under Push Notifications, and enable
    Communication Notifications, which lets notifications show their sender's
    avatar.
-3. Under Keys, create an Apple Push Notifications service key per environment
+3. Under Identifiers > App Groups, register `group.<bundle ID>`, then enable
+   App Groups on the app's and the notification extension's App IDs with that
+   group. The extension keeps downloaded sounds there, the only place iOS
+   plays them from.
+4. Under Keys, create an Apple Push Notifications service key per environment
    the user needs: Sandbox for builds run from Xcode, Production for TestFlight
    and App Store builds. Record each Key ID; the `.p8` file downloads once.
-4. Note the Team ID from the account's membership details.
+5. Note the Team ID from the account's membership details.
 
 ## Gateway
 
@@ -94,6 +98,10 @@ gateway needs the matching key.
    `{"sender": {"id": "setup", "name": "Setup"}, "body": "Hello"}`. It arrives
    with the initials S on a colored circle, and
    `GET /v1/notifications/hello` reports `"state": "received"`.
+5. In the app's examples, send Printer. It arrives with the printer's picture,
+   its chime and a photo, and its status reports
+   `{"avatar": "image", "sound": "custom"}`; `"sound": "default"` means the app
+   group is missing from one of the App IDs.
 
 ## Upgrade
 

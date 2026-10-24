@@ -1,0 +1,6 @@
+{
+  "sender": {"id": "printer", "name": "Printer", "avatar": "printer-avatar.jpg"},
+  "body": "Benchy finished in 42 min. Come get it!",
+  "sound": "print-finished.wav",
+  "image": "benchy.jpg"
+}

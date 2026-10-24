@@ -5,7 +5,8 @@
 - An agent shows a native Live Activity with one HTTP request, in nearly any
   layout ActivityKit can display, without an app update per layout.
 - An agent tells the user about a moment with one HTTP request, as a
-  notification from a sender it names.
+  notification from a sender it names, with the picture, sound and image the
+  agent chooses; nothing is bundled into the app.
 - One person can self-host the gateway. Apple Push Notification service is the
   only external service.
 - The codebase stays small: two Swift packages, Apple frameworks first, and
@@ -31,10 +32,10 @@ sequenceDiagram
     Phone->>Gateway: report activity states
     Phone->>Gateway: button press or toggle
     Agent->>Gateway: GET actions after cursor
-    Agent->>Gateway: PUT notification
-    Gateway->>APNs: alert push with a fetch token
+    Agent->>Gateway: POST media, PUT notification
+    Gateway->>APNs: alert push with media IDs and a fetch token
     APNs->>Phone: notification extension
-    Phone->>Gateway: report with the fetch token
+    Phone->>Gateway: fetch media, report with the fetch token
 ```
 
 ## Decisions
@@ -127,16 +128,18 @@ reach any https or app URL without a gateway round trip.
 alert push at priority 10 with the sender's name as the title, the body,
 `sound: "default"` when the agent asked for a sound, `mutable-content`,
 `thread-id` from `sender.id`, and a `lykta` object with the notification's
-UUID, the sender ID and a fetch token. The `LyktaNotifications` extension
-draws the sender's initials on a circle colored by `sender.id`, because iOS
-shows the app icon rather than initials for a sender without an image. It
+UUID, the sender ID, a fetch token and the IDs of its avatar, sound and
+image. The `LyktaNotifications` extension uses the sender's avatar or draws
+the sender's initials on a circle colored by `sender.id`, because iOS shows
+the app icon rather than initials for a sender without an image. It
 builds an `INPerson` with an app-specific handle and no contact suggestion
 and an incoming `INSendMessageIntent` whose conversation is the sender ID,
 donates it and passes the result of `updating(from:)` on unchanged, so iOS
 shows the avatar and name with the app icon as a badge. The Communication
 Notifications capability on the app is all this needs, with no extension
 entitlement and no SiriKit. If the intent fails, the extension delivers the
-plain alert; if the extension runs out of time, iOS does. The push reads
+plain alert with its sound and image; if the extension runs out of time, iOS
+delivers the original with the default sound. The push reads
 correctly without the extension. The app asks for permission when the user
 taps Copy Agent Setup, or Allow on the home screen for installs set up
 earlier, registers for remote notifications, and reports the authorization,
@@ -167,11 +170,42 @@ reports to its own gateway, follows no redirect, and waits at most three
 seconds for the answer before handing the notification to iOS, since iOS may
 stop the extension once it has. A retried send gets a new token.
 
+**Media is a resource of its phone.** `POST /v1/media` takes a raw WAV, PNG
+or JPEG of at most 4 MiB, the listener's limit on that route alone, and
+returns an opaque ID scoped to the uploading phone; a repeated file returns
+its existing ID. The gateway reads the bytes, not the `Content-Type`: WAV
+must hold linear PCM shorter than 30 seconds, the longest sound iOS plays, and
+images at most 4096 pixels on a side. One format per kind keeps the validator
+small and Linux-portable; agents convert with a single command. `Store` keeps
+media as SQLite blobs, so backups, restores and rollbacks stay as they were,
+and removes a file a day after its last upload or reference, which outlasts
+any notification that names it, within 32 MiB per phone. A notification's
+media references are checked, kind included, before it is queued. The fetch
+token also authorizes `GET /v1/device/notifications/{uuid}/media/{id}` for
+the media its notification names. Base64 or multipart notification bodies
+were rejected because they put binary data in every request and lose reuse.
+
+**The extension owns the phone's media cache.** It downloads what it lacks
+within 20 seconds, all at once, and moves each file into place: sounds into
+`Library/Sounds` in the app group's container, the only place outside the
+bundle where `UNNotificationSound` finds a downloaded sound, avatars decoded
+by ImageIO to 256 pixels into the group's caches, and the image into a
+temporary file that becomes the notification's attachment. Sounds and
+avatars stay within 64 files and 64 MiB by removing the least recently used
+first. A file it cannot fetch leaves the default sound or the initials, and
+the report says which. While the phone is unlocked, a Temporary banner stops a
+sound when it slides away after about nine seconds; only the user can choose
+Persistent banners, so the skill keeps sounds under eight seconds unless the
+phone reports them. Live Activity pushes run no extension, so their alerts
+keep the default sound.
+
 **The extension prepares synchronously.** iOS calls the extension with a
 content handler that is not `Sendable`, so Swift 6 cannot move it into a task
-without silencing isolation, which Lykta does not do. The extension draws,
-donates without waiting, as Apple's sample does, and waits for its report
-with a semaphore on the thread iOS called it on; every wait is bounded.
+without silencing isolation, which Lykta does not do. The extension waits for
+its downloads, draws, donates without waiting, as Apple's sample does, and
+waits for its report with semaphores on the thread iOS called it on; every
+wait is bounded, 20 seconds for media and 3 for the report, within the 30 iOS
+allows.
 
 **One actor owns durable state.** `Store` owns the SQLite database; every
 mutation is one transaction. Delivery claims jobs from rows, so a restart
@@ -216,12 +250,13 @@ limit bounds.
   observes rendered content through ActivityKit instead.
 - Agents read their phone's events through `GET /v1/events`; operators read
   every phone with `lykta-gateway events`.
-- Notifications add `notification.put`, `push.notification`,
+- Notifications add `media.put`, `notification.put`, `push.notification`,
+  `notification.media` for each file the extension fetched,
   `notification.received` from the extension's report, and
   `notification.unknown` and `notification.expired`; `device.sync` records the
   phone's notification authorization, banner style and token fingerprint.
-- Events hold IDs, states, fingerprints and errors, never tokens or activity
-  or notification content. They are kept 14 days, at most 8 MB per phone.
+- Events hold IDs, states, fingerprints and errors, never tokens, activity
+  or notification content, or media. They are kept 14 days, at most 8 MB per phone.
 
 ## Expensive to change
 
@@ -237,8 +272,11 @@ limit bounds.
 - The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
   including the action report that installed apps send.
 - The `GET /v1/actions` cursor and record format, which agents poll.
-- The `/v1/notifications` contract, its states, lifetime and error codes, the
-  `lykta` payload object and the report route, which installed extensions use,
-  and the notification fields of the device report.
+- The `/v1/notifications` and `/v1/media` contracts, their states, lifetimes,
+  limits and error codes, the `lykta` payload object with its media IDs, and
+  the report and media routes, which installed extensions use, and the
+  notification fields of the device report.
+- The app group `group.<bundle ID>` and its `Library/Sounds`, which installed
+  extensions write and self-hosters configure.
 - `sender.id` and what derives from it: Notification Center threads, Focus's
   allowed people and Siri's suggestions key on the handle and conversation.

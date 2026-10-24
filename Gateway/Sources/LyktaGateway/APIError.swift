@@ -16,6 +16,7 @@ struct APIError: Error, Encodable, Sendable {
         case notificationsNotAllowed = "notifications_not_allowed"
         case notificationsNotSetUp = "notifications_not_set_up"
         case tooManyNotifications = "too_many_notifications"
+        case unsupportedMedia = "unsupported_media"
         case `internal`
 
         var status: Int {
@@ -26,6 +27,7 @@ struct APIError: Error, Encodable, Sendable {
             case .notFound: 404
             case .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired, .notificationsNotAllowed, .notificationsNotSetUp: 409
             case .payloadTooLarge: 413
+            case .unsupportedMedia: 415
             case .tooManyNotifications: 429
             case .internal: 500
             }

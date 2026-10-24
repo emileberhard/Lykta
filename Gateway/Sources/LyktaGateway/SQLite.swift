@@ -10,6 +10,7 @@ enum SQLValue: Sendable, Hashable {
     case integer(Int64)
     case real(Double)
     case text(String)
+    case blob([UInt8])
 }
 
 protocol SQLBindable {
@@ -22,6 +23,7 @@ extension Int: SQLBindable { var sqlValue: SQLValue { .integer(Int64(self)) } }
 extension Double: SQLBindable { var sqlValue: SQLValue { .real(self) } }
 extension Bool: SQLBindable { var sqlValue: SQLValue { .integer(self ? 1 : 0) } }
 extension UUID: SQLBindable { var sqlValue: SQLValue { .text(uuidString) } }
+extension [UInt8]: SQLBindable { var sqlValue: SQLValue { .blob(self) } }
 extension Optional: SQLBindable where Wrapped: SQLBindable {
     var sqlValue: SQLValue { self?.sqlValue ?? .null }
 }
@@ -54,6 +56,11 @@ struct Row: Sendable {
         self[column] == .null ? nil : try string(column)
     }
 
+    func blob(_ column: String) throws -> [UInt8] {
+        guard case let .blob(value) = self[column] else { throw mismatch(column) }
+        return value
+    }
+
     func text<T>(_ column: String, as parse: (String) -> T?) throws -> T {
         guard let value = parse(try string(column)) else { throw mismatch(column) }
         return value
@@ -77,7 +84,7 @@ struct Row: Sendable {
         case .null: nil
         case let .real(value): value
         case let .integer(value): Double(value)
-        case .text: throw mismatch(column)
+        case .text, .blob: throw mismatch(column)
         }
     }
 
@@ -154,6 +161,7 @@ final class Database {
         case let .integer(value): sqlite3_bind_int64(statement, index, value)
         case let .real(value): sqlite3_bind_double(statement, index, value)
         case let .text(value): sqlite3_bind_text(statement, index, value, -1, Self.transient)
+        case let .blob(value): value.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), Self.transient) }
         }
     }
 
@@ -162,6 +170,8 @@ final class Database {
         case SQLITE_INTEGER: .integer(sqlite3_column_int64(statement, column))
         case SQLITE_FLOAT: .real(sqlite3_column_double(statement, column))
         case SQLITE_TEXT: .text(String(cString: sqlite3_column_text(statement, column)))
+        case SQLITE_BLOB: .blob(Array(UnsafeRawBufferPointer(start: sqlite3_column_blob(statement, column),
+                                                             count: Int(sqlite3_column_bytes(statement, column)))))
         default: .null
         }
     }

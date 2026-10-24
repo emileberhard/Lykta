@@ -76,8 +76,9 @@ may be empty, a time limit and the event collection in `task.toml`,
 `tests/test.sh`. Harbor accepts only tests inside the task, so the tasks that
 should show something carry the same check, which passes when the phone drew
 an activity the agent sent. The reminder's passes when the agent sent nothing
-now, and tests-done's when the phone received a notification and the agent
-started no activity.
+now, tests-done's when the phone received a notification and the agent
+started no activity, and chime's when that notification played a sound the
+agent made and uploaded.
 
 ## Flow
 

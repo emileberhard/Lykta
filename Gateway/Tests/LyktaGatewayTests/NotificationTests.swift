@@ -96,13 +96,15 @@ struct NotificationTests {
 
     @Test(arguments: [
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": .bool(false)],
-         "sound must be true for the default sound; leave it out for a silent notification."),
-        (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": .null],
-         "sound must be true for the default sound; leave it out for a silent notification."),
+         "sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence."),
+        (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": "chime.wav"],
+         "sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence."),
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "title": "Printer"],
-         "Unknown key \"title\"; expected body, sender, sound."),
+         "Unknown key \"title\"; expected body, image, sender, sound."),
+        (["sender": ["id": "printer", "name": "Printer", "color": "red"], "body": "Done"],
+         "Unknown key \"sender.color\"; expected avatar, id, name."),
         (["sender": ["id": "printer", "name": "Printer", "avatar": "printer.png"], "body": "Done"],
-         "Unknown key \"sender.avatar\"; expected id, name."),
+         "sender.avatar must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef."),
         (["sender": ["id": "Printer", "name": "Printer"], "body": "Done"],
          "sender.id names the sender: 1 to 64 lowercase letters, digits, '-', '_' or '.', the same for every notification it sends."),
         (["sender": ["id": "printer", "name": "Printer"], "body": ""], "body must be 1 to 500 characters."),
@@ -267,6 +269,175 @@ struct NotificationTests {
         #expect(events.events.last?.name == "notification.expired")
     }
 
+    @Test func uploadsAFileOnceAndAnswersARepeatWithTheSameId() async throws {
+        let sound = Self.wav(milliseconds: 4200)
+        let created = await upload(sound)
+        #expect(created.status == 201)
+        let medium: Uploaded = try created.decoded()
+        #expect(medium.type == "sound" && medium.durationSeconds == 4.2)
+        let repeated = await upload(sound)
+        #expect(repeated.status == 200)
+        #expect(try repeated.decoded() == medium)
+        #expect(try await upload(Self.png(width: 256, height: 256)).decoded() as Uploaded != medium)
+    }
+
+    @Test(arguments: [
+        (wav(milliseconds: 31_000), "The sound is 31.0 s long; use a clip shorter than 30 s."),
+        (wav(milliseconds: 1000, format: 3),
+         "The WAV uses audio format 3 rather than linear PCM (1); convert it, such as with `ffmpeg -i in.wav -c:a pcm_s16le out.wav`."),
+        (Array(wav(milliseconds: 1000).dropLast(100)), "The WAV's audio data is cut off; send the whole file."),
+        (png(width: 5000, height: 10), "The image is 5000×10 pixels; use at most 4096 on each side."),
+        (jpeg(width: 640, height: 4097), "The image is 640×4097 pixels; use at most 4096 on each side."),
+        (Array(png(width: 64, height: 64).prefix(16)), "The PNG file is damaged or incomplete; export it again."),
+        (Array("ID3".utf8) + [UInt8](repeating: 0, count: 64),
+         "The file is not a WAV, PNG or JPEG. Convert sounds to WAV with linear PCM, such as `ffmpeg -i in.m4a -ac 1 -c:a pcm_s16le out.wav`, "
+         + "and images to PNG or JPEG."),
+    ] as [([UInt8], String)])
+    func refusesMediaThePhoneCannotUseWithTheFix(_ bytes: [UInt8], message: String) async throws {
+        let response = await upload(bytes)
+        #expect(response.status == 415)
+        #expect(try response.decoded() as Refusal == Refusal(error: "unsupported_media", message: message))
+    }
+
+    @Test func keepsAtMost32MiBOfMediaPerPhoneUntilADayAfterTheirLastUse() async throws {
+        for fill in 0..<8 {
+            #expect(await upload(Self.wav(milliseconds: 21_000, sampleRate: 96_000, fill: UInt8(fill))).status == 201)
+        }
+        let refused = await upload(Self.wav(milliseconds: 21_000, sampleRate: 96_000, fill: 8))
+        #expect(refused.status == 413)
+        #expect((try refused.decoded() as Refusal).message.hasPrefix("This phone's media would take 34.6 MiB; the gateway keeps at most 32 MiB per phone"))
+        let device = try #require(try await store.device(agentToken: credentials.agentToken))
+        let later = now + Store.mediaRetention + 5
+        #expect(try await store.putMedium(device, bytes: Self.wav(milliseconds: 21_000, sampleRate: 96_000, fill: 8), now: later).created)
+    }
+
+    @Test func aNotificationCarriesItsMediaAndItsFetchTokenOpensOnlyThose() async throws {
+        let avatar: Uploaded = try await upload(Self.png(width: 256, height: 256)).decoded()
+        let sound: Uploaded = try await upload(Self.wav(milliseconds: 2000)).decoded()
+        let photo = Self.jpeg(width: 1200, height: 900)
+        let image: Uploaded = try await upload(photo).decoded()
+        let other: Uploaded = try await upload(Self.png(width: 64, height: 64)).decoded()
+        let created = try await send("PUT", "/v1/notifications/done", body: [
+            "sender": ["id": "printer", "name": "Printer", "avatar": .string(avatar.id)], "body": "Benchy finished.",
+            "sound": .string(sound.id), "image": .string(image.id),
+        ])
+        #expect(created.status == 201)
+        try await deliver(at: now)
+        let alert = try #require(push.alerts.first)
+        #expect(try alert.payload.value(at: "aps.sound") == "default")
+        #expect(try alert.payload.value(at: "lykta.avatar") == .string(avatar.id))
+        #expect(try alert.payload.value(at: "lykta.sound") == .string(sound.id))
+        #expect(try alert.payload.value(at: "lykta.image") == .string(image.id))
+        let (id, token) = try fetchToken()
+        let fetched = await medium(id, image.id, token: token)
+        #expect(fetched.status == 200 && fetched.contentType == "image/jpeg" && fetched.body == photo)
+        #expect(await medium(id, other.id, token: token).status == 404)
+        #expect(await medium(id, image.id, token: "lykta_fetch_other").status == 401)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.last?.name == "notification.media")
+    }
+
+    @Test func refusesReferencesToMediaThePhoneDoesNotHave() async throws {
+        let avatar: Uploaded = try await upload(Self.png(width: 256, height: 256)).decoded()
+        let wrongKind = try await send("PUT", "/v1/notifications/done", body: [
+            "sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": .string(avatar.id),
+        ])
+        #expect(wrongKind.status == 400)
+        #expect((try wrongKind.decoded() as Refusal).message == "sound must be a sound; \(avatar.id) is an image.")
+        let unknown = "m_0123456789abcdef0123456789abcdef"
+        let missing = try await send("PUT", "/v1/notifications/done", body: [
+            "sender": ["id": "printer", "name": "Printer", "avatar": .string(unknown)], "body": "Done",
+        ])
+        #expect(missing.status == 400)
+        #expect((try missing.decoded() as Refusal).message == "sender.avatar is \(unknown), which this phone has not uploaded or the gateway "
+                + "removed a day after its last use. Upload the file with POST /v1/media and use the id it returns.")
+    }
+
+    @Test func mediaBelongToThePhoneThatUploadedThem() async throws {
+        let registration = Registration(environment: .development, appVersion: "0.6.0 (1)", proof: .invite(try await store.invite(now: now)))
+        let other: Credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
+                                                                  body: Array(try JSONEncoder().encode(registration)))).decoded()
+        let uploaded: Uploaded = try await api.handle(HTTPRequest(method: "POST", target: "/v1/media",
+                                                                  headers: ["authorization": "Bearer \(other.agentToken)"],
+                                                                  body: Self.png(width: 64, height: 64))).decoded()
+        let response = try await send("PUT", "/v1/notifications/done", body: [
+            "sender": ["id": "printer", "name": "Printer", "avatar": .string(uploaded.id)], "body": "Done",
+        ])
+        #expect(response.status == 400)
+    }
+
+    @Test func aReferenceKeepsAMediumForADayAfterTheNotification() async throws {
+        let device = try #require(try await store.device(agentToken: credentials.agentToken))
+        let avatar = try await store.putMedium(device, bytes: Self.png(width: 256, height: 256), now: now).status.id
+        let request = try NotificationRequest.decode(["sender": ["id": "printer", "name": "Printer", "avatar": .string(avatar.rawValue)], "body": "Done"])
+        let used = now + Store.mediaRetention - 60
+        #expect(try await store.putNotification(device, name: Name(rawValue: "first")!, request: request, now: used).created)
+        try await store.housekeep(now: used + 120)
+        #expect(try await store.putNotification(device, name: Name(rawValue: "second")!, request: request, now: used + 120).created)
+        try await store.housekeep(now: used + 120 + Store.mediaRetention)
+        await #expect(throws: APIError.self) {
+            try await store.putNotification(device, name: Name(rawValue: "third")!, request: request, now: used + 120 + Store.mediaRetention)
+        }
+    }
+
+    @Test func everyNotificationExampleIsServedListedAndSends() async throws {
+        let folder = GatewayTests.exampleDirectory.appending(path: "notifications")
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)).sorted()
+        let reference = String(decoding: PackageResources.notifications_md, as: UTF8.self)
+        var unused = Set(files.filter { !$0.hasSuffix(".json") })
+        #expect(files.contains { $0.hasSuffix(".json") })
+        for file in files {
+            let served = await api.handle(HTTPRequest(method: "GET", target: "/skill/examples/notifications/\(file)", headers: [:], body: []))
+            let expected = try Data(contentsOf: folder.appending(path: file))
+            #expect(served.status == 200 && Data(served.body) == expected, "\(file)")
+        }
+        for file in files where file.hasSuffix(".json") {
+            #expect(reference.contains("examples/notifications/\(file)"), "\(file)")
+            var request = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: folder.appending(path: file)))
+            for path in ["sender.avatar", "sound", "image"] {
+                guard case let .string(medium)? = try? request.value(at: path) else { continue }
+                unused.remove(medium)
+                let uploaded: Uploaded = try await upload(Array(try Data(contentsOf: folder.appending(path: medium)))).decoded()
+                request = try request.replacing(path, with: .string(uploaded.id))
+            }
+            #expect(try await send("PUT", "/v1/notifications/\(file.dropLast(5))", body: request).status == 201, "\(file)")
+        }
+        #expect(unused.isEmpty)
+    }
+
+    static func wav(milliseconds: Int, format: Int = 1, sampleRate: Int = 8000, fill: UInt8 = 0) -> [UInt8] {
+        let data = [UInt8](repeating: fill, count: sampleRate * 2 * milliseconds / 1000)
+        let format: [[UInt8]] = [little(16, 4), little(format, 2), little(1, 2), little(sampleRate, 4), little(sampleRate * 2, 4), little(2, 2), little(16, 2)]
+        let chunks: [[UInt8]] = [Array("RIFF".utf8), little(36 + data.count, 4), Array("WAVEfmt ".utf8)] + format + [Array("data".utf8), little(data.count, 4), data]
+        return chunks.flatMap { $0 }
+    }
+
+    static func png(width: Int, height: Int) -> [UInt8] {
+        let chunks: [[UInt8]] = [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], big(13, 4), Array("IHDR".utf8), big(width, 4), big(height, 4),
+                                 [8, 6, 0, 0, 0, 0, 0, 0, 0]]
+        return chunks.flatMap { $0 }
+    }
+
+    static func jpeg(width: Int, height: Int) -> [UInt8] {
+        let chunks: [[UInt8]] = [[0xFF, 0xD8, 0xFF, 0xE0], big(16, 2), Array("JFIF".utf8), [0, 1, 1, 0], big(1, 2), big(1, 2), [0, 0],
+                                 [0xFF, 0xC0], big(11, 2), [8], big(height, 2), big(width, 2), [1, 1, 0x11, 0], [0xFF, 0xD9]]
+        return chunks.flatMap { $0 }
+    }
+
+    private static func little(_ value: Int, _ count: Int) -> [UInt8] {
+        (0..<count).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
+    }
+
+    private static func big(_ value: Int, _ count: Int) -> [UInt8] {
+        little(value, count).reversed()
+    }
+
+    private struct Uploaded: Decodable, Equatable {
+        let id: String
+        let type: String
+        let durationSeconds: Double?
+    }
+
     private struct Notified: Decodable, Equatable {
         let state: String
         let error: String?
@@ -308,6 +479,15 @@ struct NotificationTests {
     private func report(_ id: UUID, token: String, _ body: JSONValue) async -> HTTPResponse {
         await api.handle(HTTPRequest(method: "POST", target: "/v1/device/notifications/\(id.uuidString)/report",
                                      headers: ["authorization": "Bearer \(token)"], body: body.json))
+    }
+
+    private func upload(_ bytes: [UInt8]) async -> HTTPResponse {
+        await api.handle(HTTPRequest(method: "POST", target: "/v1/media", headers: ["authorization": "Bearer \(credentials.agentToken)"], body: bytes))
+    }
+
+    private func medium(_ id: UUID, _ medium: String, token: String) async -> HTTPResponse {
+        await api.handle(HTTPRequest(method: "GET", target: "/v1/device/notifications/\(id.uuidString)/media/\(medium)",
+                                     headers: ["authorization": "Bearer \(token)"], body: []))
     }
 
     private func status(_ name: String) async throws -> Notified {
