@@ -75,8 +75,8 @@
       ],
       "modifiers": [{"frame": {"width": 20, "height": 20}}, {"padding": {"leading": 2}}]
     },
-    "compactTrailing": {"text": "{{store}}", "modifiers": [{"font": "caption"}, {"bold": true}, {"foreground": "#FF4D58"}]},
-    "minimal": {"symbol": "cart.fill", "modifiers": [{"foreground": "#FF4D58"}]},
+    "compactTrailing": {"vstack": [{"each": "aisles", "as": "aisle", "do": {"hstack": [{"each": "aisle.items", "as": "item", "do": {"if": "{{item.done}}", "then": {"shape": "circle", "fill": "#FF4D58", "modifiers": [{"frame": {"width": 4.5, "height": 4.5}}]}, "else": {"shape": "circle", "fill": "#FF4D58", "modifiers": [{"opacity": 0.3}, {"frame": {"width": 4.5, "height": 4.5}}]}}}], "spacing": 2}}], "spacing": 2},
+    "minimal": {"vstack": [{"each": "aisles", "as": "aisle", "do": {"hstack": [{"each": "aisle.items", "as": "item", "do": {"if": "{{item.done}}", "then": {"shape": "circle", "fill": "#FF4D58", "modifiers": [{"frame": {"width": 4.5, "height": 4.5}}]}, "else": {"shape": "circle", "fill": "#FF4D58", "modifiers": [{"opacity": 0.3}, {"frame": {"width": 4.5, "height": 4.5}}]}}}], "spacing": 2}}], "spacing": 2},
     "expanded": {
       "leading": {
         "zstack": [

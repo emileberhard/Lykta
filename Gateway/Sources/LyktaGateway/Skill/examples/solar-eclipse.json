@@ -61,7 +61,10 @@
       ]
     },
     "minimal": {
-      "svg": "<svg width='24' height='24' viewBox='0 0 24 24'><defs><filter id='g'><feGaussianBlur stdDeviation='1.6'/></filter></defs><circle cx='12' cy='12' r='9.5' fill='#BFD4FF' opacity='.45' filter='url(#g)'/><circle cx='12' cy='12' r='7' fill='black'/><circle cx='12' cy='12' r='7' fill='none' stroke='#FFF8E6' stroke-width='1'/><circle cx='17' cy='7' r='2.6' fill='white' filter='url(#g)'/><circle cx='17' cy='7' r='1.2' fill='white'/></svg>"
+      "zstack": [
+        {"progress": ["{{firstContact}}", "{{totality}}"], "style": "circular", "modifiers": [{"tint": "#FFC93C"}, {"frame": {"width": 24, "height": 24}}]},
+        {"svg": "<svg width='12' height='12' viewBox='0 0 24 24'><circle cx='12' cy='12' r='9' fill='black' stroke='#FFF8E6' stroke-width='2'/><circle cx='18' cy='6' r='3' fill='white'/></svg>"}
+      ]
     },
     "expanded": {
       "leading": {
