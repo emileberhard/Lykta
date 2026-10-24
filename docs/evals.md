@@ -3,8 +3,8 @@
 `evals` shows what a fresh coding agent does with Lykta when all it has is
 what a user gives it: the app's Copy Agent Setup paste and one request. Each
 trial runs a stock Claude Code or Codex in a sandbox with its own gateway, and
-Harbor keeps the transcript. Nothing is graded yet; reading transcripts comes
-first.
+Harbor keeps the transcript. Afterwards one binary check asks the trial's
+gateway whether the agent did the one thing the request needs.
 
 ## Run it
 
@@ -18,6 +18,9 @@ just evals --agent codex --model gpt-6.1-sol --include-task-name train
 harbor view .local/evals
 ```
 
+A trial scores 1 when its check passes and 0 when it fails, so the Mean that
+Harbor prints is the pass rate.
+
 Agents take their usual credentials from the environment or from
 `--env-file`: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or
 `CLAUDE_CODE_OAUTH_TOKEN` with `CLAUDE_FORCE_OAUTH=1`. `OPENAI_BASE_URL` and
@@ -26,8 +29,11 @@ uses a proxy without Responses WebSockets only through a custom provider with
 `supports_websockets = false`, passed as `--ak config=codex.toml`.
 
 A task is a folder in `evals/tasks`: the request in `instruction.md`, which
-may be empty, a time limit in `task.toml`, and `environment` linking the shared
-`evals/environment`.
+may be empty, a time limit in `task.toml`, `environment` linking the shared
+`evals/environment` and its check in `tests/test.sh`. Harbor accepts only
+tests inside the task, so the tasks that should show something carry the same
+check, which passes when the phone drew an activity the agent sent; the
+reminder's passes when the agent started none now.
 
 ## Flow
 
@@ -40,7 +46,9 @@ sequenceDiagram
     A->>G: GET /skill/SKILL.md, PUT /v1/activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
     G-->>A: live, accepted, device active, layoutReadable true
-    H->>H: Transcript in .local/evals
+    H->>A: tests/test.sh
+    A->>G: GET /v1/activities
+    H->>H: Transcript and reward in .local/evals
 ```
 
 ## Decisions
@@ -89,8 +97,13 @@ addresses still route, so services there are reachable by IP; SSH on the host
 asked for keys. Stricter isolation, such
 as Docker Sandboxes, waits until a transcript shows an agent wandering there.
 
-**No grading yet.** The first runs are for reading what agents do. Grades
-come once the transcripts show what is worth checking.
+**Binary checks from the gateway.** A check reads the trial's gateway, which
+knows what the agent sent and what the phone drew, rather than the transcript,
+which says what the agent claims. It passes or fails, without judging how the
+activity looks, so a failure means the agent missed the request. An agent
+that does nothing, or schedules the activity with something that dies with the
+container, also starts nothing now, so the reminder's check passes it; the
+transcript shows which. Harbor's `nop` agent, which does nothing, scores 0.2.
 
 ## Measured
 
@@ -103,7 +116,7 @@ in Docker's VM.
 
 ## Next
 
-- Grade from the simulated gateway: every layout the agent sent validated, an
-  activity ended or has `endAfter`, and the reminder started none.
+- Finer checks from the simulated gateway: every layout the agent sent
+  validated, and an activity ended or has `endAfter`.
 - Taps: a phone that toggles and presses controls while the agent waits.
 - A simulated user who answers when the agent asks a question.

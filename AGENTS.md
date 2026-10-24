@@ -20,7 +20,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `iOS/AppStore` | The App Store screenshot fixture activities and slide composer |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
-| `evals` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate` |
+| `evals` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, and the binary checks that read its gateway afterwards |
 
 ## Invariants
 
@@ -176,7 +176,7 @@ maintainer, because the App Store privacy label must match.
 | `just ios` | Compile the app and widgets without signing |
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |
-| `just evals <options>` | Run fresh agents on every task in `evals/tasks` against a simulated phone; options go to `harbor run`, such as `--agent codex --model gpt-6.1-sol` or `--include-task-name train`. Transcripts land in `.local/evals`; read them with `harbor view .local/evals` |
+| `just evals <options>` | Run fresh agents on every task in `evals/tasks` against a simulated phone and check each trial; options go to `harbor run`, such as `--agent codex --model gpt-6.1-sol` or `--include-task-name train`. Transcripts and rewards land in `.local/evals`; read them with `harbor view .local/evals` |
 | `just render <inputs>` | Render request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded` and `--dark` narrow it. Close the project in Xcode before removing a worktree that rendered. |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a

@@ -19,10 +19,10 @@ render *args:
 image:
     docker build --tag lykta-gateway .
 
-# Run fresh agents on every eval task against a simulated phone; options go to harbor run
+# Run fresh agents on every eval task against a simulated phone and check what they showed; options go to harbor run
 [positional-arguments]
 evals *args: image
-    harbor run --path evals/tasks --disable-verification --ak prompt_template_path=evals/prompt.md --n-concurrent 16 --jobs-dir .local/evals "$@"
+    harbor run --path evals/tasks --ak prompt_template_path=evals/prompt.md --n-concurrent 16 --jobs-dir .local/evals "$@"
 
 # Compile the app and widgets for iOS without signing
 ios:
