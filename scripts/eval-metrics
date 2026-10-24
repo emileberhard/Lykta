@@ -12,7 +12,7 @@ MEASURES = [*SECONDS, "model calls", "tool calls", *TOKENS]
 
 
 def moment(text):
-    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    return datetime.fromisoformat(text.replace("Z", "+00:00")) if text else None
 
 
 def total(values):
@@ -38,6 +38,9 @@ def accepted(path, started):
         print(f"{path.name}: no gateway events in artifacts/events.json ({type(error).__name__}), so accepted is unknown.", file=sys.stderr)
         return None
     at = next((event["at"] for event in events if event["name"] == "activity.put"), None)
+    if at is None and len(events) == 1000:
+        print(f"{path.name}: the first 1000 gateway events hold no accepted activity, so accepted is unknown.", file=sys.stderr)
+        return None
     return "none" if at is None else (moment(at) - started).total_seconds()
 
 
@@ -50,7 +53,7 @@ def action(call):
 
 def steps_measures(path, started):
     trajectory = path / "agent" / "trajectory.json"
-    if not trajectory.is_file():
+    if started is None or not trajectory.is_file():
         return {"model calls": None, "tool calls": None, "cache writes": None, "reasoning": None, "steps": None}
     steps = [step for step in json.loads(trajectory.read_text())["steps"] if step["source"] == "agent"]
     metrics = [step.get("metrics") or {} for step in steps]
@@ -74,14 +77,15 @@ def steps_measures(path, started):
 
 def trial(path):
     result = json.loads((path / "result.json").read_text())
-    started = moment(result["agent_execution"]["started_at"])
+    execution = result.get("agent_execution") or {}
+    started, finished = moment(execution.get("started_at")), moment(execution.get("finished_at"))
     usage = result.get("agent_result") or {}
     return {
         "trial": f"{path.parent.name}/{path.name}",
         "task": result["task_name"],
         "reward": ((result.get("verifier_result") or {}).get("rewards") or {}).get("reward"),
-        "accepted": accepted(path, started),
-        "agent": (moment(result["agent_execution"]["finished_at"]) - started).total_seconds(),
+        "accepted": accepted(path, started) if started else None,
+        "agent": (finished - started).total_seconds() if started and finished else None,
         "input": usage.get("n_input_tokens"),
         "cached": usage.get("n_cache_tokens"),
         "output": usage.get("n_output_tokens"),
