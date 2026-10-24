@@ -17,10 +17,6 @@ example below is valid.
 | `keyline` | no | Dynamic Island outline color. |
 | `link` | no | A URL that opens when the user taps the activity: `https`, or an app URL such as `shortcuts://run-shortcut?name=Lights`. |
 
-Treat the compact and minimal views as a 28-point circle: a symbol, a short
-number or a ring. Use `{"if": "limitedWidth"}` when the Dynamic Island is
-narrower than usual.
-
 ## Data
 
 `{{path}}` placeholders take values from the request's `data`. A placeholder
@@ -288,17 +284,41 @@ changes with it:
 A layout may be at most 32 KB with 256 nodes, 16 levels and 512 modifiers, and
 its compressed push must fit Apple's 4 KB limit. Within a presentation:
 
+- Pad Lock Screen content 14 points from its edges, the margin notifications
+  use, so the two line up in the list. Drawings and buttons may come closer.
+- Keep an even margin to the rounded outline so nothing pokes into a corner.
+  A `containerRelativeShape` takes the activity's corner radius, so an inset
+  card or tile nests concentrically.
+- Separate a block with an inset shape or a thick line, not a fill that runs
+  to the edge; in StandBy the `background` extends to the screen's edges and
+  such a fill looks cut off.
+- Start related elements, such as a header, the text under it and its
+  progress bar, at one leading inset; a few points off reads as a mistake.
+- Keep about 10 points between text and drawn decoration, such as a border or
+  a curtain; closer, the text looks pinned to it.
+- Keep about 8 points between a ring or gauge and its tile's edge, and value
+  text inside a ring within two thirds of the inner diameter. `scale` shrinks
+  the drawing but not its layout frame, so shrink the `frame` instead.
+- Expanded content clips at about 145 points tall. Add up the rows before
+  adding one, and add `fixedSize: "vertical"` to text that must keep its
+  second line.
+- Expanded `leading` and `trailing` beside the camera hold about 44 points;
+  wider content moves below it.
+- When `{"if": "limitedWidth"}` holds, as in landscape, each compact side and
+  the minimal get a 28-point circle: show a symbol, a short number or a ring.
+- Size a circular `progress` with a `frame`, such as 24 points in `minimal`.
+- Thin lines and light text fade on black: stroke rings at least a tenth of
+  their width with round caps, use medium weight or heavier, and draw tiny
+  charts with a `line` mark of 1.5 to 2 points, since an `area` alone vanishes.
+- When you draw a ring or bar from shapes, draw its track in the tint at
+  about 35% opacity; `quaternary` or near-black tracks disappear on black, so
+  a nearly empty ring shows nothing.
+- Glows and shadows are clipped at the edge of a Dynamic Island region; keep
+  their radius small in compact and minimal.
+- `tint` on `progress` takes one color; a gradient shows only its first.
 - Give timers a fixed `frame` width; timer text otherwise reserves room for its
   longest value. In the expanded `center`, an unframed timer pushes `leading`
   and `trailing` below the camera.
-- Expanded `leading` and `trailing` beside the camera hold about 44 points;
-  wider content moves below it.
-- Size a circular `progress` with a `frame`, such as 24 points in `minimal`.
-- Glows and shadows are clipped at the edge of a Dynamic Island region; keep
-  their radius small in compact and minimal.
-- Expanded regions are short: add `fixedSize: "vertical"` to text that must
-  keep its second line.
-- `tint` on `progress` takes one color; a gradient shows only its first.
 - Offer shorter alternatives with `viewThatFits`.
 - Bound text with `lineLimit` and `minimumScaleFactor`.
 - Prefer `spacer` and alignment over fixed offsets so content adapts to each
@@ -311,10 +331,10 @@ A ring:
 ```json
 {
   "zstack": [
-    {"shape": "circle", "stroke": "quaternary", "lineWidth": 4},
+    {"shape": "circle", "stroke": "green", "lineWidth": 4, "modifiers": [{"opacity": 0.35}]},
     {"shape": "circle", "stroke": "green", "lineWidth": 4, "lineCap": "round", "trim": [0, 0.7],
      "modifiers": [{"rotation": -90}]},
-    {"text": "70", "modifiers": [{"font": 11}, {"monospacedDigit": true}]}
+    {"text": "70", "modifiers": [{"font": 11}, {"fontWeight": "semibold"}, {"monospacedDigit": true}]}
   ],
   "modifiers": [{"frame": {"width": 28, "height": 28}}]
 }
@@ -365,7 +385,7 @@ A complete request body that later updates send as `data` only:
         {"progress": "{{progress}}", "modifiers": [{"tint": "blue"}]}
       ],
       "spacing": 12,
-      "modifiers": [{"padding": 16}]
+      "modifiers": [{"padding": 14}]
     },
     "compactLeading": {"symbol": "shippingbox.fill", "modifiers": [{"foreground": "blue"}]},
     "compactTrailing": {"text": "{{done}}/{{total}}", "modifiers": [{"monospacedDigit": true}, {"contentTransition": "numericText"}]},

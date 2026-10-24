@@ -17,6 +17,67 @@ sharp vector graphics, and `{{placeholders}}` inside it update with the data.
 You need the gateway URL and agent token from the setup the user copied out of
 the Lykta app. Send the token as `Authorization: Bearer <token>`.
 
+## Design
+
+People read a Live Activity in a glance, on a phone others may see. Show the
+one value they are waiting for, large and live, and leave detail and private
+content to a tap.
+
+Take the look from the subject, as its own app would: its colors (a transit
+line's color, a brand's hex), its objects as SF Symbols or SVG drawings, and
+its tone in `fontDesign`, such as `rounded` for a pet or `monospaced` for a
+server. The Dynamic Island is always black, so one bold color carried through
+its symbols, values and `keyline` is what makes the activity recognizable
+there. On the Lock Screen, a `background` in the subject's colors carries the
+same identity; without one the card is light or dark with the system
+appearance, so use `primary` and `secondary` text and colors that read on
+both. Spend boldness in one place, such as one drawing or one large number,
+and keep the rest quiet. Let color follow the state, such as green once a
+build passes, and let changing numbers count with `contentTransition`.
+
+Each presentation has a job:
+
+- **Lock Screen**: the live value first, then its context, in a layout made
+  for this subject rather than a notification's icon, title and body. Add
+  controls only for what people do to the activity itself, and keep them few.
+  Let the height follow what there is to show, such as one line while a
+  driver is found and more once one is on the way.
+- **Compact**: one piece of information split around the camera, such as what
+  it is leading and the live value trailing, in one color and type, both sides
+  about as wide and snug against the camera. Round the value or shorten its
+  unit before letting one side grow.
+- **Minimal**: the live value or progress, such as a ring, a number or a tiny
+  chart. It is often the only sign of the activity, so a logo alone says
+  nothing. It is about 36 points wide, so a full timer such as `25:00`
+  shrinks past reading; keep text to about three characters.
+- **Expanded**: the compact view grown, keeping its placement: content hugs
+  the camera from leading and trailing and wraps below it, with no empty band
+  at the top. Make it clearly short or clearly tall, not in between.
+
+Unless the request asks for them, avoid these defaults, which make an
+activity look generated:
+
+- emoji as icons; they ignore the layout's colors and read as stickers
+- centered text above left-aligned rows, or a large centered number beside a
+  left-aligned header
+- an expanded view that copies the Lock Screen or leaves leading and trailing
+  empty
+- a minimal that repeats the compact icon
+- a progress track too dark to see on black
+- supporting text as heavy and bright as the main value instead of `secondary`
+- one example's structure with the new content swapped in
+
+Before designing your first layout, read every [example](#examples), all at
+once in parallel. Together they show the range: drawn scenery, charts,
+gauges, rows, chat bubbles and controls, each in its own palette. They are
+still a small slice of what the nodes and SVG can do, one answer each to one
+subject, so treat them as a vocabulary of techniques rather than templates:
+combine them, go beyond them, and let your own subject decide the design.
+[Fitting](references/layout.md#fitting) gives margins and sizes. Before
+sending, check every presentation: does each show something live, do related
+elements share a leading edge, does text clear every drawing, and would it be
+recognizable without its title?
+
 ## Start or update
 
 `PUT /v1/activities/{name}` with a JSON body starts the activity when no live
@@ -157,9 +218,11 @@ update; retry after a few seconds. Repeating a PUT is safe, but a repeated
 
 ## Examples
 
-Each example is a complete PUT body to adapt. Fetch one from the skill's own
-address, such as `examples/homelab.json` next to this file. Their times are
-Unix seconds around 1793000000; replace them with real ones from `date +%s`.
+Each example is a complete PUT body at the skill's own address, such as
+`examples/homelab.json` next to this file. Read all of them, fetched in
+parallel or in one command, before designing your first layout;
+[Design](#design) says how to use them. Their times are Unix seconds around
+1793000000; replace them with real ones from `date +%s`.
 
 | Example | Shows |
 | --- | --- |
