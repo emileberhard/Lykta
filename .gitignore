@@ -5,4 +5,4 @@ Local.xcconfig
 *.sqlite*
 *.p8
 .local/
-*.xcodeproj/project.xcworkspace/
+project.xcworkspace/
