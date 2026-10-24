@@ -13,6 +13,7 @@ struct ActivityJob: Sendable {
     let activity: Activity
     let environment: PushEnvironment
     let pushToken: PushToken?
+    let tokenMoved: Bool
 }
 
 struct NotificationJob: Sendable {
@@ -22,6 +23,7 @@ struct NotificationJob: Sendable {
     let request: NotificationRequest
     let environment: PushEnvironment
     let token: PushToken
+    let tokenMoved: Bool
     let fetchToken: String
     let expiresAt: Int
 }
@@ -32,6 +34,7 @@ enum Outcome: Sendable {
     case failed(String, clearsPushToken: Bool)
     case unknown(String)
     case channelGone
+    case wrongEnvironment(String, PushEnvironment)
 }
 
 struct Attempt: Sendable {
@@ -88,7 +91,7 @@ struct Delivery: Sendable {
                 .map(JSONValue.string)
             return Attempt(outcome: .accepted, detail: detail)
         } catch {
-            return Attempt(outcome: Self.outcome(of: error), detail: detail)
+            return Attempt(outcome: outcome(of: error, sentTo: job.environment, tokenMoved: job.tokenMoved), detail: detail)
         }
     }
 
@@ -105,7 +108,7 @@ struct Delivery: Sendable {
                 guard let token = job.pushToken else { return Attempt(outcome: .failed("The phone has no push token.", clearsPushToken: false), detail: detail) }
                 detail["pushToStartToken"] = .string(fingerprint(token.description.utf8))
                 let channel: String
-                if let existing = activity.channel {
+                if let existing = activity.channel, activity.channelEnvironment == job.environment {
                     channel = existing
                 } else {
                     do {
@@ -115,7 +118,7 @@ struct Delivery: Sendable {
                     } catch {
                         return Attempt(outcome: Self.outcome(of: error), detail: detail)
                     }
-                    guard try await store.setChannel(channel, for: activity.id) else { return Attempt(outcome: .channelGone, detail: detail) }
+                    guard try await store.setChannel(channel, environment: job.environment, for: activity.id) else { return Attempt(outcome: .channelGone, detail: detail) }
                     guard !shutdown.isRequested else {
                         return Attempt(outcome: .retry("The gateway restarted before starting the activity.", throttled: false), detail: detail)
                     }
@@ -142,9 +145,16 @@ struct Delivery: Sendable {
             }
             outcome = .accepted
         } catch let error as APNsError {
-            outcome = Self.outcome(of: error)
+            outcome = job.kind == .start ? self.outcome(of: error, sentTo: job.environment, tokenMoved: job.tokenMoved) : Self.outcome(of: error)
         }
         return Attempt(outcome: outcome, detail: detail)
+    }
+
+    private func outcome(of error: APNsError, sentTo environment: PushEnvironment, tokenMoved: Bool) -> Outcome {
+        if case .rejected(_, "BadDeviceToken") = error, !tokenMoved, let other = push.environments.subtracting([environment]).first {
+            return .wrongEnvironment(error.description, other)
+        }
+        return Self.outcome(of: error)
     }
 
     static func outcome(of error: APNsError) -> Outcome {

@@ -166,14 +166,31 @@ struct GatewayTests {
         #expect(try extra.decoded() as Failure == Failure(error: "too_many_activities"))
     }
 
-    @Test func forgetsARejectedPushToken() async throws {
-        push.fail("start", .rejected(status: 400, reason: "BadDeviceToken"))
+    @Test func forgetsAPushTokenNeitherEnvironmentAccepts() async throws {
+        push.acceptTokens(in: [])
         try await put("build", Self.start)
+        try await deliver(at: now)
         try await deliver(at: now)
         #expect(try await status("build") == Status(state: "ended", delivery: "failed", error: "APNs 400 BadDeviceToken"))
         let retry = try await send("PUT", "/v1/activities/build", body: Self.start)
         #expect(retry.status == 409)
         #expect(try retry.decoded() as Failure == Failure(error: "device_not_ready"))
+    }
+
+    @Test func followsAPushTokenToTheEnvironmentThatAcceptsIt() async throws {
+        push.acceptTokens(in: [.production])
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        try await deliver(at: now)
+        try await put("build", ["data": ["step": "Sign"]])
+        try await deliver(at: now + 1)
+        try await put("deploy", Self.start)
+        try await deliver(at: now + 2)
+        #expect(push.sent == ["createChannel", "start", "createChannel", "start", "update 5", "createChannel", "start"])
+        #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
+        let pushes = try await pushEvents()
+        #expect(pushes == [["push.start", "development", "wrongEnvironment"], ["push.start", "production", "accepted"],
+                           ["push.update", "production", "accepted"], ["push.start", "production", "accepted"]])
     }
 
     @Test func endingBeforeDeliverySendsNothing() async throws {
@@ -444,6 +461,11 @@ struct GatewayTests {
 
     private func status(_ name: String) async throws -> Status {
         try await send("GET", "/v1/activities/\(name)").decoded()
+    }
+
+    private func pushEvents() async throws -> [[JSONValue?]] {
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        return events.events.filter { $0.name.hasPrefix("push.") }.map { [.string($0.name), $0.detail["environment"], $0.detail["outcome"]] }
     }
 
     private func reportVersion(_ appVersion: String, layoutVersion: Version?) async throws {

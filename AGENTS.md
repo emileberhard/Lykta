@@ -62,6 +62,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - Unknown stays unknown. A start or notification with an unknown outcome is
   never sent again. A missing report never ends an activity, except when the
   activity is absent from the first report of a new app install or update.
+- A push token goes to the APNs environment that accepted it, starting with
+  the one its phone registered with, and only `BadDeviceToken` moves it, once,
+  to the other environment. An activity's updates go to its channel's
+  environment.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.

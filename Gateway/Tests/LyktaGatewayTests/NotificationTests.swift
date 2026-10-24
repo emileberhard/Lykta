@@ -268,6 +268,23 @@ struct NotificationTests {
         #expect((try await send("PUT", "/v1/notifications/third", body: Self.printer).decoded() as Refusal).error == "notifications_not_set_up")
     }
 
+    @Test func sendsToTheEnvironmentThatAcceptsTheTokenUntilThePhoneHasANewOne() async throws {
+        push.acceptTokens(in: [.production])
+        _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
+        try await deliver(at: now)
+        try await deliver(at: now)
+        _ = try await send("PUT", "/v1/notifications/second", body: Self.printer)
+        try await deliver(at: now)
+        try await report(NotificationSettings(authorization: .authorized, alertStyle: .banner, registration: .registered(PushToken(Data([0x45, 0x67, 0xcd, 0xef])))))
+        push.acceptTokens(in: [.development])
+        _ = try await send("PUT", "/v1/notifications/third", body: Self.printer)
+        try await deliver(at: now)
+        for name in ["first", "second", "third"] { #expect(try await status(name).state == "sent") }
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        let pushes = events.events.filter { $0.name == "push.notification" }.map { [$0.detail["environment"], $0.detail["outcome"]] }
+        #expect(pushes == [["development", "wrongEnvironment"], ["production", "accepted"], ["production", "accepted"], ["development", "accepted"]])
+    }
+
     @Test func aNotificationAndItsNameLastADay() async throws {
         _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
         let device = try #require(try await store.device(agentToken: credentials.agentToken))

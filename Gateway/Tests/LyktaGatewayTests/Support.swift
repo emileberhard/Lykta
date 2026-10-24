@@ -76,12 +76,13 @@ extension JSONValue: @retroactive ExpressibleByStringLiteral, @retroactive Expre
 }
 
 final class FakePush: PushService {
-    let environments: Set<PushEnvironment> = [.development]
+    let environments: Set<PushEnvironment> = [.development, .production]
 
     private struct State {
         var sent: [String] = []
         var failures: [String: APNsError] = [:]
         var alerts: [(payload: JSONValue, expiration: Int)] = []
+        var tokenEnvironments: Set<PushEnvironment> = [.development]
     }
 
     private let state = Mutex(State())
@@ -94,6 +95,10 @@ final class FakePush: PushService {
         state.withLock { $0.failures[call] = error }
     }
 
+    func acceptTokens(in environments: Set<PushEnvironment>) {
+        state.withLock { $0.tokenEnvironments = environments }
+    }
+
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         struct Sent: Decodable {
             struct APS: Decodable {
@@ -103,13 +108,13 @@ final class FakePush: PushService {
             let aps: APS
         }
         let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
-        try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body")
+        try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body", to: environment)
         return "unique-\(id)"
     }
 
     func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         state.withLock { $0.alerts.append(((try? JSONDecoder().decode(JSONValue.self, from: payload)) ?? .null, expiration)) }
-        try record("notify")
+        try record("notify", to: environment)
         return "unique-\(id)"
     }
 
@@ -145,9 +150,10 @@ final class FakePush: PushService {
         []
     }
 
-    private func record(_ call: String, detail: String = "") throws(APNsError) {
-        let failure = state.withLock { state in
+    private func record(_ call: String, detail: String = "", to environment: PushEnvironment? = nil) throws(APNsError) {
+        let failure = state.withLock { state -> APNsError? in
             state.sent.append(call + detail)
+            if let environment, !state.tokenEnvironments.contains(environment) { return APNsError.rejected(status: 400, reason: "BadDeviceToken") }
             return state.failures.removeValue(forKey: call)
         }
         if let failure { throw failure }

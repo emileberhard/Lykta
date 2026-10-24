@@ -25,7 +25,8 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
    plays them from.
 4. Under Keys, create an Apple Push Notifications service key per environment
    the user needs: Sandbox for builds run from Xcode, Production for TestFlight
-   and App Store builds. Record each Key ID; the `.p8` file downloads once.
+   and App Store builds. With both, one phone can switch between those builds.
+   Record each Key ID; the `.p8` file downloads once.
 5. Note the Team ID from the account's membership details.
 
 ## Gateway

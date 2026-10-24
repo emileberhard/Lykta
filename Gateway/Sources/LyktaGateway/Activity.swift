@@ -106,6 +106,7 @@ struct Activity: Sendable {
     let dismissAt: Int?
     let revision: Int
     let channel: String?
+    let channelEnvironment: PushEnvironment?
     let failures: Int
     let delivery: DeliveryState
     let error: String?
@@ -129,6 +130,7 @@ struct Activity: Sendable {
         dismissAt = try row.optionalInteger("dismiss_at").map(Int.init)
         revision = Int(try row.integer("revision"))
         channel = try row.optionalString("channel")
+        channelEnvironment = try row.optionalText("channel_environment", as: PushEnvironment.init(rawValue:))
         failures = Int(try row.integer("failures"))
         delivery = try row.text("delivery", as: DeliveryState.init(rawValue:))
         error = try row.optionalString("error")

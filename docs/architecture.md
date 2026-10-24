@@ -100,6 +100,19 @@ creates per activity, so the app never has to run to forward update tokens.
 The cost is the Broadcast capability and channel cleanup: the gateway deletes a
 channel five minutes after its activity ends and sweeps orphans at startup.
 
+**Each token finds its APNs environment.** A token works only in the
+environment of the build that obtained it, and a phone can move between Xcode,
+TestFlight and App Store builds while staying registered. iOS keeps an
+existing push-to-start token across such an update, so one phone can hold a
+development push-to-start token and a production notification token. The
+gateway sends a token the phone has not sent before to the environment the
+phone registered with. When APNs answers `BadDeviceToken`, the gateway moves
+that token to the other environment, if it has a key there, and sends again;
+a second `BadDeviceToken` clears the token. Apple advises against retrying
+`BadDeviceToken`, so each token gets one move. An activity's updates go to the
+environment its channel was created in, because channels never cross
+environments, and a start whose token moved gets a new channel.
+
 **The layout travels in the push.** `ContentState` carries the title and the
 raw-deflated layout JSON; the phone decodes it once. The gateway checks the
 real payload against the 4 KB APNs limit before accepting a request.
@@ -161,8 +174,8 @@ the refusal carries `Retry-After`. States are `queued`, `sent`, `received`,
 `failed` and `unknown`. A send whose APNs outcome is uncertain, or that was in
 flight when the gateway stopped, becomes `unknown` and is never sent again;
 429 and 5xx answers guarantee no delivery and are retried with backoff until
-expiry, and `BadDeviceToken` or `Unregistered` clears the phone's notification
-token and fails what waited for it. The extension's report sets `received`
+expiry, and `Unregistered`, or `BadDeviceToken` in both environments, clears
+the phone's notification token and fails what waited for it. The extension's report sets `received`
 and wins over an APNs outcome that completes after it; the first report wins.
 Notifications never coalesce, unlike activity updates.
 
