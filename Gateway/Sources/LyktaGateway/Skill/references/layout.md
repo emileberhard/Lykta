@@ -298,7 +298,9 @@ its compressed push must fit Apple's 4 KB limit. Within a presentation:
   a curtain; closer, the text looks pinned to it.
 - Keep about 8 points between a ring or gauge and its tile's edge, and value
   text inside a ring within two thirds of the inner diameter. `scale` shrinks
-  the drawing but not its layout frame, so shrink the `frame` instead.
+  the drawing but not the space it takes, so pair it with a `frame` of the
+  scaled size, as homelab's gauges do; shapes and SVG resize to a smaller
+  `frame` on their own.
 - Expanded content clips at about 145 points tall. Add up the rows before
   adding one, and add `fixedSize: "vertical"` to text that must keep its
   second line.

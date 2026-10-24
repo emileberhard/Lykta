@@ -26,7 +26,7 @@ content to a tap.
 Take the look from the subject, as its own app would: its colors (a transit
 line's color, a brand's hex), its objects as SF Symbols or SVG drawings, and
 its tone in `fontDesign`, such as `rounded` for a pet or `monospaced` for a
-server. The Dynamic Island is always black, so one bold color carried through
+server. The Dynamic Island is always black, so a bold color carried through
 its symbols, values and `keyline` is what makes the activity recognizable
 there. On the Lock Screen, a `background` in the subject's colors carries the
 same identity; without one the card is light or dark with the system
@@ -43,9 +43,9 @@ Each presentation has a job:
   Let the height follow what there is to show, such as one line while a
   driver is found and more once one is on the way.
 - **Compact**: one piece of information split around the camera, such as what
-  it is leading and the live value trailing, in one color and type, both sides
-  about as wide and snug against the camera. Round the value or shorten its
-  unit before letting one side grow.
+  it is leading and the live value trailing, in consistent color and type,
+  both sides about as wide and snug against the camera. Round the value or
+  shorten its unit before letting one side grow.
 - **Minimal**: the live value or progress, such as a ring, a number or a tiny
   chart. It is often the only sign of the activity, so a logo alone says
   nothing. It is about 36 points wide, so a full timer such as `25:00`
