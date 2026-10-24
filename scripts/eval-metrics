@@ -48,35 +48,44 @@ def action(call):
     return f"{call['function_name']} {' '.join(text.split())}"[:160]
 
 
+def steps_measures(path, started):
+    trajectory = path / "agent" / "trajectory.json"
+    if not trajectory.is_file():
+        return {"model calls": None, "tool calls": None, "cache writes": None, "reasoning": None, "steps": None}
+    steps = [step for step in json.loads(trajectory.read_text())["steps"] if step["source"] == "agent"]
+    metrics = [step.get("metrics") or {} for step in steps]
+    moments = [started] + [moment(step["timestamp"]) for step in steps]
+    return {
+        "model calls": total([step.get("llm_call_count") for step in steps]),
+        "tool calls": sum(len(step.get("tool_calls") or []) for step in steps),
+        "cache writes": total([cache_writes(each) for each in metrics]),
+        "reasoning": total([reasoning(each) for each in metrics]),
+        "steps": [{
+            "at": (moments[index + 1] - started).total_seconds(),
+            "gap": (moments[index + 1] - moments[index]).total_seconds(),
+            "input": each.get("prompt_tokens"),
+            "cached": each.get("cached_tokens", 0) if "prompt_tokens" in each else None,
+            "output": each.get("completion_tokens"),
+            "reasoning": reasoning(each),
+            "actions": [action(call) for call in step.get("tool_calls") or []],
+        } for index, (step, each) in enumerate(zip(steps, metrics))],
+    }
+
+
 def trial(path):
     result = json.loads((path / "result.json").read_text())
     started = moment(result["agent_execution"]["started_at"])
     usage = result.get("agent_result") or {}
-    steps = [step for step in json.loads((path / "agent" / "trajectory.json").read_text())["steps"] if step["source"] == "agent"]
-    metrics = [step.get("metrics") or {} for step in steps]
-    moments = [started] + [moment(step["timestamp"]) for step in steps]
     return {
         "trial": f"{path.parent.name}/{path.name}",
         "task": result["task_name"],
         "reward": ((result.get("verifier_result") or {}).get("rewards") or {}).get("reward"),
         "accepted": accepted(path, started),
         "agent": (moment(result["agent_execution"]["finished_at"]) - started).total_seconds(),
-        "model calls": total([step.get("llm_call_count") for step in steps]),
-        "tool calls": sum(len(step.get("tool_calls") or []) for step in steps),
         "input": usage.get("n_input_tokens"),
         "cached": usage.get("n_cache_tokens"),
-        "cache writes": total([cache_writes(each) for each in metrics]),
         "output": usage.get("n_output_tokens"),
-        "reasoning": total([reasoning(each) for each in metrics]),
-        "steps": [{
-            "at": (moments[index + 1] - started).total_seconds(),
-            "gap": (moments[index + 1] - moments[index]).total_seconds(),
-            "input": each.get("prompt_tokens"),
-            "cached": each.get("cached_tokens", 0),
-            "output": each.get("completion_tokens"),
-            "reasoning": reasoning(each),
-            "actions": [action(call) for call in step.get("tool_calls") or []],
-        } for index, (step, each) in enumerate(zip(steps, metrics))],
+        **steps_measures(path, started),
     }
 
 
@@ -87,7 +96,7 @@ def median(trials, measure):
 
 def summarize(jobs):
     groups = {}
-    for path in sorted(trial for job in jobs for trial in job.iterdir() if (trial / "agent" / "trajectory.json").is_file()):
+    for path in sorted(trial for job in jobs for trial in job.iterdir() if (trial / "result.json").is_file()):
         config = json.loads((path / "result.json").read_text())
         key = (config["config"]["agent"]["name"], config["agent_info"].get("version"), config["config"]["agent"]["model_name"])
         groups.setdefault(key, []).append(trial(path))
@@ -117,7 +126,7 @@ def table(group):
     rows = group["results"] + [{"task": "median", "reward": "", **group["median"]}]
     cells = [columns] + [[cell(column, row[column]) for column in columns] for row in rows]
     widths = [max(len(line[index]) for line in cells) for index in range(len(columns))]
-    title = f"{group['agent']} {group['version'] or '?'} with {group['model']}: {group['passed']} of {group['trials']} passed"
+    title = f"{group['agent']} {group['version'] or '?'} with {group['model'] or 'no model'}: {group['passed']} of {group['trials']} passed"
     return "\n".join([title] + ["  ".join(text.ljust(width) if index == 0 else text.rjust(width)
                                           for index, (text, width) in enumerate(zip(line, widths))) for line in cells])
 
@@ -129,7 +138,7 @@ def main():
     arguments = parser.parse_args()
     groups = summarize(arguments.jobs)
     if not groups:
-        sys.exit(f"No trials with an agent/trajectory.json in {', '.join(map(str, arguments.jobs))}.")
+        sys.exit(f"No trials with a result.json in {', '.join(map(str, arguments.jobs))}.")
     print(json.dumps(groups, indent=2) if arguments.json else "\n\n".join(table(group) for group in groups))
 
 

@@ -24,6 +24,9 @@ image:
 evals *args: image
     #!/usr/bin/env bash
     set -uo pipefail
+    for arg in "$@"; do
+        case $arg in --job-name* | --jobs-dir* | -o*) echo "just evals chooses its job's name and directory; run harbor run and scripts/eval-metrics directly to choose them." >&2; exit 2 ;; esac
+    done
     job=$(date +%Y-%m-%d__%H-%M-%S)
     harbor run --path evals/tasks --ak prompt_template_path=evals/prompt.md --n-concurrent 16 --jobs-dir .local/evals --job-name "$job" "$@"
     status=$?

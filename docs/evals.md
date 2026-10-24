@@ -29,20 +29,24 @@ task's collect hook saves the gateway's events as `artifacts/events.json`.
 `just evals` runs it on the job it just finished. It prints a table for each
 agent, version and model, with a median row:
 
-- `accepted`: seconds from the agent's start to the first activity the
-  gateway accepted, or `none` when it accepted none, as the reminder expects.
-- `agent`: seconds from the agent's start to its final answer.
+- `accepted`: seconds from the start of Harbor's agent phase to the first
+  activity the gateway accepted, or `none` when it accepted none, as the
+  reminder expects.
+- `agent`: seconds the agent phase took, including the harness's startup and
+  exit.
 - `model calls` and `tool calls`, counted in the transcript.
 - `input` counts every prompt token, `cached` the ones read from the cache and
   `cache writes` the ones written to it; `output` includes `reasoning`. No
   provider reports how the rest of the output splits between text and tool
   calls.
 
-`--json` prints the same with every agent step: when it ended, the gap since
-the step before, its tokens and its tool calls. A gap holds the previous
-step's tools as well as the model's work on this one. `?` marks a value the
-job does not record, such as `accepted` in jobs from before the events were
-saved.
+`--json` prints the same with every agent step: its transcript timestamp in
+seconds from the start of the agent phase, the gap since the step before, its
+tokens and its tool calls. Harnesses stamp steps differently, Claude Code when
+a response starts streaming, so a gap spans tool and model time without
+separating them. `?` marks a value the job does not record, such as `accepted`
+in jobs from before the events were saved, or every transcript measure of a
+trial without a transcript.
 
 ```bash
 scripts/eval-metrics .local/evals/<job> .local/evals/<other job>
