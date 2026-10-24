@@ -34,7 +34,7 @@ enum Outcome: Sendable {
     case failed(String, clearsPushToken: Bool)
     case unknown(String)
     case channelGone
-    case wrongEnvironment(String, PushEnvironment)
+    case wrongEnvironment(String)
 }
 
 struct Attempt: Sendable {
@@ -151,8 +151,8 @@ struct Delivery: Sendable {
     }
 
     private func outcome(of error: APNsError, sentTo environment: PushEnvironment, tokenMoved: Bool) -> Outcome {
-        if case .rejected(_, "BadDeviceToken") = error, !tokenMoved, let other = push.environments.subtracting([environment]).first {
-            return .wrongEnvironment(error.description, other)
+        if case .rejected(_, "BadDeviceToken") = error, !tokenMoved, push.environments.contains(environment.other) {
+            return .wrongEnvironment(error.description)
         }
         return Self.outcome(of: error)
     }

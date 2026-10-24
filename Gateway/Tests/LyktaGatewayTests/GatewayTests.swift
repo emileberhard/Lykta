@@ -178,8 +178,10 @@ struct GatewayTests {
     }
 
     @Test func followsAPushTokenToTheEnvironmentThatAcceptsIt() async throws {
+        guard case var .object(start) = Self.start else { return }
+        start["alert"] = ["body": "Compiling"]
         push.acceptTokens(in: [.production])
-        try await put("build", Self.start)
+        try await put("build", .object(start))
         try await deliver(at: now)
         try await deliver(at: now)
         try await put("build", ["data": ["step": "Sign"]])
@@ -187,6 +189,7 @@ struct GatewayTests {
         try await put("deploy", Self.start)
         try await deliver(at: now + 2)
         #expect(push.sent == ["createChannel", "start", "createChannel", "start", "update 5", "createChannel", "start"])
+        #expect(push.startAlerts == ["Compiling", "Compiling", "Live Activity started"])
         #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
         let pushes = try await pushEvents()
         #expect(pushes == [["push.start", "development", "wrongEnvironment"], ["push.start", "production", "accepted"],

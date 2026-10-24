@@ -11,6 +11,10 @@ import LyktaCore
 import Synchronization
 
 extension PushEnvironment {
+    var other: PushEnvironment {
+        self == .production ? .development : .production
+    }
+
     var pushOrigin: URL {
         URL(string: self == .production ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com")!
     }

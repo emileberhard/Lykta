@@ -122,10 +122,8 @@ actor Store {
         try db.transaction {
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
-            try db.run("""
-                UPDATE devices SET push_token_environment = CASE WHEN ?1 IS NULL OR ?1 IS push_token THEN push_token_environment END,
-                  push_token = COALESCE(?1, push_token), app_version = ?2, layout_version = ?3, bundle_instance = ?4 WHERE id = ?5
-                """, report.pushToStartToken, report.appVersion, report.layoutVersion?.description, report.bundleInstance, device.id)
+            try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
+                       report.pushToStartToken, report.appVersion, report.layoutVersion?.description, report.bundleInstance, device.id)
             if let notifications = report.notifications {
                 try db.run("UPDATE devices SET notification_authorization = ?, alert_style = ? WHERE id = ?",
                            notifications.authorization, notifications.alertStyle, device.id)
@@ -133,17 +131,13 @@ actor Store {
                 case .pending:
                     break
                 case let .registered(token):
-                    try db.run("""
-                        UPDATE devices SET notification_token_environment = CASE WHEN ?1 IS notification_token THEN notification_token_environment END,
-                          notification_token = ?1, notification_error = NULL WHERE id = ?2
-                        """, token, device.id)
+                    try db.run("UPDATE devices SET notification_token = ?, notification_error = NULL WHERE id = ?", token, device.id)
                 case let .failed(error):
                     try db.run("UPDATE devices SET notification_error = ? WHERE id = ?", error, device.id)
                 }
             } else {
                 try db.run("""
-                    UPDATE devices SET notification_authorization = NULL, alert_style = NULL, notification_token = NULL, notification_token_environment = NULL,
-                      notification_error = NULL WHERE id = ?
+                    UPDATE devices SET notification_authorization = NULL, alert_style = NULL, notification_token = NULL, notification_error = NULL WHERE id = ?
                     """, device.id)
             }
             let reported = Set(report.activities.map(\.id))
@@ -626,25 +620,28 @@ actor Store {
                 - (try count(db.query("SELECT count(*) AS n FROM notifications WHERE in_flight = 1")))
             guard free > 0 else { return [] }
             var jobs = try db.query("""
-                SELECT n.id, n.device_id, n.name, n.request, n.expires_at, d.environment, d.notification_token, d.notification_token_environment
+                SELECT n.id, n.device_id, n.name, n.request, n.expires_at, d.environment, d.notification_token,
+                  IFNULL(d.notification_token = d.moved_notification_token, 0) AS token_moved
                   FROM notifications n JOIN devices d ON d.id = n.device_id
                   WHERE n.state = 'queued' AND n.retry_at <= ? AND d.notification_token IS NOT NULL ORDER BY n.retry_at, n.created_at LIMIT ?
                 """, now, free).map { row in
                 let id = try row.text("id", as: UUID.init(uuidString:))
                 let fetchToken = Self.token("lykta_fetch_")
-                let moved = try row.optionalText("notification_token_environment", as: PushEnvironment.init(rawValue:))
+                let device = try row.text("environment", as: PushEnvironment.init(rawValue:))
+                let moved = try row.integer("token_moved") != 0
                 try db.run("UPDATE notifications SET state = 'sending', in_flight = 1, token_hash = ? WHERE id = ?", Self.hash(fetchToken), id)
                 return Job.notification(NotificationJob(
                     id: id, deviceID: try row.text("device_id", as: UUID.init(uuidString:)), name: try row.text("name", as: Name.init(rawValue:)),
                     request: try JSONDecoder().decode(NotificationRequest.self, from: Data(try row.string("request").utf8)),
-                    environment: try moved ?? row.text("environment", as: PushEnvironment.init(rawValue:)),
-                    token: try row.text("notification_token", as: PushToken.init(hex:)), tokenMoved: moved != nil, fetchToken: fetchToken,
+                    environment: moved ? device.other : device,
+                    token: try row.text("notification_token", as: PushToken.init(hex:)), tokenMoved: moved, fetchToken: fetchToken,
                     expiresAt: Int(try row.integer("expires_at"))))
             }
             free -= jobs.count
             guard free > 0 else { return jobs }
             let rows = try db.query("""
-                SELECT a.*, d.environment, d.push_token, d.push_token_environment FROM activities a JOIN devices d ON d.id = a.device_id
+                SELECT a.*, d.environment, d.push_token, IFNULL(d.push_token = d.moved_push_token, 0) AS token_moved
+                  FROM activities a JOIN devices d ON d.id = a.device_id
                 WHERE a.in_flight = 0 AND a.retry_at <= ?1 AND (
                   (a.phase = 'starting' AND d.push_token IS NOT NULL)
                   OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1)
@@ -662,10 +659,10 @@ actor Store {
                 case .ended: .deleteChannel
                 }
                 let device = try row.text("environment", as: PushEnvironment.init(rawValue:))
-                let moved = try row.optionalText("push_token_environment", as: PushEnvironment.init(rawValue:))
+                let moved = try row.integer("token_moved") != 0
                 return Job.activity(ActivityJob(kind: kind, activity: activity,
-                                                environment: kind == .start ? moved ?? device : activity.channelEnvironment ?? device,
-                                                pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)), tokenMoved: moved != nil))
+                                                environment: kind == .start ? (moved ? device.other : device) : activity.channelEnvironment ?? device,
+                                                pushToken: try row.optionalText("push_token", as: PushToken.init(hex:)), tokenMoved: moved))
             }
             return jobs
         }
@@ -693,7 +690,7 @@ actor Store {
         case let .retry(error, throttled): (throttled ? "throttled" : "retry", error)
         case let .failed(error, _): ("failed", error)
         case let .unknown(error): ("unknown", error)
-        case let .wrongEnvironment(error, _): ("wrongEnvironment", error)
+        case let .wrongEnvironment(error): ("wrongEnvironment", error)
         case .channelGone: preconditionFailure("notification pushes use no channel")
         }
         try db.transaction {
@@ -722,8 +719,8 @@ actor Store {
                                    ["notification": .string(id.uuidString), "name": .string(try waiting.string("name")), "error": .string(error)])
                     }
                 }
-            case let .wrongEnvironment(_, environment):
-                try db.run("UPDATE devices SET notification_token_environment = ? WHERE id = ? AND notification_token = ?", environment, job.deviceID, job.token)
+            case .wrongEnvironment:
+                try db.run("UPDATE devices SET moved_notification_token = notification_token WHERE id = ? AND notification_token = ?", job.deviceID, job.token)
                 try db.run("UPDATE notifications SET state = 'queued', token_hash = NULL WHERE id = ? AND state = 'sending'", job.id)
             case .channelGone:
                 preconditionFailure("notification pushes use no channel")
@@ -747,13 +744,13 @@ actor Store {
             case let .failed(error, _): ("failed", error)
             case let .unknown(error): ("unknown", error)
             case .channelGone: ("channelGone", nil)
-            case let .wrongEnvironment(error, _): ("wrongEnvironment", error)
+            case let .wrongEnvironment(error): ("wrongEnvironment", error)
             }
             try record("push.\(job.kind.rawValue)", device: job.activity.deviceID, activity: id,
                        attempt.detail.merging(["outcome": .string(result), "error": error.map(JSONValue.string) ?? .null]) { $1 })
+            let alert = try job.activity.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             switch (job.kind, outcome) {
             case let (_, .retry(error, throttled)):
-                let alert = try job.activity.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
                 try db.run("""
                     UPDATE activities SET retry_at = ?, failures = failures + 1, delivery = ?, error = ?, alert = COALESCE(alert, ?) WHERE id = ?
                     """, now + min(1 << (job.activity.failures + 1), 300), throttled ? DeliveryState.throttled : .pending, error, alert, id)
@@ -778,15 +775,16 @@ actor Store {
             case let (.start, .failed(error, clearsPushToken)), let (.end, .failed(error, clearsPushToken)):
                 try db.run("UPDATE activities SET phase = 'ended', ended_at = ?, delivery = 'failed', error = ? WHERE id = ?", now, error, id)
                 if clearsPushToken {
-                    try db.run("UPDATE devices SET push_token = NULL WHERE id = (SELECT device_id FROM activities WHERE id = ?)", id)
+                    try db.run("UPDATE devices SET push_token = NULL WHERE id = ? AND push_token = ?", job.activity.deviceID, job.pushToken)
                 }
             case (_, .channelGone):
                 try db.run("""
                     UPDATE activities SET phase = 'ended', ended_at = COALESCE(ended_at, ?), channel = NULL,
                       error = 'The broadcast channel no longer exists.' WHERE id = ?
                     """, now, id)
-            case let (.start, .wrongEnvironment(_, environment)):
-                try db.run("UPDATE devices SET push_token_environment = ? WHERE id = ? AND push_token = ?", environment, job.activity.deviceID, job.pushToken)
+            case (.start, .wrongEnvironment):
+                try db.run("UPDATE devices SET moved_push_token = push_token WHERE id = ? AND push_token = ?", job.activity.deviceID, job.pushToken)
+                try db.run("UPDATE activities SET alert = COALESCE(alert, ?) WHERE id = ?", alert, id)
             case (_, .unknown):
                 preconditionFailure("unknown outcomes of non-start jobs are retried")
             case (_, .wrongEnvironment):

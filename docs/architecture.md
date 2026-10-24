@@ -105,11 +105,13 @@ environment of the build that obtained it, and a phone can move between Xcode,
 TestFlight and App Store builds while staying registered. iOS keeps an
 existing push-to-start token across such an update, so one phone can hold a
 development push-to-start token and a production notification token. The
-gateway sends a token the phone has not sent before to the environment the
-phone registered with. When APNs answers `BadDeviceToken`, the gateway moves
-that token to the other environment, if it has a key there, and sends again;
-a second `BadDeviceToken` clears the token. Apple advises against retrying
-`BadDeviceToken`, so each token gets one move. An activity's updates go to the
+gateway sends a token to the environment the phone registered with until
+APNs answers `BadDeviceToken`; then, if it has a key for the other
+environment, it records that token as moved and sends it there from then on.
+A second `BadDeviceToken` clears the token. Apple advises against retrying
+`BadDeviceToken`, so each token gets one move. Because the gateway records the
+moved token itself, a replacement token starts over, even one an older gateway
+stored after a rollback. An activity's updates go to the
 environment its channel was created in, because channels never cross
 environments, and a start whose token moved gets a new channel.
 

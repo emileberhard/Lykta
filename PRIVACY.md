@@ -10,8 +10,9 @@ builder runs, and that operator is responsible for it.
 For each registered phone:
 
 - a random device ID and a random ID for the app install
-- the app version, the newest layout format it can draw, and whether the build
-  uses Apple's development or production push service
+- the app version, the newest layout format it can draw, and which of Apple's
+  push services, development or production, the phone registered with and
+  each of its push tokens works with
 - the push tokens Apple issues for starting and updating Live Activities and
   for notifications, or the error iOS gave when it refused a notification token
 - whether notifications are allowed and whether their banners are temporary

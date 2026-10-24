@@ -9,8 +9,8 @@ enum Schema {
         (table: "devices", column: "alert_style", type: "TEXT"),
         (table: "devices", column: "notification_token", type: "TEXT"),
         (table: "devices", column: "notification_error", type: "TEXT"),
-        (table: "devices", column: "push_token_environment", type: "TEXT"),
-        (table: "devices", column: "notification_token_environment", type: "TEXT"),
+        (table: "devices", column: "moved_push_token", type: "TEXT"),
+        (table: "devices", column: "moved_notification_token", type: "TEXT"),
         (table: "activities", column: "channel_environment", type: "TEXT"),
     ]
 

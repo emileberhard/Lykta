@@ -82,6 +82,7 @@ final class FakePush: PushService {
         var sent: [String] = []
         var failures: [String: APNsError] = [:]
         var alerts: [(payload: JSONValue, expiration: Int)] = []
+        var startAlerts: [String] = []
         var tokenEnvironments: Set<PushEnvironment> = [.development]
     }
 
@@ -90,6 +91,8 @@ final class FakePush: PushService {
     var sent: [String] { state.withLock { $0.sent } }
 
     var alerts: [(payload: JSONValue, expiration: Int)] { state.withLock { $0.alerts } }
+
+    var startAlerts: [String] { state.withLock { $0.startAlerts } }
 
     func fail(_ call: String, _ error: APNsError) {
         state.withLock { $0.failures[call] = error }
@@ -108,6 +111,7 @@ final class FakePush: PushService {
             let aps: APS
         }
         let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
+        state.withLock { $0.startAlerts.append(alert?.body ?? "") }
         try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body", to: environment)
         return "unique-\(id)"
     }
