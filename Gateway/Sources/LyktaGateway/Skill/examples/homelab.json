@@ -56,7 +56,7 @@
                 "spacing": 2,
                 "modifiers": [
                   {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"maxWidth": "infinity", "minHeight": 58, "maxHeight": 58}},
+                  {"frame": {"maxWidth": "infinity", "minHeight": 60, "maxHeight": 60}},
                   {"background": "#0C1A12"},
                   {"clip": 10},
                   {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
@@ -74,12 +74,12 @@
                     "style": "circular",
                     "currentValueLabel": {
                       "text": "{{temp.label}}",
-                      "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                      "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                     },
                     "modifiers": [
                       {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
-                      {"scale": 0.72},
-                      {"frame": {"width": 42, "height": 40}}
+                      {"scale": 0.58},
+                      {"frame": {"width": 34, "height": 34}}
                     ]
                   },
                   {"text": "temp", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
@@ -87,7 +87,7 @@
                 "spacing": 1,
                 "modifiers": [
                   {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"width": 64, "height": 58}},
+                  {"frame": {"width": 64, "height": 60}},
                   {"background": "#0C1A12"},
                   {"clip": 10},
                   {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
@@ -105,16 +105,16 @@
                     "style": "circularCapacity",
                     "currentValueLabel": {
                       "text": "{{disk.label}}",
-                      "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                      "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                     },
-                    "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.72}, {"frame": {"width": 42, "height": 40}}]
+                    "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.58}, {"frame": {"width": 34, "height": 34}}]
                   },
                   {"text": "disk", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
                 ],
                 "spacing": 1,
                 "modifiers": [
                   {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"width": 64, "height": 58}},
+                  {"frame": {"width": 64, "height": 60}},
                   {"background": "#0C1A12"},
                   {"clip": 10},
                   {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
@@ -158,7 +158,10 @@
       "spacing": 4
     },
     "minimal": {
-      "chart": [{"area": "{{cpu.series}}", "color": {"gradient": ["#3DDC84", "#3DDC8426"]}, "interpolation": "monotone"}],
+      "chart": [
+        {"area": "{{cpu.series}}", "color": {"gradient": ["#3DDC8480", "#3DDC8400"]}, "interpolation": "monotone"},
+        {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"}
+      ],
       "min": 0,
       "max": 100,
       "modifiers": [
@@ -228,7 +231,7 @@
                   "spacing": 2,
                   "modifiers": [
                     {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"maxWidth": "infinity", "minHeight": 58, "maxHeight": 58}},
+                    {"frame": {"maxWidth": "infinity", "minHeight": 60, "maxHeight": 60}},
                     {"background": "#0C1A12"},
                     {"clip": 10},
                     {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
@@ -246,12 +249,12 @@
                       "style": "circular",
                       "currentValueLabel": {
                         "text": "{{temp.label}}",
-                        "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                        "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                       },
                       "modifiers": [
                         {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
-                        {"scale": 0.72},
-                        {"frame": {"width": 42, "height": 40}}
+                        {"scale": 0.58},
+                        {"frame": {"width": 34, "height": 34}}
                       ]
                     },
                     {
@@ -262,7 +265,7 @@
                   "spacing": 1,
                   "modifiers": [
                     {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"width": 64, "height": 58}},
+                    {"frame": {"width": 64, "height": 60}},
                     {"background": "#0C1A12"},
                     {"clip": 10},
                     {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
@@ -280,9 +283,9 @@
                       "style": "circularCapacity",
                       "currentValueLabel": {
                         "text": "{{disk.label}}",
-                        "modifiers": [{"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                        "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
                       },
-                      "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.72}, {"frame": {"width": 42, "height": 40}}]
+                      "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.58}, {"frame": {"width": 34, "height": 34}}]
                     },
                     {
                       "text": "disk",
@@ -292,7 +295,7 @@
                   "spacing": 1,
                   "modifiers": [
                     {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"width": 64, "height": 58}},
+                    {"frame": {"width": 64, "height": 60}},
                     {"background": "#0C1A12"},
                     {"clip": 10},
                     {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
