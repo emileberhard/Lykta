@@ -104,7 +104,11 @@ private struct ProgressNodeView: View {
     var body: some View {
         switch style {
         case .linear: view.progressViewStyle(.linear)
+        #if LYKTA_APP
+        case .circular: view.progressViewStyle(RingProgressViewStyle())
+        #else
         case .circular: view.progressViewStyle(.circular)
+        #endif
         }
     }
 
@@ -139,6 +143,28 @@ private struct ProgressSchedule: TimelineSchedule {
             let next = max(date.addingTimeInterval(step), interval.lowerBound)
             return next > date ? min(next, interval.upperBound) : interval.upperBound
         }
+    }
+}
+
+private struct RingProgressViewStyle: ProgressViewStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ZStack {
+            Ring(fraction: 1).fill(.tint.opacity(0.35))
+            Ring(fraction: configuration.fractionCompleted ?? 0).fill(.tint)
+        }
+    }
+}
+
+private nonisolated struct Ring: Shape {
+    let fraction: Double
+
+    func path(in rect: CGRect) -> Path {
+        let diameter = min(rect.width, rect.height)
+        let lineWidth = diameter * 0.1
+        var arc = Path()
+        arc.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: (diameter - lineWidth) / 2,
+                   startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * fraction), clockwise: false)
+        return arc.strokedPath(StrokeStyle(lineWidth: lineWidth, lineCap: .round))
     }
 }
 #endif
@@ -207,7 +233,7 @@ private struct ToggleNodeView: View {
     var body: some View {
         switch style {
         case .switch: toggle.toggleStyle(.switch)
-        case .button: toggle.toggleStyle(.button)
+        case .button: toggle.toggleStyle(FilledToggleStyle())
         case .checkbox: toggle.toggleStyle(CheckboxToggleStyle())
         }
     }
@@ -217,6 +243,17 @@ private struct ToggleNodeView: View {
             Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
         } else {
             Toggle(isOn: .constant(isOn)) { NodeView(label) }
+        }
+    }
+}
+
+private struct FilledToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let button = Button { configuration.isOn.toggle() } label: { configuration.label }
+        if configuration.isOn {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
         }
     }
 }
