@@ -9,5 +9,3 @@ agents:
     model_name: anthropic/claude-haiku-5-5
     kwargs:
       reasoning_effort: xhigh
-datasets:
-  - path: evals/tasks

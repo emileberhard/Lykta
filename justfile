@@ -30,7 +30,7 @@ evals *args: image
     env_file=${XDG_CONFIG_HOME:-$HOME/.config}/lykta/evals.env
     [ -f "$env_file" ] && set -- --env-file "$env_file" "$@"
     job=$(date +%Y-%m-%d__%H-%M-%S)
-    harbor run --config evals/job.yaml --ak prompt_template_path=evals/prompt.md --jobs-dir .local/evals --job-name "$job" "$@"
+    harbor run --config evals/job.yaml --path evals/tasks --ak prompt_template_path=evals/prompt.md --jobs-dir .local/evals --job-name "$job" "$@"
     status=$?
     [ -d ".local/evals/$job" ] && scripts/eval-metrics ".local/evals/$job"
     exit $status

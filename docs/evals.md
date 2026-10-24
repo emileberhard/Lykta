@@ -20,8 +20,9 @@ harbor view .local/evals
 
 `just evals` runs the agents in `evals/job.yaml` twice on every task: Codex
 with GPT-6.1 Sol at medium effort and Claude Code with Claude Haiku 5.5 at
-extra-high effort, 20 trials at once. Options after it override the job, and
-`--agent` replaces its agents.
+extra-high effort, 20 trials at once. Options after it override the job;
+`--model` takes effect only with `--agent`, which replaces the job's agents
+and their efforts.
 
 A trial scores 1 when its check passes and 0 when it fails, so the Mean that
 Harbor prints is the pass rate.
