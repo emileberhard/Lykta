@@ -286,6 +286,7 @@ struct NotificationTests {
         (wav(milliseconds: 1000, format: 3),
          "The WAV uses audio format 3 rather than linear PCM (1); convert it, such as with `ffmpeg -i in.wav -c:a pcm_s16le out.wav`."),
         (Array(wav(milliseconds: 1000).dropLast(100)), "The WAV's audio data is cut off; send the whole file."),
+        (wav(milliseconds: 31_000, declaredByteRate: 32_000), "The WAV file is damaged or incomplete; export it again."),
         (png(width: 5000, height: 10), "The image is 5000×10 pixels; use at most 4096 on each side."),
         (jpeg(width: 640, height: 4097), "The image is 640×4097 pixels; use at most 4096 on each side."),
         (Array(png(width: 64, height: 64).prefix(16)), "The PNG file is damaged or incomplete; export it again."),
@@ -405,9 +406,10 @@ struct NotificationTests {
         #expect(unused.isEmpty)
     }
 
-    static func wav(milliseconds: Int, format: Int = 1, sampleRate: Int = 8000, fill: UInt8 = 0) -> [UInt8] {
+    static func wav(milliseconds: Int, format: Int = 1, sampleRate: Int = 8000, declaredByteRate: Int? = nil, fill: UInt8 = 0) -> [UInt8] {
         let data = [UInt8](repeating: fill, count: sampleRate * 2 * milliseconds / 1000)
-        let format: [[UInt8]] = [little(16, 4), little(format, 2), little(1, 2), little(sampleRate, 4), little(sampleRate * 2, 4), little(2, 2), little(16, 2)]
+        let format: [[UInt8]] = [little(16, 4), little(format, 2), little(1, 2), little(sampleRate, 4), little(declaredByteRate ?? sampleRate * 2, 4),
+                                 little(2, 2), little(16, 2)]
         let chunks: [[UInt8]] = [Array("RIFF".utf8), little(36 + data.count, 4), Array("WAVEfmt ".utf8)] + format + [Array("data".utf8), little(data.count, 4), data]
         return chunks.flatMap { $0 }
     }

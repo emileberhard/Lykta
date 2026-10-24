@@ -100,8 +100,9 @@ gateway needs the matching key.
    `GET /v1/notifications/hello` reports `"state": "received"`.
 5. In the app's examples, send Printer. It arrives with the printer's picture,
    its chime and a photo, and its status reports
-   `{"avatar": "image", "sound": "custom"}`; `"sound": "default"` means the app
-   group is missing from one of the App IDs.
+   `{"avatar": "image", "sound": "custom"}`. If it reports `"sound": "default"`,
+   check that both App IDs have the app group, then the gateway's
+   `notification.media` events to see whether the phone fetched the sound.
 
 ## Upgrade
 

@@ -9,15 +9,18 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         guard let payload = Self.payload(of: original), let host = Self.host, let content = original.mutableCopy() as? UNMutableNotificationContent else {
             return contentHandler(original)
         }
-        let media = MediaLoader(payload: payload, host: host, appGroup: Bundle.main.object(forInfoDictionaryKey: "LyktaAppGroup") as? String)
-            .load(within: 20)
+        let media = MediaLoader(payload: payload, host: host, cache: .shared).load(within: 20)
         var sound: NotificationReport.Sound = original.sound == nil ? .none : .default
         if let file = media.sound {
             content.sound = UNNotificationSound(named: UNNotificationSoundName(file))
             sound = .custom
         }
-        if let image = media.image, let attachment = try? UNNotificationAttachment(identifier: "image", url: image) {
-            content.attachments = [attachment]
+        if let image = media.image {
+            do {
+                content.attachments = [try UNNotificationAttachment(identifier: "image", url: image)]
+            } catch {
+                try? FileManager.default.removeItem(at: image)
+            }
         }
         do {
             let communication = try Self.communication(content, sender: payload.sender, avatar: media.avatar)

@@ -77,7 +77,7 @@ struct Medium: Equatable, Sendable {
 
     private static func wavMilliseconds(_ file: Bytes) throws(APIError) -> Int {
         var offset = 12
-        var byteRate: Int?
+        var bytesPerSecond: Int?
         while offset + 8 <= file.count {
             let id = file.ascii(at: offset, count: 4)
             let size = file.littleEndian(at: offset + 4, count: 4)
@@ -91,11 +91,17 @@ struct Medium: Equatable, Sendable {
                     throw APIError(.unsupportedMedia, "The WAV uses audio format \(format) rather than linear PCM (1); convert it, such as with "
                                    + "`ffmpeg -i in.wav -c:a pcm_s16le out.wav`.")
                 }
-                byteRate = file.littleEndian(at: body + 8, count: 4)
+                let channels = file.littleEndian(at: body + 2, count: 2)
+                let sampleRate = file.littleEndian(at: body + 4, count: 4)
+                let frameBytes = file.littleEndian(at: body + 12, count: 2)
+                let bits = file.littleEndian(at: body + 14, count: 2)
+                guard channels > 0, sampleRate > 0, [8, 16, 24, 32].contains(bits), frameBytes == channels * bits / 8,
+                      file.littleEndian(at: body + 8, count: 4) == sampleRate * frameBytes else { throw unreadable("WAV") }
+                bytesPerSecond = sampleRate * frameBytes
             case "data":
-                guard let byteRate, byteRate > 0 else { throw unreadable("WAV") }
+                guard let bytesPerSecond else { throw unreadable("WAV") }
                 guard body + size <= file.count else { throw APIError(.unsupportedMedia, "The WAV's audio data is cut off; send the whole file.") }
-                let milliseconds = Int((Double(size) * 1000 / Double(byteRate)).rounded())
+                let milliseconds = Int((Double(size) * 1000 / Double(bytesPerSecond)).rounded())
                 guard milliseconds > 0 else { throw APIError(.unsupportedMedia, "The WAV holds no audio.") }
                 guard milliseconds < maximumSoundMilliseconds else {
                     throw APIError(.unsupportedMedia, String(format: "The sound is %.1f s long; use a clip shorter than 30 s.", Double(milliseconds) / 1000))

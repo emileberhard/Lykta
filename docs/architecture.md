@@ -190,9 +190,12 @@ within 20 seconds, all at once, and moves each file into place: sounds into
 `Library/Sounds` in the app group's container, the only place outside the
 bundle where `UNNotificationSound` finds a downloaded sound, avatars decoded
 by ImageIO to 256 pixels into the group's caches, and the image into a
-temporary file that becomes the notification's attachment. Sounds and
-avatars stay within 64 files and 64 MiB by removing the least recently used
-first. A file it cannot fetch leaves the default sound or the initials, and
+temporary file that becomes the notification's attachment. One cache owner
+in the extension process leases the files each notification needs, so
+overlapping notifications never evict each other's, and keeps sounds and
+avatars within 64 files and 64 MiB by removing the least recently used first.
+A download that finishes after the deadline publishes nothing and removes its
+staged image. A file it cannot fetch leaves the default sound or the initials, and
 the report says which. While the phone is unlocked, a Temporary banner stops a
 sound when it slides away after about nine seconds; only the user can choose
 Persistent banners, so the skill keeps sounds under eight seconds unless the
