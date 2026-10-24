@@ -92,8 +92,9 @@ should you.
 
 ## Errors
 
-- `notifications_not_set_up`: the user has not allowed notifications yet. Ask
-  them to open Lykta and tap Allow.
+- `notifications_not_set_up`: the user has not allowed notifications yet, or
+  the phone has no notification token. The message says which and, when iOS
+  refused the token, quotes its reason. Pass it on to the user.
 - `notifications_not_allowed`: the user turned notifications off for Lykta.
   Ask them to turn them on in Lykta or in Settings.
 - `app_update_required`: the user's Lykta app predates notifications. Ask them

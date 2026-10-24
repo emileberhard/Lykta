@@ -12,22 +12,23 @@ struct ActivitiesOffNotice: View {
 }
 
 struct NotificationsNotice: View {
-    let authorization: NotificationSettings.Authorization
-    let alertStyle: NotificationSettings.AlertStyle
+    let settings: NotificationSettings
     let allow: () async -> Void
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        switch (authorization, alertStyle) {
-        case (.notDetermined, _):
+        switch (settings.authorization, settings.alertStyle, settings.registration) {
+        case (.notDetermined, _, _):
             Section {
                 Notice(Label("Agent Notifications", systemImage: "bell.badge.fill"), action: "Allow") { Task { await allow() } }
             }
-        case (.denied, _):
+        case (.denied, _, _):
             Section {
                 Notice(Label("Notifications Are Off", systemImage: "bell.slash.fill"), action: "Turn On") { openSettings() }
             }
-        case (_, .banner):
+        case let (_, _, .failed(error)):
+            Section { Problem("Notifications can’t reach this iPhone: \(error)") }
+        case (_, .banner, _):
             Section {
                 Notice(Label("Temporary Banners Cut Sounds Short", systemImage: "bell.badge.waveform.fill"), action: "Change") { openSettings() }
             }

@@ -144,7 +144,9 @@ delivers the original with the default sound. The push reads
 correctly without the extension. The app asks for permission when the user
 taps Copy Agent Setup, or Allow on the home screen for installs set up
 earlier, registers for remote notifications, and reports the authorization,
-the banner style and the token in its device report. A phone whose report
+the banner style and the token in its device report, or the reason iOS gave
+for refusing one, which the gateway passes on in its `notifications_not_set_up`
+answer and the app shows on its home screen. A phone whose report
 lacks them runs an app without notifications, also after going back from a
 newer one, so the gateway forgets its settings and token and answers
 `app_update_required`.

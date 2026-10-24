@@ -20,7 +20,7 @@ struct NotificationTests {
         try await report(Self.allowed)
     }
 
-    static let allowed = NotificationSettings(authorization: .authorized, alertStyle: .banner, token: PushToken(hex: "0123abcd"))
+    static let allowed = NotificationSettings(authorization: .authorized, alertStyle: .banner, registration: .registered(PushToken(Data([0x01, 0x23, 0xab, 0xcd]))))
 
     static let printer: JSONValue = [
         "sender": ["id": "printer", "name": "Printer"],
@@ -47,32 +47,39 @@ struct NotificationTests {
 
     @Test func aRepeatedRequestIsAnsweredBeforeTheLimitAndReadinessChecks() async throws {
         #expect(try await send("PUT", "/v1/notifications/done", body: Self.printer).status == 201)
-        try await report(NotificationSettings(authorization: .denied, alertStyle: .banner, token: nil))
+        try await report(NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending))
         #expect(try await send("PUT", "/v1/notifications/done", body: Self.printer).status == 200)
         #expect(try await send("PUT", "/v1/notifications/other", body: Self.printer).status == 409)
     }
 
     @Test(arguments: [
         (nil, "app_update_required"),
-        (NotificationSettings(authorization: .notDetermined, alertStyle: .banner, token: nil), "notifications_not_set_up"),
-        (NotificationSettings(authorization: .authorized, alertStyle: .banner, token: nil), "notifications_not_set_up"),
-        (NotificationSettings(authorization: .denied, alertStyle: .banner, token: PushToken(hex: "0123abcd")), "notifications_not_allowed"),
+        (NotificationSettings(authorization: .notDetermined, alertStyle: .banner, registration: .pending), "notifications_not_set_up"),
+        (NotificationSettings(authorization: .authorized, alertStyle: .banner, registration: .pending), "notifications_not_set_up"),
+        (NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .registered(PushToken(Data([0x01])))), "notifications_not_allowed"),
     ] as [(NotificationSettings?, String)])
     func refusesPhonesThatCannotShowNotifications(_ settings: NotificationSettings?, error: String) async throws {
-        let store = try Store(path: ":memory:")
-        let api = API(store: store, maximumDevices: 1, maximumLiveActivities: 1, environments: [.development],
-                      enrolment: Enrolment(appID: AppAttestTests.appID), version: nil, shutdown: Shutdown())
-        let registration = Registration(environment: .development, appVersion: "0.5.4 (1)", proof: .invite(try await store.invite(now: now)))
-        let credentials: Credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
-                                                                        body: Array(try JSONEncoder().encode(registration)))).decoded()
-        var report: [String: JSONValue] = ["appVersion": "0.5.4 (1)", "bundleInstance": .string(UUID().uuidString), "activities": .array([])]
-        report["notifications"] = try settings.map { try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode($0)) }
-        #expect(await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
-                                             body: JSONValue.object(report).json)).status == 200)
-        let response = await api.handle(HTTPRequest(method: "PUT", target: "/v1/notifications/done",
-                                                    headers: ["authorization": "Bearer \(credentials.agentToken)"], body: Self.printer.json))
+        let phone = try await Phone(now: now)
+        try await phone.report(settings)
+        let response = await phone.notify()
         #expect(response.status == 409)
         #expect((try response.decoded() as Refusal).error == error)
+    }
+
+    @Test func saysWhyIOSRefusedTheTokenUntilThePhoneGetsOne() async throws {
+        let refusal = "no valid “aps-environment” entitlement string found for application"
+        let phone = try await Phone(now: now)
+        try await phone.report(NotificationSettings(authorization: .authorized, alertStyle: .alert, registration: .failed(refusal)))
+        let refused = await phone.notify()
+        #expect(refused.status == 409)
+        #expect(try refused.decoded() as Refusal == Refusal(error: "notifications_not_set_up", message: "iOS refused Lykta a notification token on "
+            + "this phone (“\(refusal)”). Ask the user to update Lykta, or use a Live Activity."))
+        let events: Events = try await phone.api.handle(HTTPRequest(method: "GET", target: "/v1/events",
+                                                                    headers: ["authorization": "Bearer \(phone.credentials.agentToken)"], body: [])).decoded()
+        let synced = try #require(events.events.last { $0.name == "device.sync" }?.detail["notifications"])
+        #expect(try synced.value(at: "registrationError") == .string(refusal))
+        try await phone.report(NotificationSettings(authorization: .authorized, alertStyle: .alert, registration: .registered(PushToken(Data([0x01])))))
+        #expect(await phone.notify().status == 201)
     }
 
     @Test func aPhoneBackOnAnAppWithoutNotificationsGetsNoneUntilItUpdates() async throws {
@@ -240,7 +247,7 @@ struct NotificationTests {
         _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
         let jobs = try await store.claim(now: now, limit: 4)
         let attempt = try await Delivery(store: store, push: push, shutdown: Shutdown()).send(try #require(jobs.first), now: now)
-        try await report(NotificationSettings(authorization: .authorized, alertStyle: .banner, token: PushToken(hex: "4567cdef")))
+        try await report(NotificationSettings(authorization: .authorized, alertStyle: .banner, registration: .registered(PushToken(Data([0x45, 0x67, 0xcd, 0xef])))))
         _ = try await send("PUT", "/v1/notifications/second", body: Self.printer)
         try await store.finish(jobs[0], attempt, now: now)
         try await deliver(at: now)
@@ -450,6 +457,32 @@ struct NotificationTests {
         let id: String
         let type: String
         let durationSeconds: Double?
+    }
+
+    private struct Phone {
+        let api: API
+        let credentials: Credentials
+
+        init(now: Int) async throws {
+            let store = try Store(path: ":memory:")
+            api = API(store: store, maximumDevices: 1, maximumLiveActivities: 1, environments: [.development],
+                      enrolment: Enrolment(appID: AppAttestTests.appID), version: nil, shutdown: Shutdown())
+            let registration = Registration(environment: .development, appVersion: "0.5.4 (1)", proof: .invite(try await store.invite(now: now)))
+            credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
+                                                           body: Array(try JSONEncoder().encode(registration)))).decoded()
+        }
+
+        func report(_ settings: NotificationSettings?) async throws {
+            var report: [String: JSONValue] = ["appVersion": "0.5.4 (1)", "bundleInstance": .string(UUID().uuidString), "activities": .array([])]
+            report["notifications"] = try settings.map { try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode($0)) }
+            #expect(await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                                 body: JSONValue.object(report).json)).status == 200)
+        }
+
+        func notify() async -> HTTPResponse {
+            await api.handle(HTTPRequest(method: "PUT", target: "/v1/notifications/done",
+                                         headers: ["authorization": "Bearer \(credentials.agentToken)"], body: NotificationTests.printer.json))
+        }
     }
 
     private struct Notified: Decodable, Equatable {

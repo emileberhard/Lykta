@@ -206,6 +206,8 @@ public struct Action: Codable, Equatable, Sendable {
 }
 
 public struct NotificationSettings: Codable, Equatable, Sendable {
+    public static let maximumRegistrationErrorLength = 256
+
     public enum Authorization: String, Choice, Encodable {
         case notDetermined, denied, authorized, provisional, ephemeral
     }
@@ -214,14 +216,54 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
         case none, banner, alert
     }
 
+    public enum Registration: Equatable, Sendable {
+        case pending
+        case registered(PushToken)
+        case failed(String)
+    }
+
     public let authorization: Authorization
     public let alertStyle: AlertStyle
-    public let token: PushToken?
+    public let registration: Registration
 
-    public init(authorization: Authorization, alertStyle: AlertStyle, token: PushToken?) {
+    public var token: PushToken? {
+        guard case let .registered(token) = registration else { return nil }
+        return token
+    }
+
+    public init(authorization: Authorization, alertStyle: AlertStyle, registration: Registration) {
         self.authorization = authorization
         self.alertStyle = alertStyle
-        self.token = token
+        self.registration = registration
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: Key.self)
+        authorization = try fields.required("authorization")
+        alertStyle = try fields.required("alertStyle")
+        let failed = fields.contains(Key(stringValue: "registrationError"))
+        if let token: PushToken = try fields.optional("token") {
+            guard !failed else { throw fields.invalid("must be absent when the phone has a token", at: "registrationError") }
+            registration = .registered(token)
+        } else if failed {
+            registration = .failed(try fields.text("registrationError", maximumLength: Self.maximumRegistrationErrorLength))
+        } else {
+            registration = .pending
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: Key.self)
+        try fields.encode(authorization, forKey: Key(stringValue: "authorization"))
+        try fields.encode(alertStyle, forKey: Key(stringValue: "alertStyle"))
+        switch registration {
+        case .pending:
+            break
+        case let .registered(token):
+            try fields.encode(token, forKey: Key(stringValue: "token"))
+        case let .failed(error):
+            try fields.encode(error, forKey: Key(stringValue: "registrationError"))
+        }
     }
 }
 

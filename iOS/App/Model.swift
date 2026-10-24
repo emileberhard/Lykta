@@ -281,7 +281,7 @@ final class Model {
     private func refreshNotifications() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         let current = NotificationSettings(authorization: .init(settings.authorizationStatus), alertStyle: .init(settings.alertStyle),
-                                           token: notifications?.token)
+                                           registration: notifications?.registration ?? .pending)
         if current.token == nil, [.authorized, .provisional, .ephemeral].contains(current.authorization) {
             UIApplication.shared.registerForRemoteNotifications()
         }
@@ -290,16 +290,20 @@ final class Model {
         telemetry.record("app.notifications", ["authorization": .string(current.authorization.rawValue), "alertStyle": .string(current.alertStyle.rawValue)])
     }
 
-    private func registered(_ registration: NotificationRegistration) {
-        switch registration {
+    private func registered(_ result: NotificationRegistration) {
+        guard let current = notifications else { return }
+        let registration: NotificationSettings.Registration
+        switch result {
         case let .registered(token):
-            guard let current = notifications, current.token != token else { return }
-            notifications = NotificationSettings(authorization: current.authorization, alertStyle: current.alertStyle, token: token)
+            guard current.token != token else { return }
             telemetry.record("app.notificationToken", ["fingerprint": .string(fingerprint(token.description.utf8))])
-            Task { await sync() }
+            registration = .registered(token)
         case let .failed(error):
             telemetry.record("app.error", ["operation": .string("registerForNotifications"), "error": .string(error)])
+            registration = .failed(String(error.prefix(NotificationSettings.maximumRegistrationErrorLength)))
         }
+        notifications = NotificationSettings(authorization: current.authorization, alertStyle: current.alertStyle, registration: registration)
+        Task { await sync() }
     }
 
     private func sync() async {
@@ -431,7 +435,7 @@ private extension LiveActivity {
 #if DEBUG
 extension Model {
     static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true,
-                        notifications: NotificationSettings = NotificationSettings(authorization: .authorized, alertStyle: .alert, token: nil)) -> Model {
+                        notifications: NotificationSettings = NotificationSettings(authorization: .authorized, alertStyle: .alert, registration: .pending)) -> Model {
         let model = Model()
         model.phase = phase
         model.activities = activities

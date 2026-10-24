@@ -20,7 +20,7 @@ struct NotificationExampleView: View {
                 }
             }
             if model.phase.isReady, let notifications = model.notifications {
-                NotificationsNotice(authorization: notifications.authorization, alertStyle: notifications.alertStyle) {
+                NotificationsNotice(settings: notifications) {
                     await model.allowNotifications()
                 }
             }

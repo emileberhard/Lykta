@@ -132,7 +132,8 @@ final class SimulatedPhone: PushService {
         DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)), appVersion: Layout.version.description,
                      layoutVersion: Layout.version, bundleInstance: install,
                      activities: shown.map { .init(id: $0.key, state: $0.value) },
-                     notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner, token: PushToken(Data(repeating: 8, count: 32))))
+                     notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner,
+                                                         registration: .registered(PushToken(Data(repeating: 8, count: 32)))))
     }
 
     private static func decode(_ payload: Data) -> Payload.APS {

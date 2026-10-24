@@ -60,7 +60,7 @@ struct HomeView: View {
                 Section { ActivitiesOffNotice() }
             }
             if let notifications = model.notifications {
-                NotificationsNotice(authorization: notifications.authorization, alertStyle: notifications.alertStyle) {
+                NotificationsNotice(settings: notifications) {
                     await model.allowNotifications()
                 }
             }
@@ -177,15 +177,21 @@ private struct Actions: View {
 }
 
 #Preview("Notifications Not Allowed Yet") {
-    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .notDetermined, alertStyle: .banner, token: nil)))
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .notDetermined, alertStyle: .banner, registration: .pending)))
 }
 
 #Preview("Notifications Off") {
-    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, token: nil)))
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending)))
 }
 
 #Preview("Temporary Banners") {
-    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner, token: nil)))
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(authorization: .authorized, alertStyle: .banner, registration: .pending)))
+}
+
+#Preview("No Notification Token") {
+    HomeView(model: .preview(.ready, notifications: NotificationSettings(
+        authorization: .authorized, alertStyle: .alert,
+        registration: .failed("no valid “aps-environment” entitlement string found for application"))))
 }
 
 #Preview("Unavailable") {

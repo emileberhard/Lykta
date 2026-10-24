@@ -13,7 +13,7 @@ For each registered phone:
 - the app version, the newest layout format it can draw, and whether the build
   uses Apple's development or production push service
 - the push tokens Apple issues for starting and updating Live Activities and
-  for notifications
+  for notifications, or the error iOS gave when it refused a notification token
 - whether notifications are allowed and whether their banners are temporary
   or persistent
 - hashes of the device secret and the agent token; the tokens stay in the

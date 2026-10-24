@@ -8,6 +8,7 @@ enum Schema {
         (table: "devices", column: "notification_authorization", type: "TEXT"),
         (table: "devices", column: "alert_style", type: "TEXT"),
         (table: "devices", column: "notification_token", type: "TEXT"),
+        (table: "devices", column: "notification_error", type: "TEXT"),
     ]
 
     static func migrate(_ db: Database) throws {

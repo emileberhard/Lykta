@@ -125,11 +125,20 @@ actor Store {
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
                        report.pushToStartToken, report.appVersion, report.layoutVersion?.description, report.bundleInstance, device.id)
             if let notifications = report.notifications {
-                try db.run("""
-                    UPDATE devices SET notification_authorization = ?, alert_style = ?, notification_token = COALESCE(?, notification_token) WHERE id = ?
-                    """, notifications.authorization, notifications.alertStyle, notifications.token, device.id)
+                try db.run("UPDATE devices SET notification_authorization = ?, alert_style = ? WHERE id = ?",
+                           notifications.authorization, notifications.alertStyle, device.id)
+                switch notifications.registration {
+                case .pending:
+                    break
+                case let .registered(token):
+                    try db.run("UPDATE devices SET notification_token = ?, notification_error = NULL WHERE id = ?", token, device.id)
+                case let .failed(error):
+                    try db.run("UPDATE devices SET notification_error = ? WHERE id = ?", error, device.id)
+                }
             } else {
-                try db.run("UPDATE devices SET notification_authorization = NULL, alert_style = NULL, notification_token = NULL WHERE id = ?", device.id)
+                try db.run("""
+                    UPDATE devices SET notification_authorization = NULL, alert_style = NULL, notification_token = NULL, notification_error = NULL WHERE id = ?
+                    """, device.id)
             }
             let reported = Set(report.activities.map(\.id))
             let isNewInstall = previous != nil && previous != report.bundleInstance
@@ -160,10 +169,14 @@ actor Store {
                 "install": .string(report.bundleInstance.uuidString),
                 "newInstall": .bool(isNewInstall),
                 "pushToStartToken": .string(token),
-                "notifications": report.notifications.map { .object([
-                    "authorization": .string($0.authorization.rawValue), "alertStyle": .string($0.alertStyle.rawValue),
-                    "token": .string(Self.describe($0.token, previous: device.notifications?.token)),
-                ]) } ?? .null,
+                "notifications": report.notifications.map { settings in
+                    var detail: [String: JSONValue] = [
+                        "authorization": .string(settings.authorization.rawValue), "alertStyle": .string(settings.alertStyle.rawValue),
+                        "token": .string(Self.describe(settings.token, previous: device.notifications?.token)),
+                    ]
+                    if case let .failed(error) = settings.registration { detail["registrationError"] = .string(error) }
+                    return .object(detail)
+                } ?? .null,
                 "activities": .array(report.activities.map { .object(["id": .string($0.id.uuidString), "state": .string($0.state.rawValue)]) }),
                 "endedByReinstall": .array(abandoned),
                 "toldToEnd": .array(tombstones.map { .string($0.uuidString) }),
@@ -441,8 +454,14 @@ actor Store {
         case .notDetermined:
             throw APIError(.notificationsNotSetUp, "The user has not allowed notifications yet. Ask them to open Lykta and allow notifications.")
         case .authorized, .provisional, .ephemeral:
-            guard settings.token != nil else {
+            switch settings.registration {
+            case .registered:
+                break
+            case .pending:
                 throw APIError(.notificationsNotSetUp, "The phone has not shared its notification token yet. Ask the user to open Lykta.")
+            case let .failed(error):
+                throw APIError(.notificationsNotSetUp, "iOS refused Lykta a notification token on this phone (“\(error)”). "
+                               + "Ask the user to update Lykta, or use a Live Activity.")
             }
         }
     }
@@ -842,14 +861,22 @@ actor Store {
 
     private func device(column: String, hash: String) throws -> Device? {
         guard let row = try db.query("""
-            SELECT id, environment, push_token, app_version, layout_version, notification_authorization, alert_style, notification_token
+            SELECT id, environment, push_token, app_version, layout_version, notification_authorization, alert_style, notification_token,
+                   notification_error
               FROM devices WHERE \(column) = ?
             """, hash).first else {
             return nil
         }
         let notifications = try row.optionalText("notification_authorization", as: NotificationSettings.Authorization.init(rawValue:)).map {
-            NotificationSettings(authorization: $0, alertStyle: try row.text("alert_style", as: NotificationSettings.AlertStyle.init(rawValue:)),
-                                 token: try row.optionalText("notification_token", as: PushToken.init(hex:)))
+            let registration: NotificationSettings.Registration = if let token = try row.optionalText("notification_token", as: PushToken.init(hex:)) {
+                .registered(token)
+            } else if let error = try row.optionalString("notification_error") {
+                .failed(error)
+            } else {
+                .pending
+            }
+            return NotificationSettings(authorization: $0, alertStyle: try row.text("alert_style", as: NotificationSettings.AlertStyle.init(rawValue:)),
+                                        registration: registration)
         }
         return Device(id: try row.text("id", as: UUID.init(uuidString:)),
                       environment: try row.text("environment", as: PushEnvironment.init(rawValue:)),
