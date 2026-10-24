@@ -67,8 +67,10 @@ activity look generated:
 - supporting text as heavy and bright as the main value instead of `secondary`
 - one example's structure with the new content swapped in
 
-Before designing your first layout, read every [example](#examples), all at
-once in parallel. Together they show the range: drawn scenery, charts,
+Before designing your first layout, read the
+[layout reference](references/layout.md) and every [example](#examples) in
+one action, with one command or one batch of parallel requests rather than
+one file at a time. Together they show the range: drawn scenery, charts,
 gauges, rows, chat bubbles and controls, each in its own palette. They are
 still a small slice of what the nodes and SVG can do, one answer each to one
 subject, so treat them as a vocabulary of techniques rather than templates:
@@ -219,10 +221,10 @@ update; retry after a few seconds. Repeating a PUT is safe, but a repeated
 ## Examples
 
 Each example is a complete PUT body at the skill's own address, such as
-`examples/homelab.json` next to this file. Read all of them, fetched in
-parallel or in one command, before designing your first layout;
-[Design](#design) says how to use them. Their times are Unix seconds around
-1793000000; replace them with real ones from `date +%s`.
+`examples/homelab.json` next to this file. Fetch all of them in one action
+before designing your first layout; [Design](#design) says how to use them.
+Their times are Unix seconds around 1793000000; replace them with real ones
+from `date +%s`.
 
 | Example | Shows |
 | --- | --- |
