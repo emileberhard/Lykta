@@ -9,7 +9,9 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         guard let payload = Self.payload(of: original), let host = Self.host, let content = original.mutableCopy() as? UNMutableNotificationContent else {
             return contentHandler(original)
         }
-        let media = MediaLoader(payload: payload, host: host, cache: .shared).load(within: 20)
+        let loader = MediaLoader(payload: payload, host: host, cache: .shared)
+        defer { loader.release() }
+        let media = loader.load(within: 20)
         var sound: NotificationReport.Sound = original.sound == nil ? .none : .default
         if let file = media.sound {
             content.sound = UNNotificationSound(named: UNNotificationSoundName(file))

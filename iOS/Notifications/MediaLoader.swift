@@ -38,6 +38,14 @@ nonisolated final class MediaCache: Sendable {
         }
     }
 
+    func place(_ staged: URL, at file: URL) -> Bool {
+        leases.withLock { _ in rename(staged.path, file.path) == 0 }
+    }
+
+    func write(_ data: Data, to file: URL) -> Bool {
+        leases.withLock { _ in (try? data.write(to: file, options: .atomic)) != nil }
+    }
+
     func release(_ files: [URL]) {
         leases.withLock { leases in
             for file in files {
@@ -78,51 +86,74 @@ nonisolated final class MediaLoader: Sendable {
     private let payload: NotificationPayload
     private let host: String
     private let cache: MediaCache
+    private let avatar: URL?
+    private let sound: URL?
+    private let cached: Set<URL>
     private let state = Mutex(State())
 
     init(payload: NotificationPayload, host: String, cache: MediaCache) {
         self.payload = payload
         self.host = host
         self.cache = cache
+        avatar = payload.avatar.flatMap { id in cache.avatars?.appending(path: "\(id.rawValue).png") }
+        sound = payload.sound.flatMap { id in cache.sounds?.appending(path: "\(id.rawValue).wav") }
+        cached = cache.lease([avatar, sound].compactMap(\.self))
+    }
+
+    func release() {
+        cache.release([avatar, sound].compactMap(\.self))
     }
 
     func load(within timeout: TimeInterval) -> Media {
-        let avatar = payload.avatar.flatMap { id in cache.avatars?.appending(path: "\(id.rawValue).png") }
-        let sound = payload.sound.flatMap { id in cache.sounds?.appending(path: "\(id.rawValue).wav") }
-        let leased = [avatar, sound].compactMap(\.self)
-        let cached = cache.lease(leased)
-        defer { cache.release(leased) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForResource = timeout
         let session = URLSession(configuration: configuration, delegate: RefusingRedirects(), delegateQueue: nil)
         let pending = DispatchGroup()
         if let id = payload.avatar, let avatar {
             if cached.contains(avatar), let data = try? Data(contentsOf: avatar) {
-                publish { $0.avatar = data }
+                publish { media in
+                    media.avatar = data
+                    return true
+                }
             } else {
                 fetch(id, in: session, group: pending) { location, type in
                     guard type.hasPrefix("image/"), let data = Self.thumbnail(of: location) else { return }
-                    try? data.write(to: avatar, options: .atomic)
-                    self.publish { $0.avatar = data }
+                    self.publish { media in
+                        guard self.cache.write(data, to: avatar) else { return false }
+                        media.avatar = data
+                        return true
+                    }
                 }
             }
         }
         if let id = payload.sound, let sound {
             if cached.contains(sound) {
-                publish { $0.sound = sound.lastPathComponent }
+                publish { media in
+                    media.sound = sound.lastPathComponent
+                    return true
+                }
             } else {
                 fetch(id, in: session, group: pending) { location, type in
-                    guard type == "audio/wav", rename(location.path, sound.path) == 0 else { return }
-                    self.publish { $0.sound = sound.lastPathComponent }
+                    guard type == "audio/wav", let staged = Self.stage(location, as: "wav") else { return }
+                    let placed = self.publish { media in
+                        guard self.cache.place(staged, at: sound) else { return false }
+                        media.sound = sound.lastPathComponent
+                        return true
+                    }
+                    if !placed {
+                        try? FileManager.default.removeItem(at: staged)
+                    }
                 }
             }
         }
         if let id = payload.image {
             fetch(id, in: session, group: pending) { location, type in
-                guard let format = ["image/png": "png", "image/jpeg": "jpg"][type] else { return }
-                let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).\(format)")
-                guard rename(location.path, file.path) == 0 else { return }
-                if !self.publish({ $0.image = file }) {
+                guard let format = ["image/png": "png", "image/jpeg": "jpg"][type], let file = Self.stage(location, as: format) else { return }
+                let published = self.publish { media in
+                    media.image = file
+                    return true
+                }
+                if !published {
                     try? FileManager.default.removeItem(at: file)
                 }
             }
@@ -136,12 +167,15 @@ nonisolated final class MediaLoader: Sendable {
     }
 
     @discardableResult
-    private func publish(_ change: (inout Media) -> Void) -> Bool {
+    private func publish(_ change: (inout Media) -> Bool) -> Bool {
         state.withLock { state in
-            guard !state.isClosed else { return false }
-            change(&state.media)
-            return true
+            !state.isClosed && change(&state.media)
         }
+    }
+
+    private static func stage(_ download: URL, as format: String) -> URL? {
+        let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).\(format)")
+        return rename(download.path, file.path) == 0 ? file : nil
     }
 
     private func fetch(_ id: MediaID, in session: URLSession, group: DispatchGroup, place: @escaping @Sendable (URL, String) -> Void) {

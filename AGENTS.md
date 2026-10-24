@@ -237,10 +237,10 @@ The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size. Capture them from a Debug build on an iPhone 18 Pro simulator:
 launch it with a one-time invite from `lykta-gateway invite` as
 `SIMCTL_CHILD_LYKTA_INVITE=<invite> xcrun simctl launch <device> <bundle ID>`,
-because simulators cannot use App Attest, tap Copy Agent Setup, start the
-fixture activities with
-`LYKTA_URL=… LYKTA_TOKEN=… python3 iOS/AppStore/activities.py --quiet`, and
-send the Printer notification onto the locked simulator with
+because simulators cannot use App Attest, tap Copy Agent Setup, export
+`LYKTA_URL` and `LYKTA_TOKEN` from it, start the fixture activities with
+`python3 iOS/AppStore/activities.py --quiet`, and send the Printer
+notification onto the locked simulator with
 `python3 iOS/AppStore/activities.py printer`. Capture with
 `xcrun simctl io <device> screenshot --mask=black`, because the Dynamic
 Island is missing without a mask. Name the captures `1-lock`,
