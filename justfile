@@ -19,7 +19,7 @@ render *args:
 image:
     docker build --tag lykta-gateway .
 
-# Run fresh agents on every eval task against a simulated phone, check what they showed and print their tokens and timings; options go to harbor run
+# Run the agents in evals/job.yaml on every eval task against a simulated phone, check what they showed and print their tokens and timings; options go to harbor run
 [positional-arguments]
 evals *args: image
     #!/usr/bin/env bash
@@ -27,8 +27,10 @@ evals *args: image
     for arg in "$@"; do
         case $arg in --job-name* | --jobs-dir* | -o*) echo "just evals chooses its job's name and directory; run harbor run and scripts/eval-metrics directly to choose them." >&2; exit 2 ;; esac
     done
+    env_file=${XDG_CONFIG_HOME:-$HOME/.config}/lykta/evals.env
+    [ -f "$env_file" ] && set -- --env-file "$env_file" "$@"
     job=$(date +%Y-%m-%d__%H-%M-%S)
-    harbor run --path evals/tasks --ak prompt_template_path=evals/prompt.md --n-concurrent 16 --jobs-dir .local/evals --job-name "$job" "$@"
+    harbor run --config evals/job.yaml --ak prompt_template_path=evals/prompt.md --jobs-dir .local/evals --job-name "$job" "$@"
     status=$?
     [ -d ".local/evals/$job" ] && scripts/eval-metrics ".local/evals/$job"
     exit $status

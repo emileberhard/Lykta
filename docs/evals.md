@@ -12,11 +12,16 @@ It needs Docker and [Harbor](https://github.com/harbor-framework/harbor),
 installed with `uv tool install --python 3.13 harbor`.
 
 ```bash
-just evals --agent codex --model gpt-6.1-sol
-just evals --agent claude-code --model claude-opus-5-5 --n-attempts 4
-just evals --agent codex --model gpt-6.1-sol --include-task-name train
+just evals
+just evals --include-task-name train --n-attempts 4
+just evals --agent claude-code --model anthropic/claude-opus-5-5 --ak reasoning_effort=high
 harbor view .local/evals
 ```
+
+`just evals` runs the agents in `evals/job.yaml` twice on every task: Codex
+with GPT-6.1 Sol at medium effort and Claude Code with Claude Haiku 5.5 at
+extra-high effort, 20 trials at once. Options after it override the job, and
+`--agent` replaces its agents.
 
 A trial scores 1 when its check passes and 0 when it fails, so the Mean that
 Harbor prints is the pass rate.
@@ -53,12 +58,15 @@ scripts/eval-metrics .local/evals/<job> .local/evals/<other job>
 scripts/eval-metrics --json .local/evals/<job>
 ```
 
-Agents take their usual credentials from the environment or from
-`--env-file`: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or
-`CLAUDE_CODE_OAUTH_TOKEN` with `CLAUDE_FORCE_OAUTH=1`. `OPENAI_BASE_URL` and
-`ANTHROPIC_BASE_URL` point them at a proxy instead of the vendor's API. Codex
-uses a proxy without Responses WebSockets only through a custom provider with
-`supports_websockets = false`, passed as `--ak config=codex.toml`.
+Agents take their usual credentials from the environment: `OPENAI_API_KEY`
+for Codex and `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` with
+`CLAUDE_FORCE_OAUTH=1`, for Claude Code. `OPENAI_BASE_URL` and
+`ANTHROPIC_BASE_URL`, with `ANTHROPIC_AUTH_TOKEN` as the proxy's key, send
+them to a proxy instead of the vendor's API. Codex tries a Responses
+WebSocket first and falls back to HTTP only when the proxy answers 426. To
+keep these out of your shell, put them in `~/.config/lykta/evals.env`, which
+`just evals` passes to Harbor as `--env-file` when it exists; its values win
+over the shell's.
 
 A task is a folder in `evals/tasks`: the request in `instruction.md`, which
 may be empty, a time limit and the event collection in `task.toml`,
@@ -146,8 +154,8 @@ On an M6 Mac mini with OrbStack on 2026-10-23, 16 trials at once, 8 Codex and
 8 Claude Code, both on GPT-6.1 Sol, finished in 75 seconds. Their containers
 together peaked at 2.6 GiB and about two cores; a gateway uses about 12 MiB. A
 trial took 40,000 to 140,000 input tokens, mostly cached, and 1,000 to 2,000
-output tokens. `just evals` runs 16 trials at once; 32 needs about 6 GiB free
-in Docker's VM.
+output tokens. `evals/job.yaml` runs its 20 trials at once; 32 needs about 6
+GiB free in Docker's VM.
 
 ## Next
 

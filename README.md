@@ -54,7 +54,7 @@ as a skill for coding agents.
 ```bash
 just test   # core and gateway tests
 just ios    # compile the app and widgets
-just evals --agent codex --model gpt-6.1-sol   # fresh agents against a simulated phone
+just evals  # fresh agents against a simulated phone
 ```
 
 `Core` holds the layout language, `Gateway` serves the API and delivers
