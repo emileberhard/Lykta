@@ -273,7 +273,8 @@ actor Store {
 
     func putNotification(_ device: Device, name: Name, request: NotificationRequest, now: Int) throws -> (status: NotificationStatus, created: Bool) {
         try db.transaction {
-            try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ?", device.id, name, now)
+            try expireNotifications(now: now)
+            try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ? AND in_flight = 0", device.id, name, now)
             let canonical = request.canonical
             if let row = try db.query("SELECT * FROM notifications WHERE device_id = ? AND name = ?", device.id, name).first {
                 guard try row.string("request") == canonical else {
@@ -329,6 +330,15 @@ actor Store {
                        try JSONDecoder().decode([String: JSONValue].self, from: json).merging([
                            "notification": .string(id.uuidString), "name": .string(try row.string("name")),
                        ]) { $1 })
+        }
+    }
+
+    private func expireNotifications(now: Int) throws {
+        for row in try db.query("SELECT id, device_id, name FROM notifications WHERE state = 'queued' AND expires_at <= ?", now) {
+            let id = try row.text("id", as: UUID.init(uuidString:))
+            try db.run("UPDATE notifications SET state = 'failed', error = 'The notification expired before Apple accepted it.' WHERE id = ?", id)
+            try record("notification.expired", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: nil,
+                       ["notification": .string(id.uuidString), "name": .string(try row.string("name"))])
         }
     }
 
@@ -431,6 +441,7 @@ actor Store {
                 try record("notification.unknown", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: nil,
                            ["notification": .string(id.uuidString), "name": .string(try row.string("name"))])
             }
+            try db.run("UPDATE notifications SET in_flight = 0")
         }
     }
 
@@ -458,7 +469,10 @@ actor Store {
         try db.run("DELETE FROM activities WHERE phase = 'ended' AND channel IS NULL AND ended_at <= ?", now - 7 * 86400)
         try db.run("DELETE FROM actions WHERE at < ?", now - Self.actionRetention)
         try db.run("DELETE FROM invites WHERE expires_at <= ?", now)
-        try db.run("DELETE FROM notifications WHERE expires_at <= ?", now)
+        try db.transaction {
+            try expireNotifications(now: now)
+            try db.run("DELETE FROM notifications WHERE expires_at <= ? AND in_flight = 0", now)
+        }
         try db.run("""
             DELETE FROM actions WHERE seq IN (SELECT seq FROM (
               SELECT seq, ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY seq DESC) AS n FROM actions) WHERE n > ?)
@@ -510,14 +524,9 @@ actor Store {
             for row in try db.query("SELECT * FROM activities WHERE phase IN ('starting', 'live') AND ends_at <= ?", now) {
                 _ = try end(Activity(row), dismissAt: now, now: now, ["dismissAfter": .number(0), "scheduled": .bool(true)])
             }
-            for row in try db.query("SELECT id, device_id, name FROM notifications WHERE state = 'queued' AND expires_at <= ?", now) {
-                let id = try row.text("id", as: UUID.init(uuidString:))
-                try db.run("UPDATE notifications SET state = 'failed', error = 'The notification expired before Apple accepted it.' WHERE id = ?", id)
-                try record("notification.expired", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: nil,
-                           ["notification": .string(id.uuidString), "name": .string(try row.string("name"))])
-            }
+            try expireNotifications(now: now)
             var free = limit - (try count(db.query("SELECT count(*) AS n FROM activities WHERE in_flight = 1")))
-                - (try count(db.query("SELECT count(*) AS n FROM notifications WHERE state = 'sending'")))
+                - (try count(db.query("SELECT count(*) AS n FROM notifications WHERE in_flight = 1")))
             guard free > 0 else { return [] }
             var jobs = try db.query("""
                 SELECT n.id, n.device_id, n.name, n.request, n.expires_at, d.environment, d.notification_token
@@ -526,7 +535,7 @@ actor Store {
                 """, now, free).map { row in
                 let id = try row.text("id", as: UUID.init(uuidString:))
                 let fetchToken = Self.token("lykta_fetch_")
-                try db.run("UPDATE notifications SET state = 'sending', token_hash = ? WHERE id = ?", Self.hash(fetchToken), id)
+                try db.run("UPDATE notifications SET state = 'sending', in_flight = 1, token_hash = ? WHERE id = ?", Self.hash(fetchToken), id)
                 return Job.notification(NotificationJob(
                     id: id, deviceID: try row.text("device_id", as: UUID.init(uuidString:)), name: try row.text("name", as: Name.init(rawValue:)),
                     request: try JSONDecoder().decode(NotificationRequest.self, from: Data(try row.string("request").utf8)),
@@ -589,6 +598,7 @@ actor Store {
             guard let row = try db.query("SELECT failures FROM notifications WHERE id = ?", job.id).first else { return }
             try record("push.notification", device: job.deviceID, activity: nil,
                        attempt.detail.merging(["outcome": .string(result), "error": error.map(JSONValue.string) ?? .null]) { $1 })
+            try db.run("UPDATE notifications SET in_flight = 0 WHERE id = ?", job.id)
             switch attempt.outcome {
             case .accepted:
                 try db.run("UPDATE notifications SET state = 'sent', error = NULL WHERE id = ? AND state = 'sending'", job.id)
@@ -598,12 +608,17 @@ actor Store {
                 try db.run("""
                     UPDATE notifications SET state = 'queued', token_hash = NULL, retry_at = ?, failures = failures + 1, error = ?
                       WHERE id = ? AND state = 'sending'
-                    """, now + min(1 << (Int(try row.integer("failures")) + 1), 300), error, job.id)
+                    """, now + min(1 << min(Int(try row.integer("failures")) + 1, 9), 300), error, job.id)
             case let .failed(error, clearsPushToken):
                 try db.run("UPDATE notifications SET state = 'failed', error = ? WHERE id = ? AND state = 'sending'", error, job.id)
-                if clearsPushToken {
+                if clearsPushToken, try !db.query("SELECT 1 FROM devices WHERE id = ? AND notification_token = ?", job.deviceID, job.token).isEmpty {
                     try db.run("UPDATE devices SET notification_token = NULL WHERE id = ?", job.deviceID)
-                    try db.run("UPDATE notifications SET state = 'failed', error = ? WHERE device_id = ? AND state = 'queued'", error, job.deviceID)
+                    for waiting in try db.query("SELECT id, name FROM notifications WHERE device_id = ? AND state = 'queued'", job.deviceID) {
+                        let id = try waiting.text("id", as: UUID.init(uuidString:))
+                        try db.run("UPDATE notifications SET state = 'failed', error = ? WHERE id = ?", error, id)
+                        try record("notification.failed", device: job.deviceID, activity: nil,
+                                   ["notification": .string(id.uuidString), "name": .string(try waiting.string("name")), "error": .string(error)])
+                    }
                 }
             case .channelGone:
                 preconditionFailure("notification pushes use no channel")

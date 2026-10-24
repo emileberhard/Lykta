@@ -83,6 +83,15 @@ struct NotificationTests {
         #expect(refused.status == 429)
         #expect((try refused.decoded() as Refusal).error == "too_many_notifications")
         #expect(refused.headers["retry-after"].flatMap(Int.init).map { (3590...3600).contains($0) } == true)
+        #expect(try await send("PUT", "/v1/notifications/n0", body: Self.printer).status == 200)
+    }
+
+    @Test func refusesAPushThatWouldNotFitApplesLimit() async throws {
+        let response = try await send("PUT", "/v1/notifications/family", body: [
+            "sender": ["id": "family", "name": "Family"], "body": .string(String(repeating: "👩‍👩‍👧‍👦", count: 500)),
+        ])
+        #expect(response.status == 413)
+        #expect((try response.decoded() as Refusal).error == "payload_too_large")
     }
 
     @Test(arguments: [
@@ -119,6 +128,15 @@ struct NotificationTests {
         #expect(try await status("done") == Notified(state: "sent", error: nil, banners: "temporary"))
     }
 
+    @Test func aFetchTokenOpensOnlyItsOwnNotification() async throws {
+        _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
+        _ = try await send("PUT", "/v1/notifications/second", body: Self.printer)
+        try await deliver(at: now)
+        let tokens = try fetchTokens()
+        #expect(await report(tokens[0].id, token: tokens[1].token, ["style": "plain", "sound": "none"]).status == 401)
+        #expect(try await status("first").state == "sent")
+    }
+
     @Test func theExtensionsReportShowsWhatThePhonePreparedOnce() async throws {
         _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
         try await deliver(at: now)
@@ -144,6 +162,18 @@ struct NotificationTests {
         #expect(await report(id, token: token, ["style": "communication", "avatar": "initials", "sound": "default"]).status == 204)
         try await store.finish(jobs[0], attempt, now: now)
         #expect(try await status("done").state == "received")
+    }
+
+    @Test func anEarlyReportKeepsTheDeliverySlotUntilAppleAnswers() async throws {
+        _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
+        _ = try await send("PUT", "/v1/notifications/second", body: Self.printer)
+        let first = try await store.claim(now: now, limit: 1)
+        let attempt = try await Delivery(store: store, push: push, shutdown: Shutdown()).send(try #require(first.first), now: now)
+        let (id, token) = try fetchToken()
+        #expect(await report(id, token: token, ["style": "communication", "avatar": "initials", "sound": "default"]).status == 204)
+        #expect(try await store.claim(now: now, limit: 1).isEmpty)
+        try await store.finish(first[0], attempt, now: now)
+        #expect(try await store.claim(now: now, limit: 1).count == 1)
     }
 
     @Test func neverResendsANotificationWithAnUnknownOutcome() async throws {
@@ -179,6 +209,31 @@ struct NotificationTests {
         #expect(tokens.count == 2 && tokens[0] != tokens[1])
     }
 
+    @Test func backsOffAtMostFiveMinutesThroughALongOutage() async throws {
+        _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
+        var time = now
+        for _ in 0..<70 {
+            push.fail("notify", .rejected(status: 503, reason: "ServiceUnavailable"))
+            try await deliver(at: time)
+            try await deliver(at: time + 1)
+            time += 300
+        }
+        #expect(push.sent.count == 70)
+    }
+
+    @Test func keepsATokenThePhoneReplacedWhileTheOldOneWasRejected() async throws {
+        push.fail("notify", .rejected(status: 410, reason: "Unregistered"))
+        _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
+        let jobs = try await store.claim(now: now, limit: 4)
+        let attempt = try await Delivery(store: store, push: push, shutdown: Shutdown()).send(try #require(jobs.first), now: now)
+        try await report(NotificationSettings(authorization: .authorized, alertStyle: .banner, token: PushToken(hex: "4567cdef")))
+        _ = try await send("PUT", "/v1/notifications/second", body: Self.printer)
+        try await store.finish(jobs[0], attempt, now: now)
+        try await deliver(at: now)
+        #expect(try await status("first").state == "failed")
+        #expect(try await status("second").state == "sent")
+    }
+
     @Test func forgetsARejectedNotificationTokenAndFailsWhatWaitedForIt() async throws {
         push.fail("notify", .rejected(status: 410, reason: "Unregistered"))
         _ = try await send("PUT", "/v1/notifications/first", body: Self.printer)
@@ -187,6 +242,8 @@ struct NotificationTests {
         #expect(push.sent == ["notify"])
         #expect(try await status("first").state == "failed")
         #expect(try await status("second").state == "failed")
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.contains { $0.name == "notification.failed" && $0.detail["name"] == "second" })
         #expect((try await send("PUT", "/v1/notifications/third", body: Self.printer).decoded() as Refusal).error == "notifications_not_set_up")
     }
 
@@ -203,6 +260,7 @@ struct NotificationTests {
         push.fail("notify", .rejected(status: 503, reason: "ServiceUnavailable"))
         _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
         try await deliver(at: now)
+        try await store.housekeep(now: now + Store.notificationLifetime)
         try await deliver(at: now + Store.notificationLifetime)
         #expect(push.sent == ["notify"])
         let events: Events = try await send("GET", "/v1/events").decoded()
@@ -225,12 +283,18 @@ struct NotificationTests {
     }
 
     private func fetchToken() throws -> (UUID, String) {
-        let alert = try #require(push.alerts.last)
-        guard case let .string(id) = try alert.payload.value(at: "lykta.id"), let uuid = UUID(uuidString: id),
-              case let .string(token) = try alert.payload.value(at: "lykta.token") else {
-            throw LayoutError("the alert carries no notification id and token")
+        let last = try #require(try fetchTokens().last)
+        return (last.id, last.token)
+    }
+
+    private func fetchTokens() throws -> [(id: UUID, token: String)] {
+        try push.alerts.map { alert in
+            guard case let .string(id) = try alert.payload.value(at: "lykta.id"), let uuid = UUID(uuidString: id),
+                  case let .string(token) = try alert.payload.value(at: "lykta.token") else {
+                throw LayoutError("the alert carries no notification id and token")
+            }
+            return (uuid, token)
         }
-        return (uuid, token)
     }
 
     private func report(_ settings: NotificationSettings) async throws {

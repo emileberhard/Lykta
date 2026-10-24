@@ -102,6 +102,7 @@ enum Schema {
           request TEXT NOT NULL,
           state TEXT NOT NULL CHECK (state IN ('queued', 'sending', 'sent', 'received', 'failed', 'unknown')),
           token_hash TEXT,
+          in_flight INTEGER NOT NULL DEFAULT 0,
           retry_at INTEGER NOT NULL DEFAULT 0,
           failures INTEGER NOT NULL DEFAULT 0,
           error TEXT,
