@@ -129,7 +129,7 @@ jobs:
             want=$(plutil -convert json -o - "$RUNNER_TEMP/${bundle#*=}.entitlements" |
               jq 'if has("aps-environment") then ."aps-environment" = "production" else . end')
             codesign -d --entitlements - --xml "$RUNNER_TEMP/check/Payload/Lykta.app/${bundle%=*}" | plutil -convert json -o - - |
-              jq -e --argjson want "$want" 'contains($want)' > /dev/null ||
+              jq -e --argjson want "$want" '. as $actual | all($want | to_entries[]; $actual[.key] == .value)' > /dev/null ||
               { echo "::error::The exported ${bundle%=*} does not claim ${bundle#*=}.entitlements."; exit 1; }
           done
           export_archive upload
