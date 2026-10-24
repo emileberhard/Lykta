@@ -21,6 +21,34 @@ harbor view .local/evals
 A trial scores 1 when its check passes and 0 when it fails, so the Mean that
 Harbor prints is the pass rate.
 
+## Metrics
+
+Harbor keeps each trial's transcript, token counts, cost and timings, and each
+task's collect hook saves the gateway's events as `artifacts/events.json`.
+`scripts/eval-metrics` reads those from one or more job directories, and
+`just evals` runs it on the job it just finished. It prints a table for each
+agent, version and model, with a median row:
+
+- `accepted`: seconds from the agent's start to the first activity the
+  gateway accepted, or `none` when it accepted none, as the reminder expects.
+- `agent`: seconds from the agent's start to its final answer.
+- `model calls` and `tool calls`, counted in the transcript.
+- `input` counts every prompt token, `cached` the ones read from the cache and
+  `cache writes` the ones written to it; `output` includes `reasoning`. No
+  provider reports how the rest of the output splits between text and tool
+  calls.
+
+`--json` prints the same with every agent step: when it ended, the gap since
+the step before, its tokens and its tool calls. A gap holds the previous
+step's tools as well as the model's work on this one. `?` marks a value the
+job does not record, such as `accepted` in jobs from before the events were
+saved.
+
+```bash
+scripts/eval-metrics .local/evals/<job> .local/evals/<other job>
+scripts/eval-metrics --json .local/evals/<job>
+```
+
 Agents take their usual credentials from the environment or from
 `--env-file`: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or
 `CLAUDE_CODE_OAUTH_TOKEN` with `CLAUDE_FORCE_OAUTH=1`. `OPENAI_BASE_URL` and
@@ -29,11 +57,12 @@ uses a proxy without Responses WebSockets only through a custom provider with
 `supports_websockets = false`, passed as `--ak config=codex.toml`.
 
 A task is a folder in `evals/tasks`: the request in `instruction.md`, which
-may be empty, a time limit in `task.toml`, `environment` linking the shared
-`evals/environment` and its check in `tests/test.sh`. Harbor accepts only
-tests inside the task, so the tasks that should show something carry the same
-check, which passes when the phone drew an activity the agent sent; the
-reminder's passes when the agent started none now.
+may be empty, a time limit and the event collection in `task.toml`,
+`environment` linking the shared `evals/environment` and its check in
+`tests/test.sh`. Harbor accepts only tests inside the task, so the tasks that
+should show something carry the same check, which passes when the phone drew
+an activity the agent sent; the reminder's passes when the agent started none
+now.
 
 ## Flow
 
@@ -46,6 +75,8 @@ sequenceDiagram
     A->>G: GET /skill/SKILL.md, PUT /v1/activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
     G-->>A: live, accepted, device active, layoutReadable true
+    H->>A: Collect hook
+    A->>G: GET /v1/events, saved as artifacts/events.json
     H->>A: tests/test.sh
     A->>G: GET /v1/activities
     H->>H: Transcript and reward in .local/evals

@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import statistics
+import sys
+from datetime import datetime
+from pathlib import Path
+
+SECONDS = ["accepted", "agent"]
+TOKENS = ["input", "cached", "cache writes", "output", "reasoning"]
+MEASURES = [*SECONDS, "model calls", "tool calls", *TOKENS]
+
+
+def moment(text):
+    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+def total(values):
+    return None if None in values else sum(values)
+
+
+def reasoning(metrics):
+    extra = metrics.get("extra") or {}
+    return next((value for value in (extra.get("reasoning_output_tokens"),
+                                     (extra.get("output_tokens_details") or {}).get("thinking_tokens")) if value is not None), None)
+
+
+def cache_writes(metrics):
+    extra = metrics.get("extra") or {}
+    return next((value for value in (extra.get("cache_write_input_tokens"), extra.get("cache_creation_input_tokens"))
+                 if value is not None), None)
+
+
+def accepted(path, started):
+    try:
+        events = json.loads((path / "artifacts" / "events.json").read_text())["events"]
+    except (OSError, ValueError, KeyError) as error:
+        print(f"{path.name}: no gateway events in artifacts/events.json ({type(error).__name__}), so accepted is unknown.", file=sys.stderr)
+        return None
+    at = next((event["at"] for event in events if event["name"] == "activity.put"), None)
+    return "none" if at is None else (moment(at) - started).total_seconds()
+
+
+def action(call):
+    arguments = call.get("arguments") or {}
+    text = next((arguments[key] for key in ("command", "cmd", "input", "file_path", "skill") if isinstance(arguments.get(key), str)),
+                json.dumps(arguments))
+    return f"{call['function_name']} {' '.join(text.split())}"[:160]
+
+
+def trial(path):
+    result = json.loads((path / "result.json").read_text())
+    started = moment(result["agent_execution"]["started_at"])
+    usage = result.get("agent_result") or {}
+    steps = [step for step in json.loads((path / "agent" / "trajectory.json").read_text())["steps"] if step["source"] == "agent"]
+    metrics = [step.get("metrics") or {} for step in steps]
+    moments = [started] + [moment(step["timestamp"]) for step in steps]
+    return {
+        "trial": f"{path.parent.name}/{path.name}",
+        "task": result["task_name"],
+        "reward": ((result.get("verifier_result") or {}).get("rewards") or {}).get("reward"),
+        "accepted": accepted(path, started),
+        "agent": (moment(result["agent_execution"]["finished_at"]) - started).total_seconds(),
+        "model calls": total([step.get("llm_call_count") for step in steps]),
+        "tool calls": sum(len(step.get("tool_calls") or []) for step in steps),
+        "input": usage.get("n_input_tokens"),
+        "cached": usage.get("n_cache_tokens"),
+        "cache writes": total([cache_writes(each) for each in metrics]),
+        "output": usage.get("n_output_tokens"),
+        "reasoning": total([reasoning(each) for each in metrics]),
+        "steps": [{
+            "at": (moments[index + 1] - started).total_seconds(),
+            "gap": (moments[index + 1] - moments[index]).total_seconds(),
+            "input": each.get("prompt_tokens"),
+            "cached": each.get("cached_tokens", 0),
+            "output": each.get("completion_tokens"),
+            "reasoning": reasoning(each),
+            "actions": [action(call) for call in step.get("tool_calls") or []],
+        } for index, (step, each) in enumerate(zip(steps, metrics))],
+    }
+
+
+def median(trials, measure):
+    values = [trial[measure] for trial in trials if trial[measure] != "none"]
+    return None if not values or None in values else statistics.median(values)
+
+
+def summarize(jobs):
+    groups = {}
+    for path in sorted(trial for job in jobs for trial in job.iterdir() if (trial / "agent" / "trajectory.json").is_file()):
+        config = json.loads((path / "result.json").read_text())
+        key = (config["config"]["agent"]["name"], config["agent_info"].get("version"), config["config"]["agent"]["model_name"])
+        groups.setdefault(key, []).append(trial(path))
+    return [{
+        "agent": agent,
+        "version": version,
+        "model": model,
+        "passed": sum(trial["reward"] == 1 for trial in trials),
+        "trials": len(trials),
+        "median": {measure: median(trials, measure) for measure in MEASURES},
+        "results": sorted(trials, key=lambda trial: (trial["task"], trial["trial"])),
+    } for (agent, version, model), trials in groups.items()]
+
+
+def cell(column, value):
+    if value is None:
+        return "?"
+    if isinstance(value, str):
+        return value
+    if column in SECONDS:
+        return f"{value:.1f}s"
+    return f"{value:,.0f}" if column in TOKENS else f"{value:g}"
+
+
+def table(group):
+    columns = ["task", "reward", *MEASURES]
+    rows = group["results"] + [{"task": "median", "reward": "", **group["median"]}]
+    cells = [columns] + [[cell(column, row[column]) for column in columns] for row in rows]
+    widths = [max(len(line[index]) for line in cells) for index in range(len(columns))]
+    title = f"{group['agent']} {group['version'] or '?'} with {group['model']}: {group['passed']} of {group['trials']} passed"
+    return "\n".join([title] + ["  ".join(text.ljust(width) if index == 0 else text.rjust(width)
+                                          for index, (text, width) in enumerate(zip(line, widths))) for line in cells])
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Summarize Harbor eval jobs per agent and model: tokens, timings and every step.")
+    parser.add_argument("--json", action="store_true", help="print every trial and its steps as JSON instead of tables")
+    parser.add_argument("jobs", nargs="+", type=Path, help="job directories, such as .local/evals/<job>")
+    arguments = parser.parse_args()
+    groups = summarize(arguments.jobs)
+    if not groups:
+        sys.exit(f"No trials with an agent/trajectory.json in {', '.join(map(str, arguments.jobs))}.")
+    print(json.dumps(groups, indent=2) if arguments.json else "\n\n".join(table(group) for group in groups))
+
+
+main()
