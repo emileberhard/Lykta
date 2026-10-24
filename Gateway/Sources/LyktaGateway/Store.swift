@@ -128,6 +128,8 @@ actor Store {
                 try db.run("""
                     UPDATE devices SET notification_authorization = ?, alert_style = ?, notification_token = COALESCE(?, notification_token) WHERE id = ?
                     """, notifications.authorization, notifications.alertStyle, notifications.token, device.id)
+            } else {
+                try db.run("UPDATE devices SET notification_authorization = NULL, alert_style = NULL, notification_token = NULL WHERE id = ?", device.id)
             }
             let reported = Set(report.activities.map(\.id))
             let isNewInstall = previous != nil && previous != report.bundleInstance

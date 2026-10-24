@@ -75,6 +75,18 @@ struct NotificationTests {
         #expect((try response.decoded() as Refusal).error == error)
     }
 
+    @Test func aPhoneBackOnAnAppWithoutNotificationsGetsNoneUntilItUpdates() async throws {
+        #expect(try await send("PUT", "/v1/notifications/queued", body: Self.printer).status == 201)
+        let older: JSONValue = ["appVersion": "0.5.4 (1)", "bundleInstance": .string(UUID().uuidString), "activities": .array([])]
+        #expect(await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                             body: older.json)).status == 200)
+        let response = try await send("PUT", "/v1/notifications/done", body: Self.printer)
+        #expect(response.status == 409)
+        #expect((try response.decoded() as Refusal).error == "app_update_required")
+        try await deliver(at: now)
+        #expect(push.sent.isEmpty)
+    }
+
     @Test func limitsNotificationsPerHourAndSaysWhenToSendAgain() async throws {
         for index in 0..<Store.maximumNotificationsPerHour {
             #expect(try await send("PUT", "/v1/notifications/n\(index)", body: Self.printer).status == 201)
