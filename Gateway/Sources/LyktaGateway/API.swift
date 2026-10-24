@@ -160,8 +160,8 @@ struct API: Sendable {
         return String(value.dropFirst(7))
     }
 
-    private static func name(_ text: String) throws -> ActivityName {
-        guard let name = ActivityName(rawValue: text) else {
+    private static func name(_ text: String) throws -> Name {
+        guard let name = Name(rawValue: text) else {
             throw APIError(.invalidName, "Names use 1 to 64 lowercase letters, digits, '-', '_' or '.'.")
         }
         return name
@@ -214,7 +214,7 @@ struct API: Sendable {
 
 struct ActionRecord: Encodable, Sendable {
     let seq: Int64
-    let activity: ActivityName
+    let activity: Name
     let input: Action.Input
     let at: Date
 

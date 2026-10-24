@@ -1,7 +1,7 @@
 import Foundation
 import LyktaCore
 
-struct ActivityName: RawRepresentable, Hashable, Sendable, Encodable, CustomStringConvertible {
+struct Name: RawRepresentable, Hashable, Sendable, Encodable, CustomStringConvertible {
     let rawValue: String
 
     init?(rawValue: String) {
@@ -39,7 +39,7 @@ struct ActivityRequest: Decodable, Sendable {
 }
 
 struct ActivityStatus: Encodable, Sendable {
-    let name: ActivityName
+    let name: Name
     let id: UUID
     let title: String
     let state: Activity.Phase
@@ -93,7 +93,7 @@ struct Activity: Sendable {
 
     let id: UUID
     let deviceID: UUID
-    let name: ActivityName
+    let name: Name
     let phase: Phase
     let title: String
     let layout: String
@@ -116,7 +116,7 @@ struct Activity: Sendable {
     init(_ row: Row) throws {
         id = try row.text("id", as: UUID.init(uuidString:))
         deviceID = try row.text("device_id", as: UUID.init(uuidString:))
-        name = try row.text("name", as: ActivityName.init(rawValue:))
+        name = try row.text("name", as: Name.init(rawValue:))
         phase = try row.text("phase", as: Phase.init(rawValue:))
         title = try row.string("title")
         layout = try row.string("layout")

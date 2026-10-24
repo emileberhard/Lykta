@@ -13,13 +13,13 @@ extension PushToken: SQLBindable {
 extension PushEnvironment: SQLBindable {}
 extension ObservedState: SQLBindable {}
 extension DeliveryState: SQLBindable {}
-extension ActivityName: SQLBindable {}
+extension Name: SQLBindable {}
 extension Activity.Phase: SQLBindable {}
 
 extension ActionRecord {
     init(_ row: Row) throws {
         seq = try row.integer("seq")
-        activity = try row.text("name", as: ActivityName.init(rawValue:))
+        activity = try row.text("name", as: Name.init(rawValue:))
         input = if let button = try row.optionalString("button") {
             .button(button)
         } else {
@@ -163,7 +163,7 @@ actor Store {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
 
-    func put(_ device: Device, name: ActivityName, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityStatus {
+    func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityStatus {
         try db.transaction {
             let current = try liveActivity(device, name: name)
             if let expected = request.ifRevision, current?.revision != expected {
@@ -216,7 +216,7 @@ actor Store {
         }
     }
 
-    func end(_ device: Device, name: ActivityName, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
+    func end(_ device: Device, name: Name, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
         try db.transaction {
             guard let current = try liveActivity(device, name: name) else {
                 throw APIError(.notFound, "No live activity is named \(name).")
@@ -226,7 +226,7 @@ actor Store {
         }
     }
 
-    func detail(_ device: Device, name: ActivityName) throws -> ActivityDetail {
+    func detail(_ device: Device, name: Name) throws -> ActivityDetail {
         guard let row = try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
                                      device.id, name).first else {
             throw APIError(.notFound, "No activity is named \(name).")
@@ -573,7 +573,7 @@ actor Store {
                       layoutVersion: try row.optionalText("layout_version", as: Version.init))
     }
 
-    private func liveActivity(_ device: Device, name: ActivityName) throws -> Activity? {
+    private func liveActivity(_ device: Device, name: Name) throws -> Activity? {
         try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? AND phase IN ('starting', 'live')", device.id, name)
             .first.map(Activity.init)
     }

@@ -76,7 +76,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `Store`, so a phone's problems can be debugged from the gateway alone. Events
   carry IDs, states, fingerprints and errors, never tokens or activity content.
 - Boundaries decode into validated types: enums for states, UUIDs for ids,
-  `PushToken`, `ActivityName` and `APIError.Code`. Invalid input fails at the
+  `PushToken`, `Name` and `APIError.Code`. Invalid input fails at the
   decoder with a JSON path; stored rows that fail to parse throw rather than
   default.
 - Mutable state has one owner: an actor, the main actor or a `Mutex` inside a
