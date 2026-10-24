@@ -143,8 +143,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   credentials on a 401.
 - The notification extension is `nonisolated` and prepares each notification
   on the thread iOS calls it on, because its content handler is not `Sendable`
-  and cannot move into a task. Every wait there, the media downloads and the
-  report, is bounded so the notification arrives within iOS's budget.
+  and cannot move into a task. Every wait there, the media downloads, the
+  donation and the report, is bounded so the notification arrives within
+  iOS's budget.
 - A tap intent may run right after the system launches the app in the
   background for it, so intents only forward the action through `ActionSender`,
   which `LyktaApp.init` registers; register new intent dependencies there too.

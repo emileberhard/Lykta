@@ -1,6 +1,7 @@
 import Foundation
 import Intents
 import LyktaCore
+import Synchronization
 import UserNotifications
 
 nonisolated final class NotificationService: UNNotificationServiceExtension {
@@ -24,11 +25,11 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
                 try? FileManager.default.removeItem(at: image)
             }
         }
-        do {
-            let communication = try Self.communication(content, sender: payload.sender, avatar: media.avatar)
+        let intent = Self.intent(content, sender: payload.sender, avatar: media.avatar)
+        if Self.donate(intent, within: 3), let communication = try? content.updating(from: intent) {
             Self.report(NotificationReport(style: .communication(media.avatar == nil ? .initials : .image), sound: sound), for: payload, to: host)
             contentHandler(communication)
-        } catch {
+        } else {
             Self.report(NotificationReport(style: .plain, sound: sound), for: payload, to: host)
             contentHandler(content)
         }
@@ -45,16 +46,20 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         return try? JSONDecoder().decode(NotificationPayload.self, from: data)
     }
 
-    private static func communication(_ content: UNNotificationContent, sender id: String, avatar: Data?) throws -> UNNotificationContent {
+    private static func intent(_ content: UNNotificationContent, sender id: String, avatar: Data?) -> INSendMessageIntent {
         let sender = INPerson(personHandle: INPersonHandle(value: id, type: .unknown), nameComponents: nil, displayName: content.title,
                               image: INImage(imageData: avatar ?? Initials.avatar(of: content.title, sender: id)), contactIdentifier: nil,
                               customIdentifier: id, isMe: false, suggestionType: .none)
-        let intent = INSendMessageIntent(recipients: nil, outgoingMessageType: .outgoingMessageText, content: content.body,
-                                         speakableGroupName: nil, conversationIdentifier: id, serviceName: nil, sender: sender, attachments: nil)
+        return INSendMessageIntent(recipients: nil, outgoingMessageType: .outgoingMessageText, content: content.body,
+                                   speakableGroupName: nil, conversationIdentifier: id, serviceName: nil, sender: sender, attachments: nil)
+    }
+
+    private static func donate(_ intent: INSendMessageIntent, within seconds: Double) -> Bool {
         let interaction = INInteraction(intent: intent, response: nil)
         interaction.direction = .incoming
-        interaction.donate(completion: nil)
-        return try content.updating(from: intent)
+        let donation = Donation()
+        interaction.donate { donation.finish(succeeded: $0 == nil) }
+        return donation.succeeded(within: seconds)
     }
 
     private static func report(_ report: NotificationReport, for payload: NotificationPayload, to host: String) {
@@ -69,5 +74,19 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         session.uploadTask(with: request, from: body) { _, _, _ in reported.signal() }.resume()
         _ = reported.wait(timeout: .now() + 3)
         session.invalidateAndCancel()
+    }
+}
+
+private nonisolated final class Donation: Sendable {
+    private let finished = DispatchSemaphore(value: 0)
+    private let outcome = Mutex(false)
+
+    func finish(succeeded: Bool) {
+        outcome.withLock { $0 = succeeded }
+        finished.signal()
+    }
+
+    func succeeded(within seconds: Double) -> Bool {
+        finished.wait(timeout: .now() + seconds) == .success && outcome.withLock { $0 }
     }
 }

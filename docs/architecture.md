@@ -134,17 +134,20 @@ the sender's initials on a circle colored by `sender.id`, because iOS shows
 the app icon rather than initials for a sender without an image. It
 builds an `INPerson` with an app-specific handle and no contact suggestion
 and an incoming `INSendMessageIntent` whose conversation is the sender ID,
-donates it and passes the result of `updating(from:)` on unchanged, so iOS
-shows the avatar and name with the app icon as a badge. The Communication
+donates it, waits for the donation to succeed as Apple's guide does, and
+passes the result of `updating(from:)` on unchanged, so iOS shows the avatar
+and name with the app icon as a badge. The Communication
 Notifications capability on the app is all this needs, with no extension
-entitlement and no SiriKit. If the intent fails, the extension delivers the
-plain alert with its sound and image; if the extension runs out of time, iOS
+entitlement and no SiriKit. If the donation or the intent fails, the
+extension delivers the plain alert with its sound and image; if the extension runs out of time, iOS
 delivers the original with the default sound. The push reads
 correctly without the extension. The app asks for permission when the user
 taps Copy Agent Setup, or Allow on the home screen for installs set up
 earlier, registers for remote notifications, and reports the authorization,
 the banner style and the token in its device report. A phone whose report
-lacks them predates notifications and gets `app_update_required`.
+lacks them runs an app without notifications, also after going back from a
+newer one, so the gateway forgets its settings and token and answers
+`app_update_required`.
 
 **A notification is one event for a day.** Its name follows the activity
 name rules and stays reserved until `expires`, a day after it was accepted;
@@ -205,10 +208,9 @@ keep the default sound.
 **The extension prepares synchronously.** iOS calls the extension with a
 content handler that is not `Sendable`, so Swift 6 cannot move it into a task
 without silencing isolation, which Lykta does not do. The extension waits for
-its downloads, draws, donates without waiting, as Apple's sample does, and
-waits for its report with semaphores on the thread iOS called it on; every
-wait is bounded, 20 seconds for media and 3 for the report, within the 30 iOS
-allows.
+its downloads, its donation and its report with semaphores on the thread
+iOS called it on; every wait is bounded, 20 seconds for media and 3 each for
+the donation and the report, within the 30 iOS allows.
 
 **One actor owns durable state.** `Store` owns the SQLite database; every
 mutation is one transaction. Delivery claims jobs from rows, so a restart
