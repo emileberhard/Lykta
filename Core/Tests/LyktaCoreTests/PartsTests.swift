@@ -46,6 +46,24 @@ struct PartsTests {
         """#))
     }
 
+    @Test func expandsPartsInsideAPartThatIsAnEach() throws {
+        let template = try json(#"""
+        {"parts":{"row":{"text":"{{item}}"},"rows":{"each":"items","as":"item","do":{"use":"row"}}},"lockScreen":{"vstack":[{"use":"rows"}]}}
+        """#)
+        #expect(try template.expandingParts() == json(#"""
+        {"lockScreen":{"vstack":[{"each":"items","as":"item","do":{"text":"{{item}}"}}]}}
+        """#))
+    }
+
+    @Test func expandsPartsInsideEachGeneratedModifiersAppendedAtAUse() throws {
+        let template = try json(#"""
+        {"parts":{"base":"Hi","cell":"{{row}}"},"lockScreen":{"use":"base","modifiers":[{"each":"rows","as":"row","do":{"overlay":{"use":"cell"}}}]}}
+        """#)
+        #expect(try template.expandingParts() == json(#"""
+        {"lockScreen":{"text":"Hi","modifiers":[{"each":"rows","as":"row","do":{"overlay":"{{row}}"}}]}}
+        """#))
+    }
+
     @Test(arguments: [
         (#"{"parts":[],"minimal":""}"#, "parts: expected an object of named nodes"),
         (#"{"parts":{"z":"Z","a":"A"},"minimal":{"use":"missing"}}"#, #"minimal: unknown part "missing"; defined parts: a, z"#),

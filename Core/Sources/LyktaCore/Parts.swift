@@ -71,7 +71,13 @@ struct Parts {
             value = part
             source = "parts.\(name)"
         }
-        var expanded = try copy(value, at: path, source: source, stack: stack)
+        var expanded: JSONValue
+        if case let .object(fields) = value, fields["each"] != nil, fields["do"] != nil {
+            if source != path { origins[path] = source }
+            expanded = try element(value, as: .node, at: path, source: source, stack: stack)
+        } else {
+            expanded = try copy(value, at: path, source: source, stack: stack)
+        }
         for use in uses.reversed() {
             var result: [String: JSONValue]
             switch expanded {
@@ -89,7 +95,7 @@ struct Parts {
                 let target = "\(path).modifiers[\(offset + index)]"
                 let authored = "\(use.source).modifiers[\(index)]"
                 origins[target] = authored
-                combined.append(try self.modifier(modifier, at: target, source: authored, stack: Array(stack.prefix(use.depth))))
+                combined.append(try element(modifier, as: .modifier, at: target, source: authored, stack: Array(stack.prefix(use.depth))))
             }
             result["modifiers"] = .array(combined)
             expanded = .object(result)

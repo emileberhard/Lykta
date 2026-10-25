@@ -134,8 +134,9 @@ or calendar app.
 Write bodies as compact single-line JSON, and repeat similar rows with `each`
 over a data list instead of copying nodes; both cut the tokens you write.
 Reuse identical nodes across presentations with root `parts` and `{"use":"name"}`. A
-PUT returns the activity's status plus `payloadBytes`, the size Lykta checks
-against Apple's 4096-byte limit, so the difference is the room left.
+PUT returns the activity's status plus `payloadBytes`, the push size Lykta checks
+against APNs' 4096-byte limit; iOS also caps the name plus content at 4096 bytes,
+which a long name can make the tighter limit.
 
 Updates normally send only `data`; the title and layout keep their last values.
 Timers and timer-driven progress run on the phone, so send them once instead of
