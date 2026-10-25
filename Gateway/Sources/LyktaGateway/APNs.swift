@@ -200,7 +200,9 @@ extension Activity {
         if event != .end { aps.staleDate = staleAfter.map { now + $0 } }
         aps.relevanceScore = relevance
         aps.dismissalDate = event == .end ? dismissAt : nil
-        return try JSONEncoder().encode(Payload(aps: aps))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        return try encoder.encode(Payload(aps: aps))
     }
 }
 

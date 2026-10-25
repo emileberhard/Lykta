@@ -31,7 +31,9 @@ public indirect enum JSONValue: Codable, Hashable, Sendable {
     }
 
     public var json: [UInt8] {
-        Array(try! JSONEncoder().encode(self))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return Array(try! encoder.encode(self))
     }
 }
 
