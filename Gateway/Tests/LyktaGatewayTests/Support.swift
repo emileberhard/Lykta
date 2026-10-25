@@ -87,6 +87,7 @@ final class FakePush: PushService {
         var failures: [String: APNsError] = [:]
         var alerts: [(payload: JSONValue, expiration: Int)] = []
         var startAlerts: [String] = []
+        var layouts: [String] = []
         var tokenEnvironments: Set<PushEnvironment> = [.development]
     }
 
@@ -97,6 +98,8 @@ final class FakePush: PushService {
     var alerts: [(payload: JSONValue, expiration: Int)] { state.withLock { $0.alerts } }
 
     var startAlerts: [String] { state.withLock { $0.startAlerts } }
+
+    var layouts: [String] { state.withLock { $0.layouts } }
 
     func fail(_ call: String, _ error: APNsError) {
         state.withLock { $0.failures[call] = error }
@@ -114,7 +117,7 @@ final class FakePush: PushService {
             }
             let aps: APS
         }
-        try Self.check(payload)
+        try check(payload)
         let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
         state.withLock { $0.startAlerts.append(alert?.body ?? "") }
         try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body", to: environment)
@@ -140,7 +143,7 @@ final class FakePush: PushService {
             }
             let aps: APS
         }
-        try Self.check(payload)
+        try check(payload)
         let aps = try? JSONDecoder().decode(Sent.self, from: payload).aps
         let dismissed = aps.flatMap { aps in aps.dismissal.map { $0 <= aps.timestamp } } == true
         try record(aps?.event ?? "malformed", detail: " \(priority)" + (dismissed ? " dismissed" : ""))
@@ -160,8 +163,11 @@ final class FakePush: PushService {
         []
     }
 
-    private static func check(_ payload: Data) throws(APNsError) {
+    private func check(_ payload: Data) throws(APNsError) {
         if payload.count > 4096 { throw .rejected(status: 413, reason: "PayloadTooLarge") }
+        if case let .string(layout)? = try? JSONDecoder().decode(JSONValue.self, from: payload).value(at: "aps.content-state.layout") {
+            state.withLock { $0.layouts.append(layout) }
+        }
     }
 
     private func record(_ call: String, detail: String = "", to environment: PushEnvironment? = nil) throws(APNsError) {

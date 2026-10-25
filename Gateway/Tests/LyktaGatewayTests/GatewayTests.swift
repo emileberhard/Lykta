@@ -43,6 +43,21 @@ struct GatewayTests {
         #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
+    @Test(arguments: [(Layout.version, true), (Version(0, 7, 1), false)])
+    func eachPhoneGetsTheLayoutFormItReads(version: Version, compact: Bool) async throws {
+        try await reportVersion("1.0", layoutVersion: version)
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        try await put("build", ["data": ["step": "Test"]])
+        try await deliver(at: now + 2)
+        #expect(push.layouts.map { $0.hasPrefix("~1") } == [compact, compact])
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        let pushes = events.events.filter { $0.name.hasPrefix("push.") }
+        #expect(pushes.map { $0.detail["compact"] } == [.bool(compact), .bool(compact)])
+        let fingerprints = events.events.filter { $0.name == "activity.put" }.map { $0.detail["fingerprint"] }
+        #expect(pushes.map { $0.detail["fingerprint"] } == fingerprints)
+    }
+
     @Test func oversizedLayoutsNameTheirCostliestPartsAndChangeNothing() async throws {
         try await put("budget", Self.start)
         let response = try await send("PUT", "/v1/activities/budget", body: ["layout": Self.layout(["vstack": .array(["logo", .string(Self.noise(7_000))])])])

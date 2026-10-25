@@ -1,0 +1,72 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["zstandard==0.23.0"]
+# ///
+import base64
+import hashlib
+import json
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import zstandard
+
+ROOT = Path(__file__).resolve().parent.parent
+SKILL = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill"
+SIZE = 32768
+FILLER = """
+import Foundation
+import LyktaCore
+
+for path in CommandLine.arguments.dropFirst() {
+    guard case let .object(body) = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: URL(fileURLWithPath: path))),
+          let layout = body["layout"] else { continue }
+    print(String(decoding: try layout.filled(with: body["data"] ?? .object([:])).json, as: UTF8.self))
+}
+"""
+
+
+def filled_examples():
+    examples = sorted(path for path in (SKILL / "examples").glob("*.json"))
+    with tempfile.TemporaryDirectory() as folder:
+        package = Path(folder)
+        (package / "Sources" / "fill").mkdir(parents=True)
+        (package / "Sources" / "fill" / "main.swift").write_text(FILLER)
+        (package / "Package.swift").write_text(f"""// swift-tools-version: 6.4
+import PackageDescription
+let package = Package(
+    name: "fill",
+    platforms: [.macOS(.v27)],
+    dependencies: [.package(path: "{ROOT / 'Core'}")],
+    targets: [.executableTarget(name: "fill", dependencies: [.product(name: "LyktaCore", package: "Core")])]
+)
+""")
+        output = subprocess.run(["swift", "run", "--quiet", "--package-path", folder, "fill", *map(str, examples)],
+                                check=True, stdout=subprocess.PIPE, text=True).stdout
+    return [line.encode() for line in output.splitlines() if line]
+
+
+def snippets():
+    text = (SKILL / "references" / "layout.md").read_text()
+    blocks = re.findall(r"```json\n(.*?)```", text, re.S)
+    return [json.dumps(json.loads(block), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() for block in blocks]
+
+
+def main():
+    samples = filled_examples() + snippets()
+    trained = zstandard.train_dictionary(SIZE + 4096, samples, k=512, d=8, threads=0, notifications=0).as_bytes()
+    dictionary = trained[-SIZE:]
+    encoded = base64.b64encode(dictionary).decode()
+    lines = "\n".join(f'        "{encoded[i:i + 120]}",' for i in range(0, len(encoded), 120))
+    (ROOT / "Core" / "Sources" / "LyktaCore" / "WireDictionary.swift").write_text(
+        "import Foundation\n\nenum WireDictionary {\n    static let v1 = Array(Data(base64Encoded: [\n" + lines + "\n    ].joined())!)\n}\n")
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+    json.dump({"bytes": len(dictionary), "sha256": hashlib.sha256(dictionary).hexdigest(), "samples": len(samples), "revision": revision},
+              sys.stdout)
+    print()
+
+
+main()

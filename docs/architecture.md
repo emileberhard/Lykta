@@ -117,7 +117,20 @@ environment its channel was created in, because channels never cross
 environments, and a start whose token moved gets a new channel.
 
 **The layout travels in the push.** `ContentState` carries the title and the
-raw-deflated layout JSON; the phone decodes it once. Apple allows 4 KB twice:
+layout JSON, canonical with sorted keys and unescaped slashes, raw-deflated;
+the phone decodes it once. A phone that reports layout version 0.8.0 or later
+gets the compact form: `~1`, then a JSON-safe base-92 text without quotes,
+slashes or backslashes, of the legacy fingerprint's eight bytes, big-endian,
+followed by the layout deflated with the preset dictionary
+`WireDictionary.v1`. The gateway stores the legacy form and encodes each push
+for its phone, so the fingerprint in events stays the same for both forms, and
+a compact layout that fails to inflate still reports `layoutReadable: false`
+under its fingerprint. `scripts/wire-dictionary` trained the 32 KiB dictionary
+with zstd's COVER algorithm on the canonical filled examples and layout.md's
+snippets at commit 53a182f; held out, it shrank the deflated layouts by 39%,
+and both usage designs' content by 24% together with the denser text.
+Released forms never change: a new dictionary or framing takes a new prefix,
+and phones keep reading the old ones. Apple allows 4 KB twice:
 for the APNs payload, and for the activity's attributes and content together.
 Before accepting a start, update or tap, the gateway measures the push for the
 activity's phase, the end push with the longest dismissal date, and the
@@ -127,6 +140,16 @@ response reports the larger push as `payloadBytes`. A refusal names the limit
 that failed and estimates, with at most 48 compressions, how many bytes the
 costliest JSON paths take, counting identical copies together; the estimates
 overlap, so the message says they do not add up.
+
+Release 0.8.0 still admits by the legacy form, so 0.7.1 can deliver all it
+accepted; 0.9.0 admits by each phone's form, with 0.8.0's compact delivery as
+its rollback. After a rollback from 0.9.0 to 0.8.0, activities larger than the
+legacy form allows keep delivering and can end, but updates and taps that keep
+them that large are refused until 0.9.0 runs again. Only TestFlight and
+development builds can downgrade a phone: pushes after its report use the
+older form and its version's features, nothing is resent, and an activity it
+can no longer read stays as it was until its next update or end, or until iOS
+removes it.
 
 **Taps travel through the gateway.** A button or toggle runs a
 `LiveActivityIntent` in the app, which posts the action to the gateway with the

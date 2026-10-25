@@ -14,6 +14,7 @@ struct ActivityJob: Sendable {
     let environment: PushEnvironment
     let pushToken: PushToken?
     let tokenMoved: Bool
+    let layoutVersion: Version?
 }
 
 struct NotificationJob: Sendable {
@@ -100,6 +101,7 @@ struct Delivery: Sendable {
         var detail: [String: JSONValue] = [
             "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
             "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
+            "compact": .bool(job.layoutVersion.map { $0 >= LyktaActivity.ContentState.compactSince } ?? false),
         ]
         let outcome: Outcome
         do {
@@ -124,14 +126,14 @@ struct Delivery: Sendable {
                     }
                 }
                 detail["channel"] = .string(channel)
-                let payload = try activity.payload(.start, now: now, channel: channel)
+                let payload = try activity.payload(.start, now: now, channel: channel, layoutVersion: job.layoutVersion)
                 detail["payloadBytes"] = .number(Double(payload.count))
                 detail["uniqueID"] = try await push.start(payload, deviceToken: token, environment: job.environment, id: id).map(JSONValue.string)
             case .update, .end:
                 guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
                 let priority = job.kind == .end || activity.alert != nil ? 10 : 5
-                let payload = try activity.payload(event, now: now)
+                let payload = try activity.payload(event, now: now, layoutVersion: job.layoutVersion)
                 detail["channel"] = .string(channel)
                 detail["priority"] = .number(Double(priority))
                 detail["alert"] = .bool(activity.alert != nil)

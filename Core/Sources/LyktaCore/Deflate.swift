@@ -5,22 +5,29 @@ import CZlib
 #endif
 
 enum Deflate {
-    static func compress(_ input: [UInt8]) throws(LayoutError) -> [UInt8] {
+    static func compress(_ input: [UInt8], dictionary: [UInt8] = []) throws(LayoutError) -> [UInt8] {
         var stream = z_stream()
         let initialized = deflateInit2_(&stream, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY,
                                         ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
         guard initialized == Z_OK else { throw LayoutError("compression failed with zlib status \(initialized)") }
         defer { deflateEnd(&stream) }
+        if !dictionary.isEmpty {
+            let status = dictionary.withUnsafeBufferPointer { deflateSetDictionary(&stream, $0.baseAddress, uInt($0.count)) }
+            guard status == Z_OK else { throw LayoutError("dictionary failed with zlib status \(status)") }
+        }
         var output = [UInt8](repeating: 0, count: Int(deflateBound(&stream, uLong(input.count))))
         let status = run(&stream, input: input, output: &output) { deflate(&$0, Z_FINISH) }
         guard status == Z_STREAM_END else { throw LayoutError("compression failed with zlib status \(status)") }
         return Array(output.prefix(Int(stream.total_out)))
     }
 
-    static func decompress(_ input: [UInt8], limit: Int) -> [UInt8]? {
+    static func decompress(_ input: [UInt8], limit: Int, dictionary: [UInt8] = []) -> [UInt8]? {
         var stream = z_stream()
         guard inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return nil }
         defer { inflateEnd(&stream) }
+        if !dictionary.isEmpty {
+            guard dictionary.withUnsafeBufferPointer({ inflateSetDictionary(&stream, $0.baseAddress, uInt($0.count)) }) == Z_OK else { return nil }
+        }
         var output = [UInt8](repeating: 0, count: limit + 1)
         let status = run(&stream, input: input, output: &output) { inflate(&$0, Z_FINISH) }
         guard status == Z_STREAM_END, stream.avail_in == 0, Int(stream.total_out) <= limit else { return nil }

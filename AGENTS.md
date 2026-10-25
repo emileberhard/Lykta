@@ -47,6 +47,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   the end push, as the previous release would encode them, so every accepted
   activity can still end after a rollback. `payloadBytes` reports that
   measurement only in PUT responses; reads never compress.
+- Phones reporting layout version 0.8.0 or later get compact content, framed
+  with the legacy fingerprint and deflated with `WireDictionary.v1`; the
+  gateway stores the legacy form. Released forms and dictionaries never change:
+  a new one takes a new prefix, and phones keep reading every released form.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
 - The app bundles the skill's `examples` folder, and its gallery draws and

@@ -640,7 +640,7 @@ actor Store {
             free -= jobs.count
             guard free > 0 else { return jobs }
             let rows = try db.query("""
-                SELECT a.*, d.environment, d.push_token, d.moved_push_token_hash FROM activities a JOIN devices d ON d.id = a.device_id
+                SELECT a.*, d.environment, d.push_token, d.moved_push_token_hash, d.layout_version FROM activities a JOIN devices d ON d.id = a.device_id
                 WHERE a.in_flight = 0 AND a.retry_at <= ?1 AND (
                   (a.phase = 'starting' AND d.push_token IS NOT NULL)
                   OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1)
@@ -663,7 +663,8 @@ actor Store {
                 let moved = token.map { Self.hash($0.description) == movedHash } ?? false
                 return Job.activity(ActivityJob(kind: kind, activity: activity,
                                                 environment: kind == .start ? (moved ? device.other : device) : activity.channelEnvironment ?? device,
-                                                pushToken: token, tokenMoved: moved))
+                                                pushToken: token, tokenMoved: moved,
+                                                layoutVersion: try row.optionalText("layout_version", as: Version.init)))
             }
             return jobs
         }

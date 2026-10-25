@@ -57,10 +57,14 @@ public struct EventBatch: Codable, Sendable {
 }
 
 public func fingerprint(_ bytes: some Sequence<UInt8>) -> String {
+    String(fnv1a(bytes), radix: 16)
+}
+
+func fnv1a(_ bytes: some Sequence<UInt8>) -> UInt64 {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for byte in bytes {
         hash ^= UInt64(byte)
         hash = hash &* 0x0000_0100_0000_01b3
     }
-    return String(hash, radix: 16)
+    return hash
 }

@@ -185,24 +185,24 @@ private final class Signer: Sendable {
 }
 
 extension Activity {
-    func payload(_ event: Payload.Event, now: Int, channel: String? = nil) throws -> Data {
+    func payload(_ event: Payload.Event, now: Int, channel: String? = nil, layoutVersion: Version?) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
-        return try encoder.encode(envelope(event, now: now, channel: channel))
+        return try encoder.encode(envelope(event, now: now, channel: channel, layoutVersion: layoutVersion))
     }
 
     func admissionBytes(now: Int) throws -> (push: Int, activityKit: Int) {
         let encoder = JSONEncoder()
-        let current = try envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64))
-        var end = try envelope(.end, now: now)
+        let current = try envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64), layoutVersion: nil)
+        var end = try envelope(.end, now: now, layoutVersion: nil)
         end.aps.dismissalDate = now + 4 * 3600
         let stored = try encoder.encode(LyktaActivity(id: id, name: name.rawValue)).count + encoder.encode(current.aps.contentState).count
         return (max(try encoder.encode(current).count, try encoder.encode(end).count), stored)
     }
 
-    private func envelope(_ event: Payload.Event, now: Int, channel: String? = nil) throws -> Payload {
-        var aps = Payload.APS(timestamp: now, event: event,
-                              contentState: try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)))
+    private func envelope(_ event: Payload.Event, now: Int, channel: String? = nil, layoutVersion: Version?) throws -> Payload {
+        let state = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8))
+        var aps = Payload.APS(timestamp: now, event: event, contentState: try state.encoded(for: layoutVersion))
         if event == .start {
             aps.attributesType = "LyktaActivity"
             aps.attributes = LyktaActivity(id: id, name: name.rawValue)
