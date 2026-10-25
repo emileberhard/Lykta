@@ -9,15 +9,16 @@ enum LayoutCost {
 
     private static let probes = 48
 
-    static func describe(_ layout: JSONValue) throws -> String {
-        let baseline = try layout.compressedByteCount
+    static func describe(_ layout: JSONValue, for layoutVersion: Version?) throws -> String {
+        let size = { (layout: JSONValue) throws in try LyktaActivity.ContentState.compressedByteCount(of: layout.json, for: layoutVersion) }
+        let baseline = try size(layout)
         let groups = Dictionary(grouping: parts(layout, path: "layout"), by: \.value).values.sorted { (left: [Part], right: [Part]) -> Bool in
             let a = left[0], b = right[0]
             return a.bytes == b.bytes ? a.path < b.path : a.bytes > b.bytes
         }
         var costs: [(path: String, name: String, saving: Int)] = []
         for group in groups.prefix(probes) {
-            let saving = baseline - (try removing(group[0].value, from: layout)?.compressedByteCount ?? 0)
+            let saving = baseline - (try removing(group[0].value, from: layout).map(size) ?? 0)
             let name = String(group[0].path.prefix(160)) + (group.count > 1 ? " with \(group.count - 1) identical copies" : "")
             if saving > 0 { costs.append((group[0].path, name, saving)) }
         }

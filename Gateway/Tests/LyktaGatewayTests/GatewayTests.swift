@@ -43,6 +43,20 @@ struct GatewayTests {
         #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
+    @Test func phonesThatReadTheCompactFormFitMoreContent() async throws {
+        var longest: [Int] = []
+        for (name, version) in [("legacy", Version(0, 7, 1)), ("compact", Layout.version)] {
+            try await reportVersion("1.0", layoutVersion: version)
+            try await put(name, ["title": "Build", "layout": Self.layout("{{text}}"), "data": ["text": ""]])
+            var length = 3_000
+            while try await send("PUT", "/v1/activities/\(name)", body: ["data": ["text": .string(Self.noise(length + 20))]]).status == 200 {
+                length += 20
+            }
+            longest.append(length)
+        }
+        #expect(longest[1] > longest[0] + 200, "\(longest)")
+    }
+
     @Test(arguments: [(Layout.version, true), (Version(0, 7, 1), false)])
     func eachPhoneGetsTheLayoutFormItReads(version: Version, compact: Bool) async throws {
         try await reportVersion("1.0", layoutVersion: version)

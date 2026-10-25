@@ -235,7 +235,7 @@ actor Store {
                     """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
             }
             let activity = try self.activity(id)
-            let size = try Self.measure(activity, now: now)
+            let size = try Self.measure(activity, on: device, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
                 "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
@@ -503,7 +503,7 @@ actor Store {
                 }
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(changed), Self.encoded(state), activity.id)
-                _ = try Self.measure(self.activity(activity.id), now: now)
+                _ = try Self.measure(self.activity(activity.id), on: device, now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -836,8 +836,8 @@ actor Store {
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
-    private static func measure(_ activity: Activity, now: Int) throws -> Int {
-        let (size, stored) = try activity.admissionBytes(now: now)
+    private static func measure(_ activity: Activity, on device: Device, now: Int) throws -> Int {
+        let (size, stored) = try activity.admissionBytes(now: now, layoutVersion: device.layoutVersion)
         let limit = maximumPayloadBytes
         let exceeded = if size > limit {
             "The push payload would be \(size) bytes; APNs allows \(limit)."
@@ -849,7 +849,7 @@ actor Store {
         guard let exceeded else { return size }
         let layout = try JSONDecoder().decode(JSONValue.self, from: Data(activity.layout.utf8))
         let data = try JSONDecoder().decode(JSONValue.self, from: Data(activity.data.utf8))
-        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data))))
+        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data), for: device.layoutVersion)))
     }
 
     private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {

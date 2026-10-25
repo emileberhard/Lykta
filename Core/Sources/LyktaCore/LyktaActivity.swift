@@ -50,6 +50,10 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
             layoutVersion.map { $0 >= compactSince } ?? false
         }
 
+        public static func compressedByteCount(of layout: [UInt8], for layoutVersion: Version?) throws(LayoutError) -> Int {
+            try Deflate.compress(layout, dictionary: isCompact(for: layoutVersion) ? WireDictionary.v1 : []).count
+        }
+
         public func encoded(for layoutVersion: Version?) throws(LayoutError) -> Self {
             guard form == .legacy, Self.isCompact(for: layoutVersion) else { return self }
             guard let json = Deflate.decompress(Array(packed), limit: Layout.maximumBytes) else {

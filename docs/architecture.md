@@ -149,20 +149,21 @@ and phones keep reading the old ones. Apple allows 4 KB twice:
 for the APNs payload, and for the activity's attributes and content together.
 Before accepting a start, update or tap, the gateway measures the push for the
 activity's phase, the end push with the longest dismissal date, and the
-attributes with the content, encoded as the previous release would send them,
-so a rollback can still deliver and end everything it accepted. The PUT
-response reports the larger push as `payloadBytes`. A refusal names the limit
-that failed and estimates, with at most 48 compressions, how many bytes the
-costliest JSON paths take, counting identical copies together. Containers count
+attributes with the content, in the form the phone receives and encoded as the
+previous release would send them, so a rollback can still deliver and end
+everything it accepted. The PUT response reports the larger push as
+`payloadBytes`. A refusal names the limit that failed and estimates, with at
+most 48 compressions in the phone's form, how many bytes the costliest JSON
+paths take, counting identical copies together. Containers count
 as well as long values, and a container whose cost one path inside it explains
 gives way to that path. The estimates overlap, so the message says they do not
 add up.
 
-Release 0.8.0 still admits by the legacy form, so 0.7.1 can deliver all it
-accepted; 0.9.0 admits by each phone's form, with 0.8.0's compact delivery as
-its rollback. After a rollback from 0.9.0 to 0.8.0, activities larger than the
-legacy form allows keep delivering and can end, but updates and taps that keep
-them that large are refused until 0.9.0 runs again. Only TestFlight and
+Release 0.8.0 admitted by the legacy form, so 0.7.1 could deliver all it
+accepted; from 0.9.0 admission measures each phone's form. After a rollback
+to 0.8.0, activities larger than the legacy form allows keep delivering and can
+end, but updates and taps that keep them that large are refused until 0.9.0 or
+later runs again. Only TestFlight and
 development builds can downgrade a phone: pushes after its report use the
 older form and its version's features, nothing is resent, and an activity it
 can no longer read stays as it was until its next update or end, or until iOS
