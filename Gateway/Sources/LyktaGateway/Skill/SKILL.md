@@ -116,8 +116,9 @@ activity look generated:
 Before designing your first layout, read the
 [layout reference](references/layout.md) and every [example](#examples) at
 once, with these commands, or the same files directly when this skill is on
-disk. Run each as its own tool call, in parallel where your harness allows:
-each prints less than a harness cuts off, but several in one call print more.
+disk. Each prints about as much as one tool result shows, so run them as
+separate calls, in parallel where your harness allows; a script that runs
+several in one call gets cut off.
 
 ```sh
 lykta docs references/layout.md
