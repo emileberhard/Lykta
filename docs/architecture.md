@@ -153,8 +153,10 @@ attributes with the content, encoded as the previous release would send them,
 so a rollback can still deliver and end everything it accepted. The PUT
 response reports the larger push as `payloadBytes`. A refusal names the limit
 that failed and estimates, with at most 48 compressions, how many bytes the
-costliest JSON paths take, counting identical copies together; the estimates
-overlap, so the message says they do not add up.
+costliest JSON paths take, counting identical copies together. Containers count
+as well as long values, and a container whose cost one path inside it explains
+gives way to that path. The estimates overlap, so the message says they do not
+add up.
 
 Release 0.8.0 still admits by the legacy form, so 0.7.1 can deliver all it
 accepted; 0.9.0 admits by each phone's form, with 0.8.0's compact delivery as
