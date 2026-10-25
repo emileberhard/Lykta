@@ -15,7 +15,7 @@ from pathlib import Path
 API = "https://api.appstoreconnect.apple.com/v1/"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
 RELEASED = {"READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"}
-IN_BETA = {"WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "IN_BETA_TESTING"}
+IN_BETA = {"WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "READY_FOR_BETA_TESTING", "IN_BETA_TESTING"}
 UNPLACED_STATES = "AWAITING_UPLOAD,UPLOAD_COMPLETE,FAILED,COMPLETE,PREPARE_FOR_SUBMISSION"
 SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"}
 DEADLINE = time.monotonic() + 40 * 60
@@ -155,7 +155,7 @@ def submit_beta(app, version, build, notes):
     latest = api("GET", f"apps/{app}/appStoreVersions", limit=1, **{"filter[platform]": "IOS"})[0]["id"]
     review_notes = api("GET", f"appStoreVersions/{latest}/appStoreReviewDetail")["attributes"]["notes"]
     api("PATCH", f"betaAppReviewDetails/{app}", {"type": "betaAppReviewDetails", "id": app, "attributes": {"notes": review_notes}})
-    groups = api("GET", "betaGroups", limit=50, **{"filter[app]": app, "filter[isInternalGroup]": "false"})
+    groups = api("GET", "betaGroups", limit=200, **{"filter[app]": app, "filter[isInternalGroup]": "false"})
     if groups:
         api("POST", f"builds/{build}/relationships/betaGroups", [{"type": "betaGroups", "id": g["id"]} for g in groups])
     state = api("GET", f"builds/{build}/buildBetaDetail")["attributes"]["externalBuildState"]
