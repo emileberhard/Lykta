@@ -298,13 +298,21 @@ notices: sh and curl start in about 8 ms, against hundreds of milliseconds of
 network and APNs and seconds of model time per call. The scripts stay readable
 before they run and come from the same commit as the gateway that serves them.
 Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
-set), the token readable only by the user, and `LYKTA_URL` and `LYKTA_TOKEN`
+set), the token readable only by the user through mode 600, or on Windows an
+access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
 take precedence. Nothing is cached: an agent reads the docs once per task, and
 a cache would only save input. curl takes the token as an argument, so other
 users of the same computer could see it while a request runs, as with the
 curl commands the skill showed before; PowerShell keeps it in the process.
 Only a refused connection is retried, for up to eight seconds while a gateway
-restarts, because only it proves the request was never sent.
+restarts, because only it proves the request was never sent; after any other
+failure of a PUT, `lykta` tells the agent to read the result before sending
+again. On Windows, setup installs `lykta.cmd` in `~\.local\bin`, which runs the
+script with the execution policy bypassed, because Windows blocks scripts by
+default. cmd parses its arguments again, so in PowerShell an argument holding
+`&` needs double quotes inside single quotes, as tested on Windows PowerShell
+5.1; calling `powershell -File` directly would avoid cmd but cost some twenty
+output tokens on every call.
 
 **A PUT can wait for Apple.** `wait` on `PUT /v1/activities/{name}` and
 `PUT /v1/notifications/{name}`, 0 to 25 seconds like `GET /v1/actions`, holds

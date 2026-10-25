@@ -30,11 +30,13 @@ says how to run it. Otherwise run `scripts/lykta` from this folder, which uses
 
 It prints the gateway's JSON. When the gateway refuses a request, `lykta`
 exits with 1 and prints the error, whose message names what to fix; 2 means a
-usage or setup mistake, and 3 that the gateway was unreachable or failed,
-usually because it is restarting, so retry after a few seconds. Send bodies in
-a quoted heredoc, so the JSON needs no escaping, and quote paths that hold `?`
-or `&`. In PowerShell, pass the body as a UTF-8 file, because Windows
-PowerShell pipes only ASCII to other programs. Without a shell, send the same
+usage or setup mistake, and 3 that the gateway was unreachable or failed, with
+a message that says whether to retry or, because a PUT may have been applied,
+to read the result first. Send bodies in a quoted heredoc, so the JSON needs no
+escaping, and quote paths that hold `?` or `&`. In PowerShell, pass the body as
+a UTF-8 file, because Windows PowerShell pipes only ASCII to other programs,
+and quote an argument that holds `&` twice, as `'"actions?after=40&wait=25"'`,
+because `lykta` passes it on through cmd. Without a shell, send the same
 requests over HTTP with the token as `Authorization: Bearer <token>`, `wait=10`
 in each PUT's query, and media as the body of `POST /v1/media`.
 
@@ -113,8 +115,9 @@ activity look generated:
 
 Before designing your first layout, read the
 [layout reference](references/layout.md) and every [example](#examples) at
-once, with these commands in one batch of parallel calls, or the same files
-directly when this skill is on disk. Each prints less than harnesses cut off:
+once, with these commands, or the same files directly when this skill is on
+disk. Run each as its own tool call, in parallel where your harness allows:
+each prints less than a harness cuts off, but several in one call print more.
 
 ```sh
 lykta docs references/layout.md

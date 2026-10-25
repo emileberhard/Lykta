@@ -54,6 +54,6 @@ for shell in sh pwsh; do
 	printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring", "sound": "%s"}' "$sound" |
 		expect '"state":"sent"' 0 cli put "notifications/ring-$shell"
 	expect '"state":"ending"' 0 cli delete 'activities/printer?dismissAfter=0'
-	(export LYKTA_URL=http://127.0.0.1:1 LYKTA_TOKEN=unused; expect 'could not reach' 3 cli get activities)
+	(export LYKTA_URL=http://127.0.0.1:1 LYKTA_TOKEN=unused; expect 'could not connect' 3 cli get activities)
 	printf '%s: lykta works against the simulated gateway\n' "$shell"
 done

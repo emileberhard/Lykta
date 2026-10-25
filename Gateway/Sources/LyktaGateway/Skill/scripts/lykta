@@ -58,17 +58,19 @@ call() {
 		tries=$((tries + 1))
 		sleep 2
 	done
+	again='retry in a few seconds'
+	[ "$method" != PUT ] || again='it may have been applied, so read it with lykta get before sending it again'
 	case $code in
 	0) ;;
-	28) fail "$url did not answer within 90 seconds; read the result with lykta get before sending again" 3 ;;
-	*) fail "could not reach $url (curl exit $code); it may be restarting, so retry in a few seconds" 3 ;;
+	7) fail "could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" 3 ;;
+	*) fail "$method $target got no answer from $url (curl exit $code); $again" 3 ;;
 	esac
 	status=${out#"${out%???}"}
 	response=${out%???}
 	case $status in
 	2??) ;;
 	4??) printf 'lykta: %s %s was refused with HTTP %s:\n%s\n' "$method" "$target" "$status" "$response" >&2; exit 1 ;;
-	*) printf 'lykta: %s %s failed with HTTP %s:\n%s\n' "$method" "$target" "$status" "$response" >&2; exit 3 ;;
+	*) printf 'lykta: %s %s failed with HTTP %s; %s:\n%s\n' "$method" "$target" "$status" "$again" "$response" >&2; exit 3 ;;
 	esac
 }
 

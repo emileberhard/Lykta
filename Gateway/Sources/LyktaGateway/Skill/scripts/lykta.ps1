@@ -45,7 +45,9 @@ function Import-Setup {
 
 Add-Type -AssemblyName System.Net.Http
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-$client = [System.Net.Http.HttpClient]::new()
+$handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(90)
 
 function Test-Refused($Exception) {
@@ -57,6 +59,7 @@ function Test-Refused($Exception) {
 }
 
 function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
+    $again = if ($Method -eq 'PUT') { 'it may have been applied, so read it with lykta get before sending it again' } else { 'retry in a few seconds' }
     for ($attempt = 1; ; $attempt++) {
         $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($Method), "$url$Target")
         $request.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
@@ -71,20 +74,18 @@ function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content)
                 Start-Sleep -Seconds 2
                 continue
             }
-            if ($cause.GetBaseException() -is [System.TimeoutException] -or $cause.GetBaseException() -is [System.Threading.Tasks.TaskCanceledException]) {
-                Fail "$url did not answer within 90 seconds; read the result with lykta get before sending again" 3
-            }
-            Fail "could not reach ${url}: $($cause.GetBaseException().Message); it may be restarting, so retry in a few seconds" 3
+            if (Test-Refused $cause) { Fail "could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" 3 }
+            Fail "$Method $Target got no answer from ${url}: $($cause.GetBaseException().Message); $again" 3
         }
     }
     $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
     $status = [int]$response.StatusCode
     if ($status -ge 200 -and $status -lt 300) { return $text }
-    if ($status -lt 500) {
+    if ($status -ge 400 -and $status -lt 500) {
         [Console]::Error.WriteLine("lykta: $Method $Target was refused with HTTP ${status}:`n$text")
         exit 1
     }
-    [Console]::Error.WriteLine("lykta: $Method $Target failed with HTTP ${status}:`n$text")
+    [Console]::Error.WriteLine("lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text")
     exit 3
 }
 
@@ -92,10 +93,6 @@ function Get-ApiPath([string]$Path) {
     $trimmed = $Path.TrimStart('/')
     if ($trimmed.StartsWith('v1/')) { $trimmed = $trimmed.Substring(3) }
     "/v1/$trimmed"
-}
-
-function Write-Text([string]$Text) {
-    Write-Output $Text
 }
 
 function Invoke-Setup([string[]]$Arguments) {
@@ -106,10 +103,21 @@ function Invoke-Setup([string[]]$Arguments) {
     $null = Invoke-Gateway 'GET' '/v1/activities'
     try {
         $null = New-Item -ItemType Directory -Force -Path $config
+        if ($onWindows) {
+            $owner = [Security.AccessControl.DirectorySecurity]::new()
+            $owner.SetAccessRuleProtection($true, $false)
+            $owner.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.WindowsIdentity]::GetCurrent().User,
+                'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow'))
+            Set-Acl -LiteralPath $config -AclObject $owner
+        } else {
+            [IO.File]::SetUnixFileMode($config, 'UserRead, UserWrite, UserExecute')
+        }
         $utf8 = [Text.UTF8Encoding]::new($false)
+        $saved = Join-Path $config 'token'
+        if (Test-Path -LiteralPath $saved) { Remove-Item -LiteralPath $saved -Force }
         [IO.File]::WriteAllText((Join-Path $config 'url'), "$url`n", $utf8)
-        [IO.File]::WriteAllText((Join-Path $config 'token'), "$token`n", $utf8)
-        if (-not $onWindows) { chmod 700 $config; chmod 600 (Join-Path $config 'token') }
+        [IO.File]::WriteAllText($saved, "$token`n", $utf8)
+        if (-not $onWindows) { [IO.File]::SetUnixFileMode($saved, 'UserRead, UserWrite') }
     } catch {
         Fail "could not save the setup in ${config}: $($_.Exception.Message)" 2
     }
@@ -130,15 +138,15 @@ function Invoke-Setup([string[]]$Arguments) {
     $found = Get-Command lykta -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($found -and $found.Source -eq $run) { $run = 'lykta' }
     elseif ($run.StartsWith($HOME)) { $run = '~' + $run.Substring($HOME.Length) }
-    Write-Text "Lykta is set up for $url. Run it as $run.`n"
-    Write-Text (Invoke-Gateway 'GET' '/skill/SKILL.md')
+    Write-Output "Lykta is set up for $url. Run it as $run.`n"
+    Write-Output (Invoke-Gateway 'GET' '/skill/SKILL.md')
 }
 
 function Invoke-Docs([string[]]$Names) {
     if ($Names.Count -eq 0) { Fail 'usage: lykta docs FILE..., such as lykta docs references/layout.md' 2 }
     foreach ($name in $Names) {
-        if ($Names.Count -gt 1) { Write-Text "==> $name <==" }
-        Write-Text (Invoke-Gateway 'GET' "/skill/$($name.TrimStart('/'))")
+        if ($Names.Count -gt 1) { Write-Output "==> $name <==" }
+        Write-Output (Invoke-Gateway 'GET' "/skill/$($name.TrimStart('/'))")
     }
 }
 
@@ -157,7 +165,7 @@ function Invoke-Put([string[]]$Arguments, $Piped) {
     }
     $path = Get-ApiPath $Arguments[0]
     $path += if ($path.Contains('?')) { '&wait=10' } else { '?wait=10' }
-    Write-Text (Invoke-Gateway 'PUT' $path { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') })
+    Write-Output (Invoke-Gateway 'PUT' $path { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') })
 }
 
 function Invoke-Media([string[]]$Arguments) {
@@ -167,7 +175,7 @@ function Invoke-Media([string[]]$Arguments) {
     $answer = Invoke-Gateway 'POST' '/v1/media' { [System.Net.Http.ByteArrayContent]::new($bytes) }
     $id = ($answer | ConvertFrom-Json).id
     if (-not $id) { Fail "the gateway answered without a media id: $answer" 3 }
-    Write-Text $id
+    Write-Output $id
 }
 
 $piped = @($input)
@@ -177,10 +185,10 @@ switch ($verb) {
     'setup' { Invoke-Setup $rest }
     'docs' { Import-Setup; Invoke-Docs $rest }
     'put' { Import-Setup; Invoke-Put $rest $piped }
-    'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Text (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
-    'delete' { if ($rest.Count -ne 1) { Fail 'usage: lykta delete PATH' 2 }; Import-Setup; Write-Text (Invoke-Gateway 'DELETE' (Get-ApiPath $rest[0])) }
+    'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
+    'delete' { if ($rest.Count -ne 1) { Fail 'usage: lykta delete PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'DELETE' (Get-ApiPath $rest[0])) }
     'media' { Import-Setup; Invoke-Media $rest }
-    { $_ -in 'help', '-h', '--help' } { Write-Text $usage }
+    { $_ -in 'help', '-h', '--help' } { Write-Output $usage }
     '' { [Console]::Error.WriteLine($usage); exit 2 }
     default { [Console]::Error.WriteLine($usage); Fail "unknown command $verb" 2 }
 }
