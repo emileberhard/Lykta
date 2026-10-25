@@ -1,6 +1,35 @@
 {
   "title": "Pull requests waiting on you",
   "layout": {
+    "parts": {
+      "pullRequest": {
+        "hstack": [
+          {
+            "symbol": "{{pr.symbol}}",
+            "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
+          },
+          {
+            "text": "{{pr.repo}}#{{pr.number}}",
+            "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}, {"foreground": "#8B949E"}]
+          },
+          {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
+          {"spacer": 4},
+          {
+            "text": "{{pr.status}}",
+            "modifiers": [
+              {"font": "caption2"},
+              {"fontWeight": "semibold"},
+              {"foreground": "{{pr.color}}"},
+              {"padding": {"horizontal": 7, "vertical": 3}},
+              {"background": "{{pr.tint}}"},
+              {"clip": "capsule"}
+            ]
+          },
+          {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
+        ],
+        "spacing": 7
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -29,33 +58,7 @@
               "as": "pr",
               "do": {
                 "link": "{{pr.url}}",
-                "label": {
-                  "hstack": [
-                    {
-                      "symbol": "{{pr.symbol}}",
-                      "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
-                    },
-                    {
-                      "text": "{{pr.repo}}#{{pr.number}}",
-                      "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}, {"foreground": "#8B949E"}]
-                    },
-                    {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
-                    {"spacer": 4},
-                    {
-                      "text": "{{pr.status}}",
-                      "modifiers": [
-                        {"font": "caption2"},
-                        {"fontWeight": "semibold"},
-                        {"foreground": "{{pr.color}}"},
-                        {"padding": {"horizontal": 7, "vertical": 3}},
-                        {"background": "{{pr.tint}}"},
-                        {"clip": "capsule"}
-                      ]
-                    },
-                    {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
-                  ],
-                  "spacing": 7
-                },
+                "label": {"use": "pullRequest"},
                 "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}, {"id": "{{pr.number}}"}]
               }
             }
@@ -93,33 +96,7 @@
             "as": "pr",
             "do": {
               "link": "{{pr.url}}",
-              "label": {
-                "hstack": [
-                  {
-                    "symbol": "{{pr.symbol}}",
-                    "modifiers": [{"font": "footnote"}, {"foreground": "{{pr.color}}"}, {"frame": {"width": 16}}]
-                  },
-                  {
-                    "text": "{{pr.repo}}#{{pr.number}}",
-                    "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}, {"foreground": "#8B949E"}]
-                  },
-                  {"text": "{{pr.title}}", "modifiers": [{"font": "footnote"}, {"lineLimit": 1}]},
-                  {"spacer": 4},
-                  {
-                    "text": "{{pr.status}}",
-                    "modifiers": [
-                      {"font": "caption2"},
-                      {"fontWeight": "semibold"},
-                      {"foreground": "{{pr.color}}"},
-                      {"padding": {"horizontal": 7, "vertical": 3}},
-                      {"background": "{{pr.tint}}"},
-                      {"clip": "capsule"}
-                    ]
-                  },
-                  {"symbol": "chevron.right", "modifiers": [{"font": "caption2"}, {"foreground": "#6E7681"}]}
-                ],
-                "spacing": 7
-              },
+              "label": {"use": "pullRequest"},
               "modifiers": [{"transition": [{"move": "trailing"}, "opacity"]}, {"id": "{{pr.number}}"}]
             }
           }

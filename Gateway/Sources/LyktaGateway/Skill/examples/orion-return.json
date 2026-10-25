@@ -1,6 +1,11 @@
 {
   "title": "Orion is coming home",
   "layout": {
+    "parts": {
+      "horizon": {
+        "svg": "<svg viewBox='0 0 340 64'><defs><radialGradient id='earth' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#A8E4FF'/><stop offset='.5' stop-color='#2F7BEA'/><stop offset='1' stop-color='#0A275E'/></radialGradient><radialGradient id='moon' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#F4F4F4'/><stop offset='1' stop-color='#7D838C'/></radialGradient><filter id='glow'><feGaussianBlur stdDeviation='2.5'/></filter></defs><ellipse cx='42' cy='34' rx='24' ry='8' fill='none' stroke='#9CC3FF' stroke-opacity='.22' stroke-width='1'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-opacity='.4' stroke-width='1.2' stroke-dasharray='2 3'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-width='1.8' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><circle cx='26' cy='34' r='13' fill='#2F7BEA' opacity='.35' filter='url(#glow)'/><circle cx='26' cy='34' r='10' fill='url(#earth)'/><circle cx='300' cy='32' r='5.5' fill='url(#moon)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-opacity='.55' stroke-width='11' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}' filter='url(#glow)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>"
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -15,9 +20,7 @@
           "spacing": 6,
           "modifiers": [{"foreground": "#9CC3FF"}]
         },
-        {
-          "svg": "<svg viewBox='0 0 340 64'><defs><radialGradient id='earth' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#A8E4FF'/><stop offset='.5' stop-color='#2F7BEA'/><stop offset='1' stop-color='#0A275E'/></radialGradient><radialGradient id='moon' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#F4F4F4'/><stop offset='1' stop-color='#7D838C'/></radialGradient><filter id='glow'><feGaussianBlur stdDeviation='2.5'/></filter></defs><ellipse cx='42' cy='34' rx='24' ry='8' fill='none' stroke='#9CC3FF' stroke-opacity='.22' stroke-width='1'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-opacity='.4' stroke-width='1.2' stroke-dasharray='2 3'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-width='1.8' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><circle cx='26' cy='34' r='13' fill='#2F7BEA' opacity='.35' filter='url(#glow)'/><circle cx='26' cy='34' r='10' fill='url(#earth)'/><circle cx='300' cy='32' r='5.5' fill='url(#moon)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-opacity='.55' stroke-width='11' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}' filter='url(#glow)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>"
-        },
+        {"use": "horizon"},
         {
           "hstack": [
             {
@@ -105,9 +108,7 @@
       },
       "bottom": {
         "vstack": [
-          {
-            "svg": "<svg viewBox='0 0 340 64'><defs><radialGradient id='earth' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#A8E4FF'/><stop offset='.5' stop-color='#2F7BEA'/><stop offset='1' stop-color='#0A275E'/></radialGradient><radialGradient id='moon' cx='.35' cy='.35' r='.75'><stop offset='0' stop-color='#F4F4F4'/><stop offset='1' stop-color='#7D838C'/></radialGradient><filter id='glow'><feGaussianBlur stdDeviation='2.5'/></filter></defs><ellipse cx='42' cy='34' rx='24' ry='8' fill='none' stroke='#9CC3FF' stroke-opacity='.22' stroke-width='1'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-opacity='.4' stroke-width='1.2' stroke-dasharray='2 3'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='#9CC3FF' stroke-width='1.8' stroke-linecap='round' pathLength='1' stroke-dasharray='{{progress}} 2'/><circle cx='26' cy='34' r='13' fill='#2F7BEA' opacity='.35' filter='url(#glow)'/><circle cx='26' cy='34' r='10' fill='url(#earth)'/><circle cx='300' cy='32' r='5.5' fill='url(#moon)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-opacity='.55' stroke-width='11' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}' filter='url(#glow)'/><path d='M36 40C110 62 200 10 292 19C306 20 314 26 314 32C314 39 305 44 292 44C200 44 110 4 36 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' pathLength='1' stroke-dasharray='0 2' stroke-dashoffset='-{{progress}}'/></svg>"
-          },
+          {"use": "horizon"},
           {
             "hstack": [
               {"text": "Entry interface in", "modifiers": [{"font": "caption"}, {"foreground": "secondary"}]},

@@ -1,6 +1,121 @@
 {
   "title": "nas.home",
   "layout": {
+    "parts": {
+      "controls": {
+        "hstack": [
+          {
+            "link": "{{cpu.url}}",
+            "label": {
+              "vstack": [
+                {
+                  "hstack": [
+                    {"text": "cpu", "modifiers": [{"foreground": "#6F9681"}]},
+                    {"spacer": true},
+                    {
+                      "text": "{{cpu.value}}%",
+                      "modifiers": [
+                        {"bold": true},
+                        {"foreground": "#3DDC84"},
+                        {"contentTransition": {"numericText": "{{cpu.value}}"}}
+                      ]
+                    }
+                  ],
+                  "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}]
+                },
+                {
+                  "chart": [
+                    {
+                      "area": "{{cpu.series}}",
+                      "color": {"gradient": ["#3DDC8459", "#3DDC8400"]},
+                      "interpolation": "monotone"
+                    },
+                    {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"},
+                    {"rule": 80, "color": "#FF5F5780", "lineWidth": 1}
+                  ],
+                  "min": 0,
+                  "max": 100
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 2,
+              "modifiers": [
+                {"padding": {"horizontal": 8, "vertical": 6}},
+                {"frame": {"maxWidth": "infinity", "minHeight": 60, "maxHeight": 60}},
+                {"background": "#0C1A12"},
+                {"clip": 10},
+                {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+              ]
+            }
+          },
+          {
+            "link": "{{temp.url}}",
+            "label": {
+              "vstack": [
+                {
+                  "gauge": "{{temp.value}}",
+                  "min": "{{temp.min}}",
+                  "max": "{{temp.max}}",
+                  "style": "circular",
+                  "currentValueLabel": {
+                    "text": "{{temp.label}}",
+                    "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                  },
+                  "modifiers": [
+                    {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
+                    {"scale": 0.58},
+                    {"frame": {"width": 34, "height": 34}}
+                  ]
+                },
+                {
+                  "text": "temp",
+                  "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
+                }
+              ],
+              "spacing": 1,
+              "modifiers": [
+                {"padding": {"horizontal": 8, "vertical": 6}},
+                {"frame": {"width": 64, "height": 60}},
+                {"background": "#0C1A12"},
+                {"clip": 10},
+                {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+              ]
+            }
+          },
+          {
+            "link": "{{disk.url}}",
+            "label": {
+              "vstack": [
+                {
+                  "gauge": "{{disk.value}}",
+                  "min": "{{disk.min}}",
+                  "max": "{{disk.max}}",
+                  "style": "circularCapacity",
+                  "currentValueLabel": {
+                    "text": "{{disk.label}}",
+                    "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
+                  },
+                  "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.58}, {"frame": {"width": 34, "height": 34}}]
+                },
+                {
+                  "text": "disk",
+                  "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
+                }
+              ],
+              "spacing": 1,
+              "modifiers": [
+                {"padding": {"horizontal": 8, "vertical": 6}},
+                {"frame": {"width": 64, "height": 60}},
+                {"background": "#0C1A12"},
+                {"clip": 10},
+                {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
+              ]
+            }
+          }
+        ],
+        "spacing": 8
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -21,109 +136,7 @@
           "spacing": 6,
           "modifiers": [{"font": "caption"}, {"fontDesign": "monospaced"}]
         },
-        {
-          "hstack": [
-            {
-              "link": "{{cpu.url}}",
-              "label": {
-                "vstack": [
-                  {
-                    "hstack": [
-                      {"text": "cpu", "modifiers": [{"foreground": "#6F9681"}]},
-                      {"spacer": true},
-                      {
-                        "text": "{{cpu.value}}%",
-                        "modifiers": [
-                          {"bold": true},
-                          {"foreground": "#3DDC84"},
-                          {"contentTransition": {"numericText": "{{cpu.value}}"}}
-                        ]
-                      }
-                    ],
-                    "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}]
-                  },
-                  {
-                    "chart": [
-                      {"area": "{{cpu.series}}", "color": {"gradient": ["#3DDC8459", "#3DDC8400"]}, "interpolation": "monotone"},
-                      {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"},
-                      {"rule": 80, "color": "#FF5F5780", "lineWidth": 1}
-                    ],
-                    "min": 0,
-                    "max": 100
-                  }
-                ],
-                "alignment": "leading",
-                "spacing": 2,
-                "modifiers": [
-                  {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"maxWidth": "infinity", "minHeight": 60, "maxHeight": 60}},
-                  {"background": "#0C1A12"},
-                  {"clip": 10},
-                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                ]
-              }
-            },
-            {
-              "link": "{{temp.url}}",
-              "label": {
-                "vstack": [
-                  {
-                    "gauge": "{{temp.value}}",
-                    "min": "{{temp.min}}",
-                    "max": "{{temp.max}}",
-                    "style": "circular",
-                    "currentValueLabel": {
-                      "text": "{{temp.label}}",
-                      "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
-                    },
-                    "modifiers": [
-                      {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
-                      {"scale": 0.58},
-                      {"frame": {"width": 34, "height": 34}}
-                    ]
-                  },
-                  {"text": "temp", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
-                ],
-                "spacing": 1,
-                "modifiers": [
-                  {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"width": 64, "height": 60}},
-                  {"background": "#0C1A12"},
-                  {"clip": 10},
-                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                ]
-              }
-            },
-            {
-              "link": "{{disk.url}}",
-              "label": {
-                "vstack": [
-                  {
-                    "gauge": "{{disk.value}}",
-                    "min": "{{disk.min}}",
-                    "max": "{{disk.max}}",
-                    "style": "circularCapacity",
-                    "currentValueLabel": {
-                      "text": "{{disk.label}}",
-                      "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
-                    },
-                    "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.58}, {"frame": {"width": 34, "height": 34}}]
-                  },
-                  {"text": "disk", "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]}
-                ],
-                "spacing": 1,
-                "modifiers": [
-                  {"padding": {"horizontal": 8, "vertical": 6}},
-                  {"frame": {"width": 64, "height": 60}},
-                  {"background": "#0C1A12"},
-                  {"clip": 10},
-                  {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                ]
-              }
-            }
-          ],
-          "spacing": 8
-        },
+        {"use": "controls"},
         {
           "if": "stale",
           "then": {
@@ -192,119 +205,7 @@
       },
       "bottom": {
         "vstack": [
-          {
-            "hstack": [
-              {
-                "link": "{{cpu.url}}",
-                "label": {
-                  "vstack": [
-                    {
-                      "hstack": [
-                        {"text": "cpu", "modifiers": [{"foreground": "#6F9681"}]},
-                        {"spacer": true},
-                        {
-                          "text": "{{cpu.value}}%",
-                          "modifiers": [
-                            {"bold": true},
-                            {"foreground": "#3DDC84"},
-                            {"contentTransition": {"numericText": "{{cpu.value}}"}}
-                          ]
-                        }
-                      ],
-                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}]
-                    },
-                    {
-                      "chart": [
-                        {
-                          "area": "{{cpu.series}}",
-                          "color": {"gradient": ["#3DDC8459", "#3DDC8400"]},
-                          "interpolation": "monotone"
-                        },
-                        {"line": "{{cpu.series}}", "color": "#3DDC84", "lineWidth": 1.5, "interpolation": "monotone"},
-                        {"rule": 80, "color": "#FF5F5780", "lineWidth": 1}
-                      ],
-                      "min": 0,
-                      "max": 100
-                    }
-                  ],
-                  "alignment": "leading",
-                  "spacing": 2,
-                  "modifiers": [
-                    {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"maxWidth": "infinity", "minHeight": 60, "maxHeight": 60}},
-                    {"background": "#0C1A12"},
-                    {"clip": 10},
-                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                  ]
-                }
-              },
-              {
-                "link": "{{temp.url}}",
-                "label": {
-                  "vstack": [
-                    {
-                      "gauge": "{{temp.value}}",
-                      "min": "{{temp.min}}",
-                      "max": "{{temp.max}}",
-                      "style": "circular",
-                      "currentValueLabel": {
-                        "text": "{{temp.label}}",
-                        "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
-                      },
-                      "modifiers": [
-                        {"tint": {"gradient": ["#3DDC84", "#FFB547", "#FF5F57"], "direction": "angular"}},
-                        {"scale": 0.58},
-                        {"frame": {"width": 34, "height": 34}}
-                      ]
-                    },
-                    {
-                      "text": "temp",
-                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
-                    }
-                  ],
-                  "spacing": 1,
-                  "modifiers": [
-                    {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"width": 64, "height": 60}},
-                    {"background": "#0C1A12"},
-                    {"clip": 10},
-                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                  ]
-                }
-              },
-              {
-                "link": "{{disk.url}}",
-                "label": {
-                  "vstack": [
-                    {
-                      "gauge": "{{disk.value}}",
-                      "min": "{{disk.min}}",
-                      "max": "{{disk.max}}",
-                      "style": "circularCapacity",
-                      "currentValueLabel": {
-                        "text": "{{disk.label}}",
-                        "modifiers": [{"font": 19}, {"fontDesign": "monospaced"}, {"fontWeight": "semibold"}, {"foreground": "#D7F5E3"}]
-                      },
-                      "modifiers": [{"tint": "#5CD6FF"}, {"scale": 0.58}, {"frame": {"width": 34, "height": 34}}]
-                    },
-                    {
-                      "text": "disk",
-                      "modifiers": [{"font": "caption2"}, {"fontDesign": "monospaced"}, {"foreground": "#6F9681"}]
-                    }
-                  ],
-                  "spacing": 1,
-                  "modifiers": [
-                    {"padding": {"horizontal": 8, "vertical": 6}},
-                    {"frame": {"width": 64, "height": 60}},
-                    {"background": "#0C1A12"},
-                    {"clip": 10},
-                    {"overlay": {"shape": "roundedRectangle", "cornerRadius": 10, "stroke": "#1C3A28", "lineWidth": 1}}
-                  ]
-                }
-              }
-            ],
-            "spacing": 8
-          },
+          {"use": "controls"},
           {
             "if": "stale",
             "then": {

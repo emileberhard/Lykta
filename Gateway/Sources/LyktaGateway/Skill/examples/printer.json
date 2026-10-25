@@ -1,6 +1,33 @@
 {
   "title": "Printing a lantern shade",
   "layout": {
+    "parts": {
+      "pause": {
+        "if": "{{paused}}",
+        "then": {
+          "button": "resume",
+          "label": {
+            "symbol": "play.fill",
+            "modifiers": [{"foreground": "white"}, {"accessibilityLabel": "Resume print"}]
+          },
+          "style": "borderedProminent",
+          "set": {"paused": false, "pausedAt": null},
+          "add": {"eta": {"since": "pausedAt"}},
+          "modifiers": [{"tint": "{{filament}}"}]
+        },
+        "else": {
+          "button": "pause",
+          "label": {
+            "symbol": "pause.fill",
+            "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
+          },
+          "style": "bordered",
+          "set": {"paused": true},
+          "now": {"pausedAt": 0},
+          "modifiers": [{"tint": "{{filament}}"}]
+        }
+      }
+    },
     "lockScreen": {
       "hstack": [
         {
@@ -22,31 +49,7 @@
                   ]
                 },
                 {"spacer": true},
-                {
-                  "if": "{{paused}}",
-                  "then": {
-                    "button": "resume",
-                    "label": {
-                      "symbol": "play.fill",
-                      "modifiers": [{"foreground": "white"}, {"accessibilityLabel": "Resume print"}]
-                    },
-                    "style": "borderedProminent",
-                    "set": {"paused": false, "pausedAt": null},
-                    "add": {"eta": {"since": "pausedAt"}},
-                    "modifiers": [{"tint": "{{filament}}"}]
-                  },
-                  "else": {
-                    "button": "pause",
-                    "label": {
-                      "symbol": "pause.fill",
-                      "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
-                    },
-                    "style": "bordered",
-                    "set": {"paused": true},
-                    "now": {"pausedAt": 0},
-                    "modifiers": [{"tint": "{{filament}}"}]
-                  }
-                }
+                {"use": "pause"}
               ],
               "alignment": "center"
             },
@@ -160,31 +163,7 @@
                 "modifiers": [{"font": "caption2"}]
               },
               {"spacer": true},
-              {
-                "if": "{{paused}}",
-                "then": {
-                  "button": "resume",
-                  "label": {
-                    "symbol": "play.fill",
-                    "modifiers": [{"foreground": "white"}, {"accessibilityLabel": "Resume print"}]
-                  },
-                  "style": "borderedProminent",
-                  "set": {"paused": false, "pausedAt": null},
-                  "add": {"eta": {"since": "pausedAt"}},
-                  "modifiers": [{"tint": "{{filament}}"}]
-                },
-                "else": {
-                  "button": "pause",
-                  "label": {
-                    "symbol": "pause.fill",
-                    "modifiers": [{"foreground": "{{filament}}"}, {"accessibilityLabel": "Pause print"}]
-                  },
-                  "style": "bordered",
-                  "set": {"paused": true},
-                  "now": {"pausedAt": 0},
-                  "modifiers": [{"tint": "{{filament}}"}]
-                }
-              }
+              {"use": "pause"}
             ]
           }
         ],

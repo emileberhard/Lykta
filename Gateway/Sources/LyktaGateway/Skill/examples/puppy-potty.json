@@ -1,6 +1,17 @@
 {
   "title": "Ollie's potty clock",
   "layout": {
+    "parts": {
+      "ollie": {
+        "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
+        "modifiers": [{"frame": {"width": 32, "height": 32}}]
+      },
+      "ring": {
+        "progress": ["{{last}}", "{{due}}"],
+        "style": "circular",
+        "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 44, "height": 44}}]
+      }
+    },
     "lockScreen": {
       "hstack": [
         {
@@ -93,15 +104,8 @@
     "expanded": {
       "leading": {
         "zstack": [
-          {
-            "progress": ["{{last}}", "{{due}}"],
-            "style": "circular",
-            "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 44, "height": 44}}]
-          },
-          {
-            "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
-            "modifiers": [{"frame": {"width": 32, "height": 32}}]
-          }
+          {"use": "ring"},
+          {"use": "ollie"}
         ],
         "modifiers": [{"padding": {"leading": 4, "top": 4}}]
       },
@@ -149,15 +153,8 @@
       "hstack": [
         {
           "zstack": [
-            {
-              "progress": ["{{last}}", "{{due}}"],
-              "style": "circular",
-              "modifiers": [{"tint": "#F28C28"}, {"frame": {"width": 44, "height": 44}}]
-            },
-            {
-              "svg": "<svg viewBox='0 0 48 48'><title>Ollie</title><ellipse cx='10.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(16 10.5 25)'/><ellipse cx='37.5' cy='25' rx='6.5' ry='12' fill='#C99A6B' transform='rotate(-16 37.5 25)'/><circle cx='17' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='9.5' r='6.5' fill='#FFF1DC'/><circle cx='31' cy='12' r='6' fill='#FFF1DC'/><circle cx='24' cy='25' r='14.5' fill='#FFF1DC'/><circle cx='14.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='33.5' cy='30' r='2.6' fill='#FF9AA2' opacity='.45'/><circle cx='18.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='29.5' cy='24' r='2.7' fill='#2B1D14'/><circle cx='19.4' cy='23' r='.9' fill='white'/><circle cx='30.4' cy='23' r='.9' fill='white'/><ellipse cx='24' cy='31.5' rx='6.5' ry='5' fill='white'/><ellipse cx='24' cy='29.4' rx='2.7' ry='2' fill='#2B1D14'/><path d='M24 31.4v1.8M21.4 33.2q2.6 1.9 5.2 0' fill='none' stroke='#2B1D14' stroke-width='.9' stroke-linecap='round'/><ellipse cx='24' cy='35.4' rx='1.6' ry='1.8' fill='#FF7A8A'/></svg>",
-              "modifiers": [{"frame": {"width": 32, "height": 32}}]
-            }
+            {"use": "ring"},
+            {"use": "ollie"}
           ]
         },
         {

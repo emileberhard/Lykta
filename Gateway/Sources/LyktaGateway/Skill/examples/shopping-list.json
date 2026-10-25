@@ -1,6 +1,39 @@
 {
   "title": "Shopping at ICA",
   "layout": {
+    "parts": {
+      "aisles": {
+        "vstack": [
+          {
+            "concat": [{"symbol": "{{aisle.symbol}}"}, " {{aisle.name}}"],
+            "modifiers": [
+              {"font": "caption2"},
+              {"fontWeight": "semibold"},
+              {"textCase": "uppercase"},
+              {"foreground": "secondary"}
+            ]
+          },
+          {
+            "each": "aisle.items",
+            "as": "item",
+            "do": {
+              "toggle": "item.done",
+              "style": "checkbox",
+              "label": {
+                "if": "{{item.done}}",
+                "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}, {"foreground": "tertiary"}]},
+                "else": "{{item.name}}",
+                "modifiers": [{"lineLimit": 1}]
+              },
+              "modifiers": [{"tint": "#E3000F"}]
+            }
+          }
+        ],
+        "alignment": "leading",
+        "spacing": 3,
+        "modifiers": [{"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -26,37 +59,7 @@
             {
               "each": "aisles",
               "as": "aisle",
-              "do": {
-                "vstack": [
-                  {
-                    "concat": [{"symbol": "{{aisle.symbol}}"}, " {{aisle.name}}"],
-                    "modifiers": [
-                      {"font": "caption2"},
-                      {"fontWeight": "semibold"},
-                      {"textCase": "uppercase"},
-                      {"foreground": "secondary"}
-                    ]
-                  },
-                  {
-                    "each": "aisle.items",
-                    "as": "item",
-                    "do": {
-                      "toggle": "item.done",
-                      "style": "checkbox",
-                      "label": {
-                        "if": "{{item.done}}",
-                        "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}, {"foreground": "tertiary"}]},
-                        "else": "{{item.name}}",
-                        "modifiers": [{"lineLimit": 1}]
-                      },
-                      "modifiers": [{"tint": "#E3000F"}]
-                    }
-                  }
-                ],
-                "alignment": "leading",
-                "spacing": 3,
-                "modifiers": [{"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
-              }
+              "do": {"use": "aisles"}
             }
           ],
           "alignment": "top",
@@ -94,37 +97,7 @@
           {
             "each": "aisles",
             "as": "aisle",
-            "do": {
-              "vstack": [
-                {
-                  "concat": [{"symbol": "{{aisle.symbol}}"}, " {{aisle.name}}"],
-                  "modifiers": [
-                    {"font": "caption2"},
-                    {"fontWeight": "semibold"},
-                    {"textCase": "uppercase"},
-                    {"foreground": "secondary"}
-                  ]
-                },
-                {
-                  "each": "aisle.items",
-                  "as": "item",
-                  "do": {
-                    "toggle": "item.done",
-                    "style": "checkbox",
-                    "label": {
-                      "if": "{{item.done}}",
-                      "then": {"text": "{{item.name}}", "modifiers": [{"strikethrough": true}, {"foreground": "tertiary"}]},
-                      "else": "{{item.name}}",
-                      "modifiers": [{"lineLimit": 1}]
-                    },
-                    "modifiers": [{"tint": "#E3000F"}]
-                  }
-                }
-              ],
-              "alignment": "leading",
-              "spacing": 3,
-              "modifiers": [{"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
-            }
+            "do": {"use": "aisles"}
           }
         ],
         "alignment": "top",

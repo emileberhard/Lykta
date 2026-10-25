@@ -1,6 +1,34 @@
 {
   "title": "Lykta 1.0 in App Review",
   "layout": {
+    "parts": {
+      "stage": {
+        "vstack": [
+          {
+            "hstack": [
+              {"shape": "rectangle", "fill": "{{stage.in}}", "modifiers": [{"frame": {"height": 2}}]},
+              {
+                "symbol": "{{stage.symbol}}",
+                "modifiers": [{"font": 15}, {"foreground": "{{stage.color}}"}, {"contentTransition": "symbolReplace"}]
+              },
+              {"shape": "rectangle", "fill": "{{stage.out}}", "modifiers": [{"frame": {"height": 2}}]}
+            ],
+            "spacing": 3
+          },
+          {
+            "text": "{{stage.name}}",
+            "modifiers": [
+              {"font": 10},
+              {"fontWeight": "{{stage.weight}}"},
+              {"foreground": "{{stage.color}}"},
+              {"lineLimit": 1}
+            ]
+          }
+        ],
+        "spacing": 4,
+        "modifiers": [{"frame": {"maxWidth": "infinity"}}]
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -53,32 +81,7 @@
             {
               "each": "stages",
               "as": "stage",
-              "do": {
-                "vstack": [
-                  {
-                    "hstack": [
-                      {"shape": "rectangle", "fill": "{{stage.in}}", "modifiers": [{"frame": {"height": 2}}]},
-                      {
-                        "symbol": "{{stage.symbol}}",
-                        "modifiers": [{"font": 15}, {"foreground": "{{stage.color}}"}, {"contentTransition": "symbolReplace"}]
-                      },
-                      {"shape": "rectangle", "fill": "{{stage.out}}", "modifiers": [{"frame": {"height": 2}}]}
-                    ],
-                    "spacing": 3
-                  },
-                  {
-                    "text": "{{stage.name}}",
-                    "modifiers": [
-                      {"font": 10},
-                      {"fontWeight": "{{stage.weight}}"},
-                      {"foreground": "{{stage.color}}"},
-                      {"lineLimit": 1}
-                    ]
-                  }
-                ],
-                "spacing": 4,
-                "modifiers": [{"frame": {"maxWidth": "infinity"}}]
-              }
+              "do": {"use": "stage"}
             }
           ],
           "spacing": 0
@@ -138,32 +141,7 @@
           {
             "each": "stages",
             "as": "stage",
-            "do": {
-              "vstack": [
-                {
-                  "hstack": [
-                    {"shape": "rectangle", "fill": "{{stage.in}}", "modifiers": [{"frame": {"height": 2}}]},
-                    {
-                      "symbol": "{{stage.symbol}}",
-                      "modifiers": [{"font": 15}, {"foreground": "{{stage.color}}"}, {"contentTransition": "symbolReplace"}]
-                    },
-                    {"shape": "rectangle", "fill": "{{stage.out}}", "modifiers": [{"frame": {"height": 2}}]}
-                  ],
-                  "spacing": 3
-                },
-                {
-                  "text": "{{stage.name}}",
-                  "modifiers": [
-                    {"font": 10},
-                    {"fontWeight": "{{stage.weight}}"},
-                    {"foreground": "{{stage.color}}"},
-                    {"lineLimit": 1}
-                  ]
-                }
-              ],
-              "spacing": 4,
-              "modifiers": [{"frame": {"maxWidth": "infinity"}}]
-            }
+            "do": {"use": "stage"}
           }
         ],
         "spacing": 0,

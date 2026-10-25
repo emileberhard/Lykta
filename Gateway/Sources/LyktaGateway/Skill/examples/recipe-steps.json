@@ -1,6 +1,26 @@
 {
   "title": "Cooking shakshuka",
   "layout": {
+    "parts": {
+      "next": {
+        "button": "next",
+        "label": {
+          "concat": ["Next ", {"symbol": "chevron.right"}],
+          "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
+        },
+        "style": "borderedProminent",
+        "add": {"step": 1},
+        "modifiers": [{"tint": "#C8432B"}]
+      },
+      "stop": {
+        "concat": [{"symbol": "stop.fill"}, " Stop"],
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Stop the timer"}]
+      },
+      "start": {
+        "concat": [{"symbol": "timer"}, " Start"],
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Start the timer"}]
+      }
+    },
     "lockScreen": {
       "vstack": [
         {
@@ -108,10 +128,7 @@
               "if": "{{timer.on}}",
               "then": {
                 "button": "stop-timer",
-                "label": {
-                  "concat": [{"symbol": "stop.fill"}, " Stop"],
-                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Stop the timer"}]
-                },
+                "label": {"use": "stop"},
                 "style": "bordered",
                 "set": {"timer.on": false},
                 "modifiers": [{"tint": "#C8432B"}]
@@ -120,10 +137,7 @@
                 "if": "{{steps[step].timed}}",
                 "then": {
                   "button": "start-timer",
-                  "label": {
-                    "concat": [{"symbol": "timer"}, " Start"],
-                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Start the timer"}]
-                  },
+                  "label": {"use": "start"},
                   "style": "bordered",
                   "set": {"timer.on": true},
                   "now": {"timer.start": 0, "timer.end": "{{steps[step].seconds}}"},
@@ -137,16 +151,7 @@
                 "concat": [{"symbol": "fork.knife"}, " Enjoy"],
                 "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#C8432B"}]
               },
-              "else": {
-                "button": "next",
-                "label": {
-                  "concat": ["Next ", {"symbol": "chevron.right"}],
-                  "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
-                },
-                "style": "borderedProminent",
-                "add": {"step": 1},
-                "modifiers": [{"tint": "#C8432B"}]
-              }
+              "else": {"use": "next"}
             }
           ],
           "spacing": 8,
@@ -272,10 +277,7 @@
                 "if": "{{timer.on}}",
                 "then": {
                   "button": "stop-timer",
-                  "label": {
-                    "concat": [{"symbol": "stop.fill"}, " Stop"],
-                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Stop the timer"}]
-                  },
+                  "label": {"use": "stop"},
                   "style": "bordered",
                   "set": {"timer.on": false},
                   "modifiers": [{"tint": "#FF7A5C"}]
@@ -284,10 +286,7 @@
                   "if": "{{steps[step].timed}}",
                   "then": {
                     "button": "start-timer",
-                    "label": {
-                      "concat": [{"symbol": "timer"}, " Start"],
-                      "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"accessibilityLabel": "Start the timer"}]
-                    },
+                    "label": {"use": "start"},
                     "style": "bordered",
                     "set": {"timer.on": true},
                     "now": {"timer.start": 0, "timer.end": "{{steps[step].seconds}}"},
@@ -301,16 +300,7 @@
                   "concat": [{"symbol": "fork.knife"}, " Enjoy"],
                   "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"fontDesign": "serif"}, {"foreground": "#FF7A5C"}]
                 },
-                "else": {
-                  "button": "next",
-                  "label": {
-                    "concat": ["Next ", {"symbol": "chevron.right"}],
-                    "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"foreground": "white"}]
-                  },
-                  "style": "borderedProminent",
-                  "add": {"step": 1},
-                  "modifiers": [{"tint": "#C8432B"}]
-                }
+                "else": {"use": "next"}
               }
             ],
             "spacing": 8
