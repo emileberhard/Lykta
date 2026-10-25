@@ -17,8 +17,8 @@ COMPOSER = "iOS/AppStore/compose.swift"
 EXAMPLES = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill" / "examples"
 INPUTS = ["Core/Package.swift", "Core/Sources", "iOS/App", "iOS/Avatars", "iOS/Config", "iOS/Lykta.xcodeproj", "iOS/Rendering",
           "Gateway/Sources/LyktaGateway/Skill/examples", "scripts/screenshots"]
-DEVICE_TYPE = "iPhone 17 Pro"
-SIMULATOR = "Lykta Screenshots"
+DEVICE_TYPE = "iPhone 18 Pro"
+SIMULATOR = f"Lykta {DEVICE_TYPE}"
 KEPT_CAPTURES = 10
 
 
