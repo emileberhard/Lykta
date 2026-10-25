@@ -32,8 +32,11 @@ It prints the gateway's JSON. When the gateway refuses a request, `lykta`
 exits with 1 and prints the error, whose message names what to fix; 2 means a
 usage or setup mistake, and 3 that the gateway was unreachable or failed, with
 a message that says whether to retry or, because a PUT may have been applied,
-to read the result first. Send bodies in a quoted heredoc, so the JSON needs no
-escaping, and quote paths that hold `?` or `&`. In PowerShell, pass the body as
+to read the result first. Write a body with a layout to a file, in the same
+command as the `lykta put` that sends it, so a refused body takes a small edit
+instead of a rewrite; a quoted heredoc keeps the JSON free of escaping, and
+short updates can go to `lykta put` in one directly. Quote paths that hold `?`
+or `&`. In PowerShell, pass the body as
 a UTF-8 file, because Windows PowerShell pipes only ASCII to other programs,
 and quote an argument that holds `&` twice, as `'"actions?after=40&wait=25"'`,
 because `lykta` passes it on through cmd. Without a shell, send the same
