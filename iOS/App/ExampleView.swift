@@ -51,7 +51,7 @@ struct ExampleView: View {
     }
 }
 
-private struct CompactIsland: View {
+struct CompactIsland: View {
     private static let width: CGFloat = 52.33
 
     let leading: Node?
@@ -77,7 +77,7 @@ private struct CompactIsland: View {
     }
 }
 
-private struct ExpandedIsland: View {
+struct ExpandedIsland: View {
     let regions: LyktaCore.Layout.Expanded?
     let keyline: Color?
 
