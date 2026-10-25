@@ -39,6 +39,7 @@ struct API: Sendable {
         "references/layout.md": PackageResources.layout_md,
         "references/notifications.md": PackageResources.notifications_md,
         "examples/agent-question.json": PackageResources.agent_question_json,
+        "examples/ai-usage.json": PackageResources.ai_usage_json,
         "examples/app-review.json": PackageResources.app_review_json,
         "examples/homelab.json": PackageResources.homelab_json,
         "examples/jira-release.json": PackageResources.jira_release_json,

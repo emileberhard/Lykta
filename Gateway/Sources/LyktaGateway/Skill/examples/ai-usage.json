@@ -1,0 +1,210 @@
+{
+  "title": "AI usage",
+  "layout": {
+    "parts": {
+      "pod": {
+        "vstack": [
+          {
+            "zstack": [
+              {"shape": "circle", "fill": "{{g.color}}", "modifiers": [{"frame": {"width": 37, "height": 37}}, {"opacity": 0.08}]},
+              {
+                "shape": "circle",
+                "stroke": "{{g.color}}",
+                "lineWidth": 6,
+                "modifiers": [{"frame": {"width": 48, "height": 48}}, {"opacity": 0.35}]
+              },
+              {
+                "shape": "circle",
+                "stroke": "{{g.color}}",
+                "lineWidth": 6,
+                "lineCap": "round",
+                "trim": [0, "{{g.left}}"],
+                "modifiers": [{"frame": {"width": 48, "height": 48}}, {"rotation": -90}]
+              },
+              {"svg": "{{g.mark}}", "modifiers": [{"frame": {"width": 23, "height": 23}}]}
+            ],
+            "modifiers": [{"frame": {"width": 58, "height": 58}}, {"accessibilityLabel": "{{g.spoken}}"}]
+          },
+          {
+            "hstack": [
+              {"shape": "circle", "fill": "{{g.color}}", "modifiers": [{"frame": {"width": 4.5, "height": 4.5}}]},
+              {"text": "{{g.resets}}", "modifiers": [{"foreground": "#FFFFFFB8"}]}
+            ],
+            "spacing": 3,
+            "modifiers": [
+              {"font": 10},
+              {"fontWeight": "medium"},
+              {"monospacedDigit": true},
+              {"lineLimit": 1},
+              {"minimumScaleFactor": 0.7}
+            ]
+          }
+        ],
+        "spacing": 5,
+        "modifiers": [
+          {"padding": {"horizontal": 6, "vertical": 8}},
+          {"frame": {"maxWidth": "infinity"}},
+          {"background": "#FFFFFF0F"},
+          {"clip": 16},
+          {
+            "overlay": {
+              "shape": "roundedRectangle",
+              "cornerRadius": 16,
+              "stroke": "{{g.color}}",
+              "lineWidth": 1,
+              "modifiers": [{"opacity": 0.25}]
+            }
+          }
+        ]
+      }
+    },
+    "lockScreen": {
+      "hstack": [{"each": "gauges", "as": "g", "do": {"use": "pod"}}],
+      "alignment": "top",
+      "spacing": 6,
+      "modifiers": [{"padding": {"horizontal": 14, "vertical": 12}}]
+    },
+    "compactLeading": {
+      "zstack": [
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.0.color}}",
+          "lineWidth": 2.7,
+          "modifiers": [{"frame": {"width": 20, "height": 20}}, {"opacity": 0.35}]
+        },
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.0.color}}",
+          "lineWidth": 2.7,
+          "lineCap": "round",
+          "trim": [0, "{{gauges.0.left}}"],
+          "modifiers": [{"frame": {"width": 20, "height": 20}}, {"rotation": -90}]
+        },
+        {"svg": "{{gauges.0.mark}}", "modifiers": [{"frame": {"width": 10, "height": 10}}]}
+      ],
+      "modifiers": [{"frame": {"width": 24, "height": 24}}]
+    },
+    "compactTrailing": {
+      "zstack": [
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.1.color}}",
+          "lineWidth": 2.7,
+          "modifiers": [{"frame": {"width": 20, "height": 20}}, {"opacity": 0.35}]
+        },
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.1.color}}",
+          "lineWidth": 2.7,
+          "lineCap": "round",
+          "trim": [0, "{{gauges.1.left}}"],
+          "modifiers": [{"frame": {"width": 20, "height": 20}}, {"rotation": -90}]
+        },
+        {"svg": "{{gauges.1.mark}}", "modifiers": [{"frame": {"width": 10, "height": 10}}]}
+      ],
+      "modifiers": [{"frame": {"width": 24, "height": 24}}]
+    },
+    "minimal": {
+      "zstack": [
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.0.color}}",
+          "lineWidth": 3,
+          "modifiers": [{"frame": {"width": 21, "height": 21}}, {"opacity": 0.35}]
+        },
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.0.color}}",
+          "lineWidth": 3,
+          "lineCap": "round",
+          "trim": [0, "{{gauges.0.left}}"],
+          "modifiers": [{"frame": {"width": 21, "height": 21}}, {"rotation": -90}]
+        },
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.1.color}}",
+          "lineWidth": 3,
+          "modifiers": [{"frame": {"width": 12, "height": 12}}, {"opacity": 0.35}]
+        },
+        {
+          "shape": "circle",
+          "stroke": "{{gauges.1.color}}",
+          "lineWidth": 3,
+          "lineCap": "round",
+          "trim": [0, "{{gauges.1.left}}"],
+          "modifiers": [{"frame": {"width": 12, "height": 12}}, {"rotation": -90}]
+        }
+      ],
+      "modifiers": [{"frame": {"width": 24, "height": 24}}, {"accessibilityLabel": "{{gauges.0.spoken}}. {{gauges.1.spoken}}"}]
+    },
+    "expanded": {
+      "leading": {
+        "hstack": [
+          {"svg": "{{gauges.0.mark}}", "modifiers": [{"frame": {"width": 15, "height": 15}}]},
+          {"text": "{{gauges.0.label}}", "modifiers": [{"foreground": "{{gauges.0.color}}"}, {"contentTransition": "numericText"}]}
+        ],
+        "spacing": 4,
+        "modifiers": [
+          {"font": 11},
+          {"fontWeight": "semibold"},
+          {"monospacedDigit": true},
+          {"accessibilityLabel": "{{gauges.0.spoken}}"},
+          {"padding": {"leading": 4, "top": 2}}
+        ]
+      },
+      "trailing": {
+        "hstack": [
+          {"svg": "{{gauges.1.mark}}", "modifiers": [{"frame": {"width": 15, "height": 15}}]},
+          {"text": "{{gauges.1.label}}", "modifiers": [{"foreground": "{{gauges.1.color}}"}, {"contentTransition": "numericText"}]}
+        ],
+        "spacing": 4,
+        "modifiers": [
+          {"font": 11},
+          {"fontWeight": "semibold"},
+          {"monospacedDigit": true},
+          {"accessibilityLabel": "{{gauges.1.spoken}}"},
+          {"padding": {"trailing": 4, "top": 2}}
+        ]
+      },
+      "bottom": {
+        "hstack": [{"each": "gauges", "as": "g", "do": {"use": "pod"}}],
+        "alignment": "top",
+        "spacing": 6,
+        "modifiers": [{"padding": {"top": 4, "horizontal": 2}}]
+      }
+    },
+    "background": "#0D1016",
+    "keyline": "#D97757"
+  },
+  "data": {
+    "gauges": [
+      {
+        "label": "62%",
+        "left": 0.62,
+        "color": "#E27B58",
+        "resets": "Thu",
+        "spoken": "Claude: 62% of the weekly limit left, resets Thursday",
+        "mark": "<svg viewBox='0 0 24 24'><path fill='#E27B58' d='m4.7 16 4.7-2.7 .1-.2-.1-.1-8.3-.4-.6-.1-.5-.7 .1-.4 .4-.3 9 .7 .1-.2-.3-.2-4.9-3.3-2-1.4-.4-.5-.2-1 .7-.7 1.1 .1 5.7 4.3 .1-.1-3.6-6.3-.3-1.4 .8-1 .4-.1 1 .1 .4 .4 3.6 7.6 .4 1.1 .1 0 .7-7.4 .4-1 .7-.4 .6 .2 .5 .7-1.3 7.2 .5-.3 4.2-5.1 .5-.4 1.1 0 .7 1.1-.3 1.2-3.2 4.2-.8 1.3 .3 .1 6.2-1.2 .8 .4 .1 .4-.3 .8-7.8 1.8 6.9 .5 .8 .5 .5 .6-.1 .5-1.2 .6-6.8-1.6-.2 .1 5.6 5.2 .2 .6-.4 .5-.3-.1-5.1-4 2.8 4.3 .1 1.1-.2 .4-.6 .2-.6-.1-4-6.1-.1 .1-.7 7.3-.3 .3-.7 .3-.6-.5-.3-.7 1.4-7.5-3.7 4.9-1.8 1.9-.4 .1-.7-.3 .1-.7 5.1-6.8-6.4 4.2-1.1 .1-.5-.4 .1-.8z'/></svg>"
+      },
+      {
+        "label": "41%",
+        "left": 0.41,
+        "color": "#7A9DFF",
+        "resets": "Sun 16:11",
+        "spoken": "Codex: 41% of the weekly limit left, resets Sunday 16:11",
+        "mark": "<svg viewBox='0 0 24 24'><g fill='#B8CEFF'><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z'/><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z' transform='rotate(60 12 11.9)'/><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z' transform='rotate(120 12 11.9)'/><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z' transform='rotate(180 12 11.9)'/><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z' transform='rotate(240 12 11.9)'/><path d='M14.4 1.7A5.95 5.95 0 0 0 4.2 6v5.8c0 .3.1.6.4.7l6 3.4L12 15.1l-6.1-3.5c-.2-.1-.3-.2-.3-.5V5.9a4.5 4.5 0 0 1 7.3-3.5Z' transform='rotate(300 12 11.9)'/></g></svg>"
+      },
+      {
+        "label": "$21",
+        "left": 0.22,
+        "color": "#FFB83D",
+        "resets": "1 Nov",
+        "spoken": "Copilot: $21.53 of $100 left this month, resets 1 November",
+        "mark": "<svg viewBox='0 0 24 24'><path fill='#C9D1D9' fill-rule='evenodd' d='M12 2.2C7.8 2.2 4.7 4.4 4.1 8c-.8.4-1.6 1.3-1.6 2.8v2.4c0 1.7 1.1 3 2.7 3.2.8 2.6 3.3 4.4 6.8 4.4s6-1.8 6.8-4.4c1.6-.2 2.7-1.5 2.7-3.2v-2.4c0-1.5-.8-2.4-1.6-2.8-.6-3.6-3.7-5.8-7.9-5.8ZM6.2 11.4c.7-.3 1.8-.5 3.1-.5 1.2 0 1.9.4 1.9 1.3v1.6c0 .9-.8 1.5-2.1 1.5-1.6 0-2.9-.7-2.9-2.1v-1.8Zm11.6 0v1.8c0 1.4-1.3 2.1-2.9 2.1-1.3 0-2.1-.6-2.1-1.5v-1.6c0-.9.7-1.3 1.9-1.3 1.3 0 2.4.2 3.1.5Z'/><path fill='#79C0FF' d='M8.8 12v2.4m6.4-2.4v2.4' stroke='#79C0FF' stroke-width='1.8' stroke-linecap='round'/></svg>"
+      }
+    ]
+  },
+  "staleAfter": 720,
+  "endAfter": 28800,
+  "relevance": 20
+}

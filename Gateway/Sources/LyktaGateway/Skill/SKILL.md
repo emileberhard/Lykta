@@ -125,10 +125,10 @@ several in one call gets cut off.
 
 ```sh
 lykta docs references/layout.md
-lykta docs examples/recipe-steps.json examples/pr-inbox.json examples/app-review.json
-lykta docs examples/jira-release.json examples/shopping-list.json examples/orion-return.json
-lykta docs examples/puppy-potty.json examples/agent-question.json examples/solar-eclipse.json
-lykta docs examples/homelab.json examples/movie-night.json examples/printer.json
+lykta docs examples/recipe-steps.json examples/solar-eclipse.json examples/orion-return.json
+lykta docs examples/jira-release.json examples/printer.json examples/agent-question.json
+lykta docs examples/puppy-potty.json examples/app-review.json examples/shopping-list.json examples/pr-inbox.json
+lykta docs examples/homelab.json examples/movie-night.json examples/ai-usage.json
 ```
 
 Together they show the range: drawn scenery, charts,
@@ -301,6 +301,7 @@ real ones with `now` rather than computing them.
 | Example | Shows |
 | --- | --- |
 | [agent-question](examples/agent-question.json) | An agent's question in a chat bubble; a reply button records the answer and shows it as the user's reply |
+| [ai-usage](examples/ai-usage.json) | Weekly Claude and Codex limits and a monthly Copilot budget as rings around each brand's mark, amber once one runs low |
 | [app-review](examples/app-review.json) | App Store review stages for a build, on a card colored by the review state |
 | [homelab](examples/homelab.json) | A server dashboard of a CPU chart and gauges, each linking to Grafana, that flags a missed heartbeat |
 | [jira-release](examples/jira-release.json) | A release's issues as a donut chart, light theme, a link per blocker |
