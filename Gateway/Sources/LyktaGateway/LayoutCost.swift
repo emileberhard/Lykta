@@ -15,11 +15,14 @@ enum LayoutCost {
             let a = left[0], b = right[0]
             return a.bytes == b.bytes ? a.path < b.path : a.bytes > b.bytes
         }
-        var costs: [(name: String, saving: Int)] = []
+        var costs: [(path: String, name: String, saving: Int)] = []
         for group in groups.prefix(probes) {
             let saving = baseline - (try removing(group[0].value, from: layout)?.compressedByteCount ?? 0)
             let name = String(group[0].path.prefix(160)) + (group.count > 1 ? " with \(group.count - 1) identical copies" : "")
-            if saving > 0 { costs.append((name, saving)) }
+            if saving > 0 { costs.append((group[0].path, name, saving)) }
+        }
+        costs = costs.filter { cost in
+            !costs.contains { ($0.path.hasPrefix(cost.path + ".") || $0.path.hasPrefix(cost.path + "[")) && $0.saving * 10 >= cost.saving * 9 }
         }
         costs.sort { $0.saving == $1.saving ? $0.name < $1.name : $0.saving > $1.saving }
         guard !costs.isEmpty else { return "Shorten text or simplify distinct detail; repeated parts cost little." }
@@ -34,9 +37,8 @@ enum LayoutCost {
         case let .array(values): values.enumerated().flatMap { parts($0.element, path: "\(path)[\($0.offset)]") }
         default: []
         }
-        if !children.isEmpty { return children }
         let bytes = value.json.count
-        return path != "layout" && bytes >= 128 ? [Part(path: path, value: value, bytes: bytes)] : []
+        return (path != "layout" && bytes >= 128 ? [Part(path: path, value: value, bytes: bytes)] : []) + children
     }
 
     private static func removing(_ part: JSONValue, from value: JSONValue) -> JSONValue? {

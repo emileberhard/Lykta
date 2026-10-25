@@ -68,6 +68,17 @@ struct GatewayTests {
         #expect(unchanged.revision == 1)
     }
 
+    @Test func oversizedLayoutsOfManyShortRowsNameTheContainerThatHoldsThem() async throws {
+        try await put("budget", Self.start)
+        let text = Array(Self.noise(90 * 60))
+        let rows = (0..<60).map { JSONValue.string(String(text[$0 * 90..<($0 + 1) * 90])) }
+        let response = try await send("PUT", "/v1/activities/budget", body: ["layout": Self.layout(["vstack": .array(["logo", ["vstack": .array(rows)]])])])
+        let refusal: Refusal = try response.decoded()
+        #expect(response.status == 413)
+        #expect(refusal.message.contains("layout.lockScreen.vstack[1].vstack ~"), "\(refusal.message)")
+        #expect(!refusal.message.contains("layout.lockScreen ~"), "\(refusal.message)")
+    }
+
     @Test func registersOnlyAttestedAppsAndInvitedDevices() async throws {
         let invite = try await store.invite(now: now)
         let refusals: [(Registration.Proof, String)] = [
