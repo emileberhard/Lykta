@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CACHE = Path.home() / "Library" / "Caches" / "lykta" / "captures"
+OUTPUT = ROOT / ".local" / "screenshots"
+BUILD = ROOT / ".local" / "build"
+COMPOSER = "iOS/AppStore/compose.swift"
+EXAMPLES = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill" / "examples"
+INPUTS = ["Core", "iOS", "Gateway/Sources/LyktaGateway/Skill/examples", "scripts/screenshots"]
+DEVICE_TYPE = "iPhone 17 Pro"
+SIMULATOR = "Lykta Screenshots"
+KEPT_CAPTURES = 10
+
+
+def run(*args, **kwargs):
+    result = subprocess.run([str(arg) for arg in args], text=True, capture_output=True, **kwargs)
+    if result.returncode != 0:
+        sys.exit(f"{' '.join(map(str, args[:3]))} failed:\n{(result.stdout + result.stderr)[-3000:]}")
+    return result.stdout
+
+
+def runtime():
+    runtimes = [r for r in json.loads(run("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
+                if r["platform"] == "iOS" and r["isAvailable"]]
+    if not runtimes:
+        sys.exit("No iOS simulator runtime is installed.")
+    return max(runtimes, key=lambda r: [int(part) for part in r["version"].split(".")])
+
+
+def capture_key(simulator_runtime):
+    files = run("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *INPUTS,
+                f":!{COMPOSER}").split("\0")
+    digest = hashlib.sha256()
+    for part in (run("xcodebuild", "-version"), simulator_runtime["buildversion"], DEVICE_TYPE):
+        digest.update(part.encode() + b"\0")
+    for name in sorted(filter(None, files)):
+        path = ROOT / name
+        if path.is_file():
+            digest.update(name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()[:20]
+
+
+def simulator(simulator_runtime):
+    devices = json.loads(run("xcrun", "simctl", "list", "devices", "--json"))["devices"].get(simulator_runtime["identifier"], [])
+    existing = next((d["udid"] for d in devices if d["name"] == SIMULATOR and d["isAvailable"]), None)
+    return existing or run("xcrun", "simctl", "create", SIMULATOR, DEVICE_TYPE, simulator_runtime["identifier"]).strip()
+
+
+def capture(simulator_runtime, target):
+    udid = simulator(simulator_runtime)
+    print(f"Capturing the app on the {SIMULATOR} simulator", file=sys.stderr)
+    run("xcodebuild", "-quiet", "-project", ROOT / "iOS" / "Lykta.xcodeproj", "-scheme", "Lykta", "-configuration", "Debug",
+        "-destination", f"id={udid}", "-derivedDataPath", BUILD, "CODE_SIGNING_ALLOWED=NO", "LYKTA_GATEWAY_HOST=", "build")
+    app = BUILD / "Build" / "Products" / "Debug-iphonesimulator" / "Lykta.app"
+    bundle = run("plutil", "-extract", "CFBundleIdentifier", "raw", app / "Info.plist").strip()
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=CACHE))
+    try:
+        run("xcrun", "simctl", "bootstatus", udid, "-b")
+        run("xcrun", "simctl", "install", udid, app)
+        console = run("xcrun", "simctl", "launch", "--console-pty", "--terminate-running-process", udid, bundle,
+                      env={**os.environ, "SIMCTL_CHILD_LYKTA_CAPTURE": str(staging)}, timeout=600)
+        if not (staging / "home.png").exists():
+            sys.exit(f"The app exited without capturing:\n{console[-3000:]}")
+        staging.rename(target)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    finally:
+        subprocess.run(["xcrun", "simctl", "shutdown", udid], capture_output=True)
+
+
+def captures():
+    CACHE.mkdir(parents=True, exist_ok=True)
+    simulator_runtime = runtime()
+    target = CACHE / capture_key(simulator_runtime)
+    with open(CACHE / ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if target.exists():
+            os.utime(target)
+        else:
+            capture(simulator_runtime, target)
+            stored = sorted((path for path in CACHE.iterdir() if path.is_dir() and not path.name.startswith(".")),
+                            key=lambda path: path.stat().st_mtime, reverse=True)
+            for stale in stored[KEPT_CAPTURES:]:
+                shutil.rmtree(stale)
+    return target
+
+
+def main():
+    source = captures()
+    shutil.rmtree(OUTPUT, ignore_errors=True)
+    OUTPUT.mkdir(parents=True)
+    run("xcrun", "swift", ROOT / COMPOSER, source, EXAMPLES, OUTPUT)
+    print(json.dumps({"captures": str(source), "slides": sorted(str(path) for path in OUTPUT.glob("*.png"))}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

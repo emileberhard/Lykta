@@ -15,6 +15,10 @@ gateway:
 render *args:
     @scripts/render "$@"
 
+# Compose the App Store screenshots into .local/screenshots, capturing the app only when its UI changed
+screenshots:
+    @scripts/screenshots
+
 # Build the gateway container image
 image:
     docker build --tag lykta-gateway .
