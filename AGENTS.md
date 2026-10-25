@@ -42,6 +42,11 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `svg`; when the SVG subset grows, record its new elements and attributes. The
   gateway refuses a layout with `app_update_required` when the phone's reported
   layout version predates a feature in it; never let such a layout through.
+- Admission measures both of Apple's 4 KB limits, the APNs payload and the
+  activity's attributes plus content, for the push of the current phase and
+  the end push, as the previous release would encode them, so every accepted
+  activity can still end after a rollback. `payloadBytes` reports that
+  measurement only in PUT responses; reads never compress.
 - Rendering is bounded and offline: layouts stay within the `Layout` budgets,
   the widget makes no network requests, and view bodies never parse JSON.
 - The app bundles the skill's `examples` folder, and its gallery draws and

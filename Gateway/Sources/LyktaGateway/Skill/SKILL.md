@@ -131,6 +131,11 @@ so and ask the user how to schedule it instead of leaving a process running. A
 reminder that only needs to alert the user at a time belongs in their reminders
 or calendar app.
 
+Write bodies as compact single-line JSON, and repeat similar rows with `each`
+over a data list instead of copying nodes; both cut the tokens you write. A
+PUT returns the activity's status plus `payloadBytes`, the size Lykta checks
+against Apple's 4096-byte limit, so the difference is the room left.
+
 Updates normally send only `data`; the title and layout keep their last values.
 Timers and timer-driven progress run on the phone, so send them once instead of
 updating every second. The phone shows at most one update per second per
@@ -226,8 +231,10 @@ read once without it to start again.
 Errors are JSON, and the message names the JSON path to fix:
 `{"error": "invalid_layout", "message": "lockScreen.hstack[1].colour: unknown key; expected alignment, hstack, modifiers, spacing"}`.
 
-- `payload_too_large`: the layout does not fit Apple's 4 KB push limit. Shorten
-  text or simplify the layout.
+- `payload_too_large`: the push, or the activity's name and content together,
+  would exceed Apple's 4 KB limit. The message says which, and estimates how
+  many compressed bytes the costliest JSON paths take; simplify those or
+  shorten text.
 - `device_not_ready`: the user has to open the Lykta app once.
 - `too_many_activities`: end an activity first.
 - `conflict`: the activity changed since the `ifRevision` you sent, or a tapped

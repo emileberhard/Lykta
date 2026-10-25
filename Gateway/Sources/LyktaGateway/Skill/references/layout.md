@@ -293,7 +293,11 @@ changes with it:
 ## Fitting
 
 A layout may be at most 32 KB with 256 nodes, 16 levels and 512 modifiers, and
-its compressed push must fit Apple's 4 KB limit. Within a presentation:
+its compressed push must fit Apple's 4 KB limit. Compression makes repeats
+nearly free and spends the bytes on distinct detail, so long SVG paths cost
+most: drop decimals a mark's display size cannot show, but keep the points
+its shape needs, and build a symmetric mark from one part repeated with
+`rotation`. Within a presentation:
 
 - Pad Lock Screen content 14 points from its edges, the margin notifications
   use, so the two line up in the list. Drawings and buttons may come closer.

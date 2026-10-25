@@ -40,7 +40,11 @@ agent, version and model, with a median row:
   none, as the reminder expects.
 - `agent`: seconds the agent phase took, including the harness's startup and
   exit.
-- `model calls` and `tool calls`, counted in the transcript.
+- `model calls` (turns) and `tool calls`, counted in the transcript.
+- `payload bytes`: largest accepted activity or notification payload in the
+  collected events; `413s`: rejected requests with HTTP 413. Missing events or
+  no accepted payload leave size unknown; a full 1000-event page leaves the
+  rejection count unknown.
 - `input` counts every prompt token, `cached` the ones read from the cache and
   `cache writes` the ones written to it; `output` includes `reasoning`. No
   provider reports how the rest of the output splits between text and tool

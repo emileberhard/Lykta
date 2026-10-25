@@ -189,7 +189,7 @@ actor Store {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
 
-    func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityStatus {
+    func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityPut {
         try db.transaction {
             let current = try liveActivity(device, name: name)
             if let expected = request.ifRevision, current?.revision != expected {
@@ -232,13 +232,13 @@ actor Store {
                     """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
             }
             let activity = try self.activity(id)
-            let size = try Self.payloadSize(of: activity, now: now)
+            let size = try Self.measure(activity, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
                 "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
                 "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
             ])
-            return activity.status
+            return ActivityPut(status: activity.status, payloadBytes: size)
         }
     }
 
@@ -500,7 +500,7 @@ actor Store {
                 }
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(changed), Self.encoded(state), activity.id)
-                _ = try Self.payloadSize(of: self.activity(activity.id), now: now)
+                _ = try Self.measure(self.activity(activity.id), now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -832,14 +832,20 @@ actor Store {
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
-    private static func payloadSize(of activity: Activity, now: Int) throws -> Int {
-        let size = try activity.payload(activity.phase == .starting ? .start : .update, now: now,
-                                        channel: String(repeating: "x", count: 64)).count
-        guard size <= maximumPayloadBytes else {
-            throw APIError(.payloadTooLarge,
-                           "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). Simplify the layout or shorten its text.")
+    private static func measure(_ activity: Activity, now: Int) throws -> Int {
+        let (size, stored) = try activity.admissionBytes(now: now)
+        let limit = maximumPayloadBytes
+        let exceeded = if size > limit {
+            "The push payload would be \(size) bytes; APNs allows \(limit)."
+        } else if stored > limit {
+            "The activity's name and content would be \(stored) bytes; iOS allows \(limit) for a Live Activity."
+        } else {
+            String?.none
         }
-        return size
+        guard let exceeded else { return size }
+        let layout = try JSONDecoder().decode(JSONValue.self, from: Data(activity.layout.utf8))
+        let data = try JSONDecoder().decode(JSONValue.self, from: Data(activity.data.utf8))
+        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data))))
     }
 
     private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {

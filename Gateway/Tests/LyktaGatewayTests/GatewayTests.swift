@@ -19,6 +19,40 @@ struct GatewayTests {
         _ = try await report([])
     }
 
+    @Test(arguments: [("budget", "APNs allows 4096"), (String(repeating: "n", count: 64), "iOS allows 4096 for a Live Activity")])
+    func admissionNamesTheTighterLimitAndLeavesRoomToEnd(name: String, limit: String) async throws {
+        try await put(name, ["title": "Build", "layout": Self.layout("{{text}}"), "data": ["text": ""]])
+        try await deliver(at: now)
+        var admitted: Admitted?
+        var refusal: Refusal?
+        for length in stride(from: 3_600, to: 4_400, by: 2) {
+            let response = try await send("PUT", "/v1/activities/\(name)", body: ["data": ["text": .string(Self.noise(length))]])
+            guard response.status == 200 else {
+                refusal = try response.decoded()
+                break
+            }
+            admitted = try response.decoded()
+        }
+        let message = try #require(refusal?.message)
+        #expect(message.contains(limit), "\(message)")
+        #expect(try #require(admitted).payloadBytes > 4_040)
+        try await deliver(at: now + 2)
+        #expect(try await send("DELETE", "/v1/activities/\(name)").status == 200)
+        try await deliver(at: now + 4)
+        #expect(push.sent.suffix(2) == ["update 5", "end 10"])
+        #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
+    }
+
+    @Test func oversizedLayoutsNameTheirCostliestPartsAndChangeNothing() async throws {
+        try await put("budget", Self.start)
+        let response = try await send("PUT", "/v1/activities/budget", body: ["layout": Self.layout(["vstack": .array(["logo", .string(Self.noise(7_000))])])])
+        let refusal: Refusal = try response.decoded()
+        #expect(response.status == 413)
+        #expect(refusal.message.contains("layout.lockScreen.vstack[1] ~"), "\(refusal.message)")
+        let unchanged: Detail = try await send("GET", "/v1/activities/budget").decoded()
+        #expect(unchanged.revision == 1)
+    }
+
     @Test func registersOnlyAttestedAppsAndInvitedDevices() async throws {
         let invite = try await store.invite(now: now)
         let refusals: [(Registration.Proof, String)] = [
@@ -452,6 +486,15 @@ struct GatewayTests {
         "layout": layout(["vstack": .array(["{{steps[step]}}", ["button": "next", "label": "Next", "add": ["step": .number(1)]]])]),
         "data": ["step": .number(1), "steps": ["1": "Chop", "2": "Fry"]],
     ]
+
+    static func noise(_ length: Int) -> String {
+        var seed: UInt64 = 42
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        return String((0..<length).map { _ in
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return alphabet[Int(seed >> 33) % alphabet.count]
+        })
+    }
 
     static let oversized = layout(["vstack": .array((0..<200).map { _ in .string(UUID().uuidString) })])
 

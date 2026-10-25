@@ -1,0 +1,1 @@
+Keep an AI subscription usage overview on my Lock Screen: Claude 72% used, resets in 2 hours; OpenAI 38% used, resets in 4 hours; Gemini 56% used, resets in 6 hours. Give each service its recognizable brand logo and a colored usage ring, with a useful compact and minimal Dynamic Island view. I want to glance at which subscription has room left.

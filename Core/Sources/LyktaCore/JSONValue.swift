@@ -30,6 +30,10 @@ public indirect enum JSONValue: Codable, Hashable, Sendable {
         }
     }
 
+    public var compressedByteCount: Int {
+        get throws { try Deflate.compress(json).count }
+    }
+
     public var json: [UInt8] {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

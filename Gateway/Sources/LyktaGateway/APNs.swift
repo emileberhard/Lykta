@@ -186,6 +186,21 @@ private final class Signer: Sendable {
 
 extension Activity {
     func payload(_ event: Payload.Event, now: Int, channel: String? = nil) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        return try encoder.encode(envelope(event, now: now, channel: channel))
+    }
+
+    func admissionBytes(now: Int) throws -> (push: Int, activityKit: Int) {
+        let encoder = JSONEncoder()
+        let current = try envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64))
+        var end = try envelope(.end, now: now)
+        end.aps.dismissalDate = now + 4 * 3600
+        let stored = try encoder.encode(LyktaActivity(id: id, name: name.rawValue)).count + encoder.encode(current.aps.contentState).count
+        return (max(try encoder.encode(current).count, try encoder.encode(end).count), stored)
+    }
+
+    private func envelope(_ event: Payload.Event, now: Int, channel: String? = nil) throws -> Payload {
         var aps = Payload.APS(timestamp: now, event: event,
                               contentState: try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)))
         if event == .start {
@@ -200,9 +215,7 @@ extension Activity {
         if event != .end { aps.staleDate = staleAfter.map { now + $0 } }
         aps.relevanceScore = relevance
         aps.dismissalDate = event == .end ? dismissAt : nil
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.withoutEscapingSlashes]
-        return try encoder.encode(Payload(aps: aps))
+        return Payload(aps: aps)
     }
 }
 
@@ -236,5 +249,5 @@ struct Payload: Codable {
         }
     }
 
-    let aps: APS
+    var aps: APS
 }

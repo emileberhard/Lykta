@@ -8,7 +8,7 @@ from pathlib import Path
 
 SECONDS = ["accepted", "agent"]
 TOKENS = ["input", "cached", "cache writes", "output", "reasoning"]
-MEASURES = [*SECONDS, "model calls", "tool calls", *TOKENS]
+MEASURES = [*SECONDS, "model calls", "tool calls", "payload bytes", "413s", *TOKENS]
 
 
 def moment(text):
@@ -42,6 +42,20 @@ def accepted(path, started):
         print(f"{path.name}: the first 1000 gateway events hold no accepted activity or notification, so accepted is unknown.", file=sys.stderr)
         return None
     return "none" if at is None else (moment(at) - started).total_seconds()
+
+
+def payload_measures(path):
+    try:
+        events = json.loads((path / "artifacts" / "events.json").read_text())["events"]
+    except (OSError, ValueError, KeyError):
+        return {"payload bytes": None, "413s": None}
+    sizes = [event["detail"]["payloadBytes"] for event in events
+             if event["name"] in ("activity.put", "notification.put") and "payloadBytes" in event["detail"]]
+    truncated = len(events) == 1000
+    return {
+        "payload bytes": max(sizes) if sizes else None,
+        "413s": None if truncated else sum(event["name"] == "request.failed" and event["detail"].get("status") == 413 for event in events),
+    }
 
 
 def action(call):
@@ -90,6 +104,7 @@ def trial(path):
         "cached": usage.get("n_cache_tokens"),
         "output": usage.get("n_output_tokens"),
         **steps_measures(path, started),
+        **payload_measures(path),
     }
 
 

@@ -62,7 +62,8 @@ gateway a log of what it observes:
 
 The gateway logs what it did with each request and push. These logs contain no
 tokens, no activity or notification text and no uploaded files. Your agents can read your phone's log with the
-agent token. The gateway's operator can read every phone's log.
+agent token. The gateway's operator can read every phone's log. A refused
+request's message names layout paths and byte counts, never layout values.
 
 ## Retention and deletion
 

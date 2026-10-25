@@ -86,6 +86,21 @@ struct ActivityDetail: Encodable, Sendable {
     }
 }
 
+struct ActivityPut: Encodable, Sendable {
+    let status: ActivityStatus
+    let payloadBytes: Int
+
+    func encode(to encoder: any Encoder) throws {
+        try status.encode(to: encoder)
+        var fields = encoder.container(keyedBy: CodingKeys.self)
+        try fields.encode(payloadBytes, forKey: .payloadBytes)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case payloadBytes
+    }
+}
+
 struct Activity: Sendable {
     enum Phase: String, Encodable, Sendable {
         case starting, live, ending, ended

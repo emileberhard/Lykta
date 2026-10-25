@@ -117,8 +117,16 @@ environment its channel was created in, because channels never cross
 environments, and a start whose token moved gets a new channel.
 
 **The layout travels in the push.** `ContentState` carries the title and the
-raw-deflated layout JSON; the phone decodes it once. The gateway checks the
-real payload against the 4 KB APNs limit before accepting a request.
+raw-deflated layout JSON; the phone decodes it once. Apple allows 4 KB twice:
+for the APNs payload, and for the activity's attributes and content together.
+Before accepting a start, update or tap, the gateway measures the push for the
+activity's phase, the end push with the longest dismissal date, and the
+attributes with the content, encoded as the previous release would send them,
+so a rollback can still deliver and end everything it accepted. The PUT
+response reports the larger push as `payloadBytes`. A refusal names the limit
+that failed and estimates, with at most 48 compressions, how many bytes the
+costliest JSON paths take, counting identical copies together; the estimates
+overlap, so the message says they do not add up.
 
 **Taps travel through the gateway.** A button or toggle runs a
 `LiveActivityIntent` in the app, which posts the action to the gateway with the

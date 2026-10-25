@@ -46,6 +46,10 @@ struct Identified: Decodable {
     let id: UUID
 }
 
+struct Admitted: Decodable {
+    let payloadBytes: Int
+}
+
 struct Failure: Decodable, Equatable {
     let error: String
 }
@@ -110,6 +114,7 @@ final class FakePush: PushService {
             }
             let aps: APS
         }
+        try Self.check(payload)
         let alert = try? JSONDecoder().decode(Sent.self, from: payload).aps.alert
         state.withLock { $0.startAlerts.append(alert?.body ?? "") }
         try record(alert.map { !$0.title.isEmpty && !$0.body.isEmpty } == true ? "start" : "start without an alert title and body", to: environment)
@@ -135,6 +140,7 @@ final class FakePush: PushService {
             }
             let aps: APS
         }
+        try Self.check(payload)
         let aps = try? JSONDecoder().decode(Sent.self, from: payload).aps
         let dismissed = aps.flatMap { aps in aps.dismissal.map { $0 <= aps.timestamp } } == true
         try record(aps?.event ?? "malformed", detail: " \(priority)" + (dismissed ? " dismissed" : ""))
@@ -152,6 +158,10 @@ final class FakePush: PushService {
 
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String] {
         []
+    }
+
+    private static func check(_ payload: Data) throws(APNsError) {
+        if payload.count > 4096 { throw .rejected(status: 413, reason: "PayloadTooLarge") }
     }
 
     private func record(_ call: String, detail: String = "", to environment: PushEnvironment? = nil) throws(APNsError) {
