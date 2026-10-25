@@ -8,14 +8,15 @@ sender gather in one thread.
 
 ## Send
 
-`PUT /v1/notifications/{name}` sends a notification right away. The name
-identifies the event, such as `printer-job-42-done`: 1 to 64 characters from
-`a-z`, `0-9`, `-`, `_` and `.`.
+`lykta put notifications/{name}`, the [main skill's](../SKILL.md#the-lykta-command)
+command, sends a notification right away. The name identifies the event, such
+as `printer-job-42-done`: 1 to 64 characters from `a-z`, `0-9`, `-`, `_` and
+`.`.
 
-```bash
-curl -sS -X PUT "$LYKTA_URL/v1/notifications/printer-job-42-done" \
-  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}'
+```sh
+lykta put notifications/printer-job-42-done <<'EOF'
+{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}
+EOF
 ```
 
 | Field | Meaning |
@@ -27,10 +28,12 @@ curl -sS -X PUT "$LYKTA_URL/v1/notifications/printer-job-42-done" \
 | `sound` | `true` plays the default sound, the id of a sound plays that sound. Leave it out for a silent notification, for news the user can read later. |
 | `image` | Optional id of an image shown as a thumbnail and in full when the user expands the notification, such as a photo of the finished print. |
 
-The gateway answers `201` with the notification's status. It keeps a
-notification and reserves its name for a day, until `expires`. Within that
-day the same request returns the existing notification with `200` and sends
-nothing again, so after a lost response repeat the exact request; a different
+`lykta put` waits up to 10 seconds for Apple's answer and prints the
+notification's [status](#status), so `state` is `sent`, or says what happened.
+The gateway keeps a notification and reserves its name for a day, until
+`expires`. Within that
+day the same request returns the existing notification and sends nothing
+again, so after a lost response repeat the exact request; a different
 request under the name fails with `conflict`. Never send under a new name to
 retry, because the user may already have seen the first.
 
@@ -40,19 +43,20 @@ the PUT then, as the main skill describes for activities.
 
 ## Media
 
-Upload each sound or image once with `POST /v1/media`, the file as the raw
-body, and put the returned `id` in the notification:
+`lykta media FILE` uploads a sound or image and prints its id, the same id
+each time for the same file. Upload and send in one command, with the
+heredoc's delimiter unquoted so the shell fills in the ids:
 
-```bash
-curl -sS -X POST "$LYKTA_URL/v1/media" -H "Authorization: Bearer $LYKTA_TOKEN" \
-  --data-binary @chime.wav
+```sh
+lykta put notifications/front-door-1842 <<EOF
+{"sender": {"id": "front-door", "name": "Front door", "avatar": "$(lykta media door-avatar.jpg)"}, "body": "Someone is at the door.", "sound": "$(lykta media chime.wav)", "image": "$(lykta media snapshot.jpg)"}
+EOF
 ```
 
-The gateway answers `201` with `{"id": "m_…", "type": "sound", "durationSeconds": 1.6}`,
-or `200` with the same id when this phone already has the file. An id works
-only for the phone whose token uploaded it, and the gateway removes a file a
-day after its last upload or use, so upload again when a notification names
-an id it no longer knows.
+When an upload fails, `lykta` prints why, and the PUT fails on the empty id.
+An id works only for the phone whose token uploaded it, and the gateway
+removes a file a day after its last upload or use, so upload again when a
+notification names an id it no longer knows.
 
 - **Sounds** are WAV files with linear PCM audio, shorter than 30 seconds.
   Convert other audio first, such as `ffmpeg -i in.m4a -ac 1 -c:a pcm_s16le out.wav`.
@@ -74,7 +78,7 @@ media files next to them where the ids go, so upload each and put its id there;
 
 ## Status
 
-`GET /v1/notifications/{name}` returns:
+`lykta get notifications/{name}` returns:
 
 | Field | Values |
 | --- | --- |
@@ -111,7 +115,7 @@ should you.
 
 ## Debug
 
-`GET /v1/events`, described in the main skill, also records notifications:
+`lykta get events`, described in the main skill, also records notifications:
 `media.put` for each new file, `notification.put` when the gateway accepted
 one, `push.notification` with Apple's outcome, `notification.media` for each
 file the phone fetched, `notification.received` when the phone prepared it,

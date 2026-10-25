@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+swift build --package-path Gateway --product LyktaGateway
+gateway=$(swift build --package-path Gateway --show-bin-path)/LyktaGateway
+skill=$PWD/Gateway/Sources/LyktaGateway/Skill
+url=http://127.0.0.1:$((20000 + $$ % 20000))
+token=lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b
+work=$(mktemp -d)
+LYKTA_HOST=127.0.0.1 LYKTA_PORT=${url##*:} "$gateway" simulate 2>"$work/gateway.log" &
+pid=$!
+trap 'kill "$pid" 2>/dev/null; rm -rf "$work"' EXIT
+until curl -fsS "$url/v1/version" >/dev/null 2>&1; do
+	kill -0 "$pid" 2>/dev/null || { cat "$work/gateway.log"; exit 1; }
+	sleep 0.2
+done
+
+cli() {
+	if [ "$shell" = sh ]; then sh "$skill/scripts/lykta" "$@"; else pwsh -NoProfile -File "$skill/scripts/lykta.ps1" "$@"; fi
+}
+
+expect() {
+	want=$1 status=$2
+	shift 2
+	set +e
+	"$@" >"$work/out" 2>"$work/err"
+	got=$?
+	set -e
+	if [ "$got" -ne "$status" ] || ! grep -qF -- "$want" "$work/out" "$work/err"; then
+		printf '%s: lykta %s exited %s and should exit %s with %s\n' "$shell" "$*" "$got" "$status" "$want" >&2
+		cat "$work/out" "$work/err" >&2
+		exit 1
+	fi
+}
+
+for shell in sh pwsh; do
+	export HOME="$work/$shell" XDG_CONFIG_HOME='' LYKTA_URL='' LYKTA_TOKEN=''
+	mkdir -p "$HOME"
+	expect 'not set up' 2 cli get activities
+	expect 'unknown command' 2 cli publish
+	expect 'refused with HTTP 401' 1 cli setup "$url" lykta_agent_wrong
+	expect "Lykta is set up for $url" 0 cli setup "$url/" "$token"
+	cp "$work/out" "$work/setup"
+	expect '# Lykta' 0 cat "$work/setup"
+	expect "$HOME/.config/lykta/token" 0 find "$HOME/.config/lykta/token" -perm 600
+	expect '==> examples/printer.json <==' 0 cli docs references/layout.md examples/printer.json
+	expect 'refused with HTTP 404' 1 cli docs examples/missing.json
+	expect '"delivery":"accepted"' 0 cli put activities/printer "$skill/examples/printer.json"
+	printf '{"now": {"eta": 60}}' | expect '"revision":2' 0 cli put /v1/activities/printer
+	expect '"eta":' 0 cli get activities/printer
+	printf '{"title": "Broken", "layout": {}}' | expect 'refused with HTTP 400' 1 cli put activities/broken
+	expect 'm_' 0 cli media "$skill/examples/notifications/doorbell.wav"
+	sound=$(cat "$work/out")
+	printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring", "sound": "%s"}' "$sound" |
+		expect '"state":"sent"' 0 cli put "notifications/ring-$shell"
+	expect '"state":"ending"' 0 cli delete 'activities/printer?dismissAfter=0'
+	(export LYKTA_URL=http://127.0.0.1:1 LYKTA_TOKEN=unused; expect 'could not reach' 3 cli get activities)
+	printf '%s: lykta works against the simulated gateway\n' "$shell"
+done

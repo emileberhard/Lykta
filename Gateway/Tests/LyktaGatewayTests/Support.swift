@@ -179,3 +179,15 @@ final class FakePush: PushService {
         if let failure { throw failure }
     }
 }
+
+func deliverOnceClaimable(_ store: Store, _ push: FakePush, at time: Int) async throws {
+    let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
+    while true {
+        let jobs = try await store.claim(now: time, limit: 4)
+        for job in jobs {
+            try await store.finish(job, try await delivery.send(job, now: time), now: time)
+        }
+        if !jobs.isEmpty { return }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}

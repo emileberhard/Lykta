@@ -85,11 +85,13 @@ final class Model {
     func copySetup() async -> Bool {
         guard let gateway, let credentials else { return false }
         telemetry.record("app.copySetup")
+        let url = gateway.url.absoluteString
+        let script = gateway.url.appending(path: "skill/scripts/lykta").absoluteString
         UIPasteboard.general.string = """
-            Show Live Activities and send notifications on my iPhone with Lykta.
-            Gateway: \(gateway.url.absoluteString)
-            Token: \(credentials.agentToken)
-            Instructions: \(gateway.url.appending(path: "skill/SKILL.md").absoluteString)
+            Show Live Activities and send notifications on my iPhone with Lykta. Set it up and read its instructions with this command:
+            curl -fsS --create-dirs -o ~/.local/bin/lykta \(script) && sh ~/.local/bin/lykta setup \(url) \(credentials.agentToken)
+            Or in PowerShell:
+            irm \(script).ps1 -UseBasicParsing -OutFile $env:TEMP\\lykta.ps1; powershell -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\lykta.ps1 setup \(url) \(credentials.agentToken)
             """
         await allowNotifications()
         return true

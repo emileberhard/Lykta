@@ -13,7 +13,7 @@ struct API: Sendable {
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
         let failure: APIError
         do {
-            return try await route(request, now: Int(Date().timeIntervalSince1970))
+            return try await route(request, now: Self.now())
         } catch let error as APIError {
             failure = error
         } catch {
@@ -59,9 +59,12 @@ struct API: Sendable {
         "examples/notifications/print-finished.wav": PackageResources.print_finished_wav,
         "examples/notifications/printer-avatar.jpg": PackageResources.printer_avatar_jpg,
         "examples/notifications/tests-passed.json": PackageResources.tests_passed_json,
+        "scripts/lykta": PackageResources.lykta,
+        "scripts/lykta.ps1": PackageResources.lykta_ps1,
     ].map { path, body in
         let type = switch path.split(separator: ".").last {
         case "md": "text/markdown; charset=utf-8"
+        case "scripts/lykta", "ps1": "text/plain; charset=utf-8"
         case "json": "application/json"
         case "jpg": "image/jpeg"
         case "wav": "audio/wav"
@@ -110,20 +113,15 @@ struct API: Sendable {
             return .noContent
         case ("GET", "v1/actions"):
             let device = try await agent(request)
-            let wait = try request.query["wait"].map { text in
-                guard let seconds = Int(text), (0...25).contains(seconds) else { throw Self.invalid("wait must be 0 to 25 seconds.") }
-                return seconds
-            } ?? 0
+            let wait = try Self.wait(request)
             let after = try Self.cursor(request, of: "action")
             let cursor = if let after { after } else { try await store.latestAction(device) }
-            let deadline = ContinuousClock.now.advanced(by: .seconds(wait))
-            while true {
-                let actions = try await store.actions(device, after: cursor, limit: 100)
-                if !actions.isEmpty || ContinuousClock.now >= deadline || shutdown.isClosing {
-                    return Self.json(200, ActionPage(actions: actions, cursor: actions.last?.seq ?? cursor))
-                }
-                try await Task.sleep(for: .milliseconds(250))
+            var actions: [ActionRecord] = []
+            try await waiting(wait) {
+                actions = try await store.actions(device, after: cursor, limit: 100)
+                return !actions.isEmpty
             }
+            return Self.json(200, ActionPage(actions: actions, cursor: actions.last?.seq ?? cursor))
         case ("POST", "v1/device/events"):
             let device = try await phone(request)
             try await store.ingest(device, try Self.decode(request.body))
@@ -138,9 +136,12 @@ struct API: Sendable {
             return Self.json(200, ["events": try await store.events(device: device.id, after: after, limit: limit)])
         case ("PUT", "v1/notifications/{name}"):
             let device = try await agent(request)
-            let (status, created) = try await store.putNotification(device, name: try Self.name(path[2]),
-                                                                    request: try NotificationRequest.decode(try Self.decode(request.body)), now: now)
-            return Self.json(created ? 201 : 200, status)
+            let name = try Self.name(path[2])
+            let wait = try Self.wait(request)
+            let created = try await store.putNotification(device, name: name, request: try NotificationRequest.decode(try Self.decode(request.body)),
+                                                          now: now)
+            try await waiting(wait) { try await store.notificationAttempted(device, name: name, now: Self.now()) }
+            return Self.json(created ? 201 : 200, try await store.notification(device, name: name, now: Self.now()))
         case ("GET", "v1/notifications/{name}"):
             return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
         case ("POST", "v1/device/notifications/{id}/report"):
@@ -160,9 +161,12 @@ struct API: Sendable {
             return Self.json(200, try await store.detail(try await agent(request), name: try Self.name(path[2])))
         case ("PUT", "v1/activities/{name}"):
             let device = try await agent(request)
-            let status = try await store.put(device, name: try Self.name(path[2]), request: try Self.activityRequest(request.body),
-                                             maximumLiveActivities: maximumLiveActivities, now: now)
-            return Self.json(200, status)
+            let name = try Self.name(path[2])
+            let wait = try Self.wait(request)
+            let (activity, payloadBytes) = try await store.put(device, name: name, request: try Self.activityRequest(request.body),
+                                                               maximumLiveActivities: maximumLiveActivities, now: now)
+            try await waiting(wait) { try await store.attempted(activity, now: Self.now()) }
+            return Self.json(200, ActivityPut(detail: try await store.detail(device, name: name), payloadBytes: payloadBytes))
         case ("DELETE", "v1/activities/{name}"):
             let device = try await agent(request)
             let dismissAfter = try request.query["dismissAfter"].map { text in
@@ -184,6 +188,24 @@ struct API: Sendable {
         case 6 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "media": "v1/device/notifications/{id}/media/{media}"
         default: path.joined(separator: "/")
         }
+    }
+
+    private func waiting(_ seconds: Int, until done: () async throws -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
+        while !(try await done()), ContinuousClock.now < deadline, !shutdown.isClosing {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    private static func now() -> Int {
+        Int(Date().timeIntervalSince1970)
+    }
+
+    private static func wait(_ request: HTTPRequest) throws -> Int {
+        try request.query["wait"].map { text in
+            guard let seconds = Int(text), (0...25).contains(seconds) else { throw invalid("wait must be 0 to 25 seconds.") }
+            return seconds
+        } ?? 0
     }
 
     private struct ActionPage: Encodable {
@@ -235,6 +257,14 @@ struct API: Sendable {
         guard request.endAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("endAfter must be 1 to 28800 seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         guard request.ifRevision.map({ $0 >= 1 }) != false else { throw invalid("ifRevision must be a revision from GET /v1/activities/{name}.") }
+        let paths = request.now?.keys.sorted() ?? []
+        if let path = paths.first(where: { !(1...256).contains($0.utf8.count) || $0.contains("{{") || $0.split(separator: ".", omittingEmptySubsequences: false).contains("") }) {
+            throw invalid("now: \"\(path)\" is not a data path such as \"timer.ends\".")
+        }
+        if let (outer, inner) = paths.lazy.flatMap({ outer in paths.lazy.filter { $0.hasPrefix(outer + ".") }.map { (outer, $0) } }).first {
+            throw invalid("now: \"\(outer)\" contains \"\(inner)\"; set each value once.")
+        }
+        guard request.now?.values.allSatisfy(\.isFinite) != false else { throw invalid("now takes finite numbers of seconds.") }
         return request
     }
 

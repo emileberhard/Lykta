@@ -91,14 +91,14 @@ gateway needs the matching key.
 1. `curl -fsS https://<host>/skill/SKILL.md` returns the agent skill.
 2. In the app, open an example and tap Show on Lock Screen; it appears on the
    Lock Screen and in the Dynamic Island.
-3. With the agent token from Copy Agent Setup, `GET /v1/activities/example`
-   reports `"delivery": "accepted"`. Gateway logs go to stderr
-   (`docker logs lykta`).
-4. Allow notifications when Copy Agent Setup asks, then
-   `PUT /v1/notifications/hello` with
-   `{"sender": {"id": "setup", "name": "Setup"}, "body": "Hello"}`. It arrives
-   with the initials S on a colored circle, and
-   `GET /v1/notifications/hello` reports `"state": "received"`.
+3. Run the command Copy Agent Setup copies; it installs `lykta` and prints the
+   agent skill. `lykta get activities/example` then reports
+   `"delivery": "accepted"`. Gateway logs go to stderr (`docker logs lykta`).
+4. Allow notifications when Copy Agent Setup asks, then send
+   `{"sender": {"id": "setup", "name": "Setup"}, "body": "Hello"}` with
+   `lykta put notifications/hello`. It arrives with the initials S on a
+   colored circle, and `lykta get notifications/hello` reports
+   `"state": "received"`.
 5. In the app's examples, send Printer. It arrives with the printer's picture,
    its chime and a photo, and its status reports
    `{"avatar": "image", "sound": "custom"}`. If it reports `"sound": "default"`,

@@ -1,0 +1,154 @@
+#!/bin/sh
+set -u
+
+usage() {
+	cat <<'EOF'
+Usage: lykta COMMAND
+
+  setup URL TOKEN   Save the gateway URL and agent token, check them and print the skill
+  docs FILE...      Print skill files, such as references/layout.md examples/printer.json
+  put PATH [FILE]   PUT the JSON in FILE, or on stdin, to /v1/PATH and wait for Apple's answer
+  get PATH          GET /v1/PATH, such as activities/deploy or actions?wait=25
+  delete PATH       DELETE /v1/PATH, such as activities/deploy?dismissAfter=0
+  media FILE        Upload an image or sound and print its id
+
+LYKTA_URL and LYKTA_TOKEN take precedence over the setup saved in ~/.config/lykta.
+Exit status: 0 done, 1 the gateway refused the request, 2 usage or setup error,
+3 the gateway was unreachable or failed.
+EOF
+}
+
+fail() {
+	printf 'lykta: %s\n' "$1" >&2
+	exit "$2"
+}
+
+config=${XDG_CONFIG_HOME:-$HOME/.config}/lykta
+
+load() {
+	url=${LYKTA_URL:-}
+	token=${LYKTA_TOKEN:-}
+	if [ -z "$url" ] && [ -r "$config/url" ]; then url=$(cat "$config/url"); fi
+	if [ -z "$token" ] && [ -r "$config/token" ]; then token=$(cat "$config/token"); fi
+	[ -n "$url" ] && [ -n "$token" ] ||
+		fail "not set up; run lykta setup URL TOKEN with the setup the user copied from the Lykta app, or set LYKTA_URL and LYKTA_TOKEN" 2
+	url=${url%/}
+}
+
+nothing() {
+	:
+}
+
+json() {
+	printf '%s' "$body"
+}
+
+medium() {
+	cat -- "$file"
+}
+
+call() {
+	feed=$1 method=$2 target=$3
+	shift 3
+	tries=1
+	while :; do
+		out=$($feed | curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -w '%{http_code}' "$@" "$url$target")
+		code=$?
+		[ "$code" -eq 7 ] && [ "$tries" -lt 5 ] || break
+		tries=$((tries + 1))
+		sleep 2
+	done
+	case $code in
+	0) ;;
+	28) fail "$url did not answer within 90 seconds; read the result with lykta get before sending again" 3 ;;
+	*) fail "could not reach $url (curl exit $code); it may be restarting, so retry in a few seconds" 3 ;;
+	esac
+	status=${out#"${out%???}"}
+	response=${out%???}
+	case $status in
+	2??) ;;
+	4??) printf 'lykta: %s %s was refused with HTTP %s:\n%s\n' "$method" "$target" "$status" "$response" >&2; exit 1 ;;
+	*) printf 'lykta: %s %s failed with HTTP %s:\n%s\n' "$method" "$target" "$status" "$response" >&2; exit 3 ;;
+	esac
+}
+
+api() {
+	path=${1#/}
+	path=/v1/${path#v1/}
+}
+
+setup() {
+	[ $# -eq 2 ] || fail "usage: lykta setup URL TOKEN" 2
+	url=${1%/} token=$2
+	case $url in
+	http://* | https://*) ;;
+	*) fail "the URL must start with https:// or http://" 2 ;;
+	esac
+	call nothing GET /v1/activities
+	(umask 077 && mkdir -p "$config" && rm -f "$config/token" && printf '%s\n' "$url" >"$config/url" && printf '%s\n' "$token" >"$config/token") ||
+		fail "could not save the setup in $config" 2
+	self=$0
+	run=$self
+	if [ -f "$self" ]; then
+		chmod +x "$self" 2>/dev/null
+		[ "$(command -v lykta 2>/dev/null)" = "$self" ] && run=lykta
+	fi
+	case $run in "$HOME"/*) run="~${run#"$HOME"}" ;; esac
+	printf 'Lykta is set up for %s. Run it as %s.\n\n' "$url" "$run"
+	call nothing GET /skill/SKILL.md
+	printf '%s\n' "$response"
+}
+
+docs() {
+	[ $# -gt 0 ] || fail "usage: lykta docs FILE..., such as lykta docs references/layout.md" 2
+	for name do
+		[ $# -eq 1 ] || printf '==> %s <==\n' "$name"
+		call nothing GET "/skill/${name#/}"
+		printf '%s\n' "$response"
+	done
+}
+
+put() {
+	[ $# -eq 1 ] || [ $# -eq 2 ] || fail "usage: lykta put PATH [FILE], with the JSON body in FILE or on stdin" 2
+	if [ $# -eq 1 ] && [ -t 0 ]; then fail "send the JSON body on stdin, such as with a heredoc, or name a file" 2; fi
+	body=$(cat -- "${2:--}") || fail "could not read ${2:-stdin}" 2
+	api "$1"
+	case $path in *\?*) path=$path'&wait=10' ;; *) path=$path'?wait=10' ;; esac
+	call json PUT "$path" -H 'Content-Type: application/json' --data-binary @-
+	printf '%s\n' "$response"
+}
+
+media() {
+	[ $# -eq 1 ] || fail "usage: lykta media FILE" 2
+	file=$1
+	[ -f "$file" ] && [ -r "$file" ] || fail "could not read $file" 2
+	call medium POST /v1/media -H 'Content-Type: application/octet-stream' --data-binary @-
+	id=$(printf '%s' "$response" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+	[ -n "$id" ] || fail "the gateway answered without a media id: $response" 3
+	printf '%s\n' "$id"
+}
+
+send() {
+	method=$1 name=$2
+	shift 2
+	[ $# -eq 1 ] || fail "usage: lykta $name PATH" 2
+	load
+	api "$1"
+	call nothing "$method" "$path"
+	printf '%s\n' "$response"
+}
+
+command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
+verb=${1:-}
+[ $# -eq 0 ] || shift
+case $verb in
+setup) setup "$@" ;;
+docs) load && docs "$@" ;;
+put) load && put "$@" ;;
+get) send GET get "$@" ;;
+delete) send DELETE delete "$@" ;;
+media) load && media "$@" ;;
+help | -h | --help) usage ;;
+'') usage >&2; exit 2 ;;
+*) usage >&2; fail "unknown command $verb" 2 ;;
+esac

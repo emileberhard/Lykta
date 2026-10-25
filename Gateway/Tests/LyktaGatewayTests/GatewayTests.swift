@@ -464,6 +464,80 @@ struct GatewayTests {
         #expect(try stale.decoded() as Failure == Failure(error: "conflict"))
     }
 
+    @Test func aWaitingPutAnswersWithApplesOutcomeForItsRevision() async throws {
+        async let started = send("PUT", "/v1/activities/build?wait=5", body: Self.start)
+        try await deliverOnceClaimable(store, push, at: now)
+        #expect(try await started.decoded() as Status == Status(state: "live", delivery: "accepted", error: nil))
+        let updated: Status = try await send("PUT", "/v1/activities/build", body: ["data": ["step": "Test"]]).decoded()
+        #expect(updated == Status(state: "live", delivery: "pending", error: nil))
+        push.fail("update", .rejected(status: 429, reason: "TooManyRequests"))
+        async let throttled = send("PUT", "/v1/activities/build?wait=5", body: ["data": ["step": "Sign"]])
+        try await deliverOnceClaimable(store, push, at: now + 1)
+        let answer: Status = try await throttled.decoded()
+        #expect(answer.delivery == "throttled")
+        #expect(answer.error == "APNs 429 TooManyRequests")
+        #expect(push.sent == ["createChannel", "start", "update 5"])
+    }
+
+    @Test func aWaitOutOfRangeChangesNothing() async throws {
+        let response = try await send("PUT", "/v1/activities/build?wait=26", body: Self.start)
+        #expect(try response.decoded() as Refusal == Refusal(error: "invalid_request", message: "wait must be 0 to 25 seconds."))
+        #expect(try await send("GET", "/v1/activities/build").status == 404)
+    }
+
+    @Test func nowSetsDataToTheTimeTheGatewayReceivesThePut() async throws {
+        guard case var .object(start) = Self.start else { return }
+        start["now"] = ["started": .number(0), "timer.ends": .number(1500)]
+        let started: Detail = try await send("PUT", "/v1/activities/build", body: .object(start)).decoded()
+        let begun = try started.data.number(at: "started")
+        #expect(abs(begun - Double(now)) < 5)
+        #expect(try started.data.number(at: "timer.ends") == begun + 1500)
+        #expect(try started.data.value(at: "step") == "Compile")
+        let restarted: Detail = try await send("PUT", "/v1/activities/build", body: ["now": ["timer.ends": .number(60)]]).decoded()
+        #expect(restarted.revision == 2)
+        #expect(try restarted.data.number(at: "started") == begun)
+        #expect(try restarted.data.value(at: "step") == "Compile")
+    }
+
+    @Test(arguments: [
+        (["a..b": .number(0)], #"now: "a..b" is not a data path such as "timer.ends"."#),
+        (["timer": .number(0), "timer.ends": .number(0)], #"now: "timer" contains "timer.ends"; set each value once."#),
+        (["step.ends": .number(0)], #"now: data "step" is not an object or a list, so it cannot hold "step.ends""#),
+    ] as [(JSONValue, String)])
+    func nowRefusesPathsItCannotSet(_ paths: JSONValue, message: String) async throws {
+        guard case var .object(start) = Self.start else { return }
+        start["now"] = paths
+        let response = try await send("PUT", "/v1/activities/build", body: .object(start))
+        #expect(try response.decoded() as Refusal == Refusal(error: "invalid_request", message: message))
+        #expect(try await send("GET", "/v1/activities/build").status == 404)
+    }
+
+    @Test func servesEveryFileOfTheSkill() async throws {
+        let skill = Self.exampleDirectory.deletingLastPathComponent()
+        let files = try FileManager.default.subpathsOfDirectory(atPath: skill.path(percentEncoded: false)).filter { path in
+            var directory: ObjCBool = false
+            return !path.split(separator: "/").contains { $0.hasPrefix(".") }
+                && FileManager.default.fileExists(atPath: skill.appending(path: path).path(percentEncoded: false), isDirectory: &directory) && !directory.boolValue
+        }
+        #expect(files.contains("scripts/lykta") && files.contains("scripts/lykta.ps1"))
+        for file in files {
+            let served = await api.handle(HTTPRequest(method: "GET", target: "/skill/\(file)", headers: [:], body: []))
+            #expect(served.status == 200, "\(file)")
+            #expect(Data(served.body) == (try Data(contentsOf: skill.appending(path: file))), "\(file)")
+        }
+    }
+
+    @Test func theSkillsDocsCommandsReadEveryExampleInOutputsHarnessesShowWhole() throws {
+        let skill = Self.exampleDirectory.deletingLastPathComponent()
+        let commands = String(decoding: PackageResources.SKILL_md, as: UTF8.self).split(separator: "\n")
+            .filter { $0.hasPrefix("lykta docs ") }.map { $0.split(separator: " ").dropFirst(2).map(String.init) }
+        for files in commands {
+            let printed = try files.reduce(0) { $0 + $1.utf8.count + 9 + (try Data(contentsOf: skill.appending(path: $1)).count) }
+            #expect(printed < 28_000, "\(files)")
+        }
+        #expect(Set(commands.joined()) == Set(["references/layout.md"] + (try Self.exampleFiles()).map { "examples/\($0)" }))
+    }
+
     @Test func requiresTheAgentToken() async throws {
         let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/activities",
                                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))

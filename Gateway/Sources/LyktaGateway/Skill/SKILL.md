@@ -11,9 +11,32 @@ and a notification, which tells the user about one moment. You send JSON to
 the user's gateway; the gateway validates it and pushes it to the phone. The
 Lykta app does not need to be open.
 
-You need the gateway URL and agent token: `LYKTA_URL` and `LYKTA_TOKEN` when
-they are set, as the examples assume, and otherwise the setup the user copied
-out of the Lykta app. Send the token as `Authorization: Bearer <token>`.
+## The lykta command
+
+Send everything with `lykta`, a small command in this skill's `scripts`
+folder: `lykta` for sh with curl, `lykta.ps1` for PowerShell. The setup the
+user copied from the Lykta app installs it, saves the gateway and token, and
+says how to run it. Otherwise run `scripts/lykta` from this folder, which uses
+`LYKTA_URL` and `LYKTA_TOKEN` when they are set, or first
+`scripts/lykta setup URL TOKEN` with the user's gateway and token.
+
+| Command | Does |
+| --- | --- |
+| `lykta put PATH [FILE]` | Sends the JSON in FILE, or on stdin, to `PUT /v1/PATH` and prints the result once Apple has answered |
+| `lykta get PATH` | `GET /v1/PATH` |
+| `lykta delete PATH` | `DELETE /v1/PATH` |
+| `lykta media FILE` | Uploads an image or sound and prints its id |
+| `lykta docs FILE...` | Prints files of this skill |
+
+It prints the gateway's JSON. When the gateway refuses a request, `lykta`
+exits with 1 and prints the error, whose message names what to fix; 2 means a
+usage or setup mistake, and 3 that the gateway was unreachable or failed,
+usually because it is restarting, so retry after a few seconds. Send bodies in
+a quoted heredoc, so the JSON needs no escaping, and quote paths that hold `?`
+or `&`. In PowerShell, pass the body as a UTF-8 file, because Windows
+PowerShell pipes only ASCII to other programs. Without a shell, send the same
+requests over HTTP with the token as `Authorization: Bearer <token>`, `wait=10`
+in each PUT's query, and media as the body of `POST /v1/media`.
 
 ## Choose the form
 
@@ -89,9 +112,19 @@ activity look generated:
 - one example's structure with the new content swapped in
 
 Before designing your first layout, read the
-[layout reference](references/layout.md) and every [example](#examples) in
-one action, with one command or one batch of parallel requests rather than
-one file at a time. Together they show the range: drawn scenery, charts,
+[layout reference](references/layout.md) and every [example](#examples) at
+once, with these commands in one batch of parallel calls, or the same files
+directly when this skill is on disk. Each prints less than harnesses cut off:
+
+```sh
+lykta docs references/layout.md
+lykta docs examples/recipe-steps.json examples/pr-inbox.json examples/app-review.json
+lykta docs examples/jira-release.json examples/shopping-list.json examples/orion-return.json
+lykta docs examples/puppy-potty.json examples/agent-question.json examples/solar-eclipse.json
+lykta docs examples/homelab.json examples/movie-night.json examples/printer.json
+```
+
+Together they show the range: drawn scenery, charts,
 gauges, rows, chat bubbles and controls, each in its own palette. They are
 still a small slice of what the nodes and SVG can do, one answer each to one
 subject, so treat them as a vocabulary of techniques rather than templates:
@@ -104,8 +137,8 @@ without its title?
 
 ## Start or update
 
-`PUT /v1/activities/{name}` with a JSON body starts the activity when no live
-activity has that name, and updates it otherwise. A name is 1 to 64 characters
+`lykta put activities/{name}` with a JSON body starts the activity when no
+live activity has that name, and updates it otherwise. A name is 1 to 64 characters
 from `a-z`, `0-9`, `-`, `_` and `.`.
 
 | Field | Meaning |
@@ -113,6 +146,7 @@ from `a-z`, `0-9`, `-`, `_` and `.`.
 | `title` | Required to start; up to 120 characters. Used for alerts and when the phone cannot render the layout. |
 | `layout` | Required to start. See [the layout reference](references/layout.md). |
 | `data` | Values for `{{path}}` placeholders in the layout. Replaces the previous data. |
+| `now` | `{"path": seconds}` sets each data path to the time the gateway receives the PUT, in Unix seconds, plus the seconds, such as `{"started": 0, "ends": 1500}` for a timer that ends in 25 minutes. Missing paths are created. |
 | `alert` | `{"title", "body", "sound": true}` lights up the screen and expands the Dynamic Island. Only `body` is required; up to 200 characters. Use it for moments that need attention. |
 | `staleAfter` | Seconds until the phone marks the activity as out of date. Each PUT renews it. |
 | `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
@@ -133,24 +167,26 @@ or calendar app.
 
 Write bodies as compact single-line JSON, and repeat similar rows with `each`
 over a data list instead of copying nodes; both cut the tokens you write.
-Reuse identical nodes across presentations with root `parts` and `{"use":"name"}`. A
-PUT returns the activity's status plus `payloadBytes`, the push size Lykta checks
-against APNs' 4096-byte limit; iOS also caps the name plus content at 4096 bytes,
-which a long name can make the tighter limit.
+Reuse identical nodes across presentations with root `parts` and `{"use":"name"}`.
+
+`lykta put` waits up to 10 seconds for Apple's answer and prints the
+activity's [status](#status) and `data`, so it needs no read afterwards:
+`delivery` is `accepted`, or says what happened. It also prints
+`payloadBytes`, the push size Lykta checks against APNs' 4096-byte limit; iOS
+also caps the name plus content at 4096 bytes, which a long name can make the
+tighter limit.
 
 Updates normally send only `data`; the title and layout keep their last values.
 Timers and timer-driven progress run on the phone, so send them once instead of
 updating every second. The phone shows at most one update per second per
 activity; faster PUTs collapse into the latest state.
 
-```bash
-curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
-  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
-  -d @deploy.json
+```sh
+lykta put activities/deploy deploy.json
 
-curl -sS -X PUT "$LYKTA_URL/v1/activities/deploy" \
-  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
-  -d '{"data": {"service": "api", "step": "Done", "done": 5, "total": 5, "progress": 1, "started": 1793000000}}'
+lykta put activities/deploy <<'EOF'
+{"data": {"service": "api", "step": "Done", "done": 5, "total": 5, "progress": 1, "started": 1793000000}}
+EOF
 ```
 
 ## Buttons and toggles
@@ -159,11 +195,11 @@ Layouts can hold links, buttons and toggles (see the layout reference). A
 toggle flips a boolean in the activity's data on the gateway and redraws at
 once, so a checklist works while no agent runs. A button can change the data
 the same way with `set`, `add` and `now`, so steppers, resets and pause buttons
-work on their own. Agents read every press and toggle from `GET /v1/actions`:
+work on their own. Agents read every press and toggle with `lykta get actions`:
 
-```bash
-cursor=$(curl -sS "$LYKTA_URL/v1/actions" -H "Authorization: Bearer $LYKTA_TOKEN" | jq .cursor)
-curl -sS "$LYKTA_URL/v1/actions?after=$cursor&wait=25" -H "Authorization: Bearer $LYKTA_TOKEN"
+```sh
+lykta get actions
+lykta get 'actions?after=40&wait=25'
 ```
 
 ```json
@@ -188,21 +224,22 @@ change.
 
 ## End
 
-`DELETE /v1/activities/{name}` ends the activity with its last content. The
-system keeps it on the Lock Screen for up to four hours; `?dismissAfter=seconds`
-(0 to 14400) removes it sooner. An activity without `endAfter` that nobody
+`lykta delete activities/{name}` ends the activity with its last content. The
+system keeps it on the Lock Screen for up to four hours;
+`lykta delete 'activities/{name}?dismissAfter=seconds'` (0 to 14400) removes it
+sooner. An activity without `endAfter` that nobody
 ends stays until iOS ends it after eight hours.
 
 ## Status
 
-`GET /v1/activities/{name}` returns the newest activity with that name,
-including its current `data` and `revision`, and `GET /v1/activities` lists
+`lykta get activities/{name}` returns the newest activity with that name,
+including its current `data` and `revision`, and `lykta get activities` lists
 recent ones:
 
 | Field | Values |
 | --- | --- |
 | `state` | `starting`, `live`, `ending`, `ended` |
-| `delivery` | `pending`, `accepted` (Apple accepted the push), `throttled`, `unknown`, `failed` |
+| `delivery` | For the current revision: `pending`, `accepted` (Apple accepted the push), `throttled`, `unknown`, `failed` |
 | `device` | What the phone last reported: `pending`, `active`, `stale`, `ended`, `dismissed`, `unknown`, or `null` before its first report |
 | `error` | Why delivery failed or the activity ended, or `null` |
 | `layoutReadable` | Whether the phone could draw the current content, or `null` before it reports. `false` means it shows only the title |
@@ -211,7 +248,7 @@ Accepted means Apple took the push, not that the phone displayed it.
 
 ## Debug
 
-When an activity does not appear or update, read `GET /v1/events` before
+When an activity does not appear or update, read `lykta get events` before
 retrying. It returns this phone's newest events, oldest first, from both sides:
 
 - The gateway: `activity.put`, `push.start`, `push.update` and `push.end` with
@@ -224,7 +261,7 @@ phone received that exact content. An accepted `push.start` followed by
 `activity.unseen` means iOS dropped the start, usually because the start budget
 is spent; wait instead of retrying. An `app.authorization` with
 `activitiesEnabled: false` means the user turned Live Activities off. Pass
-`?after=<seq>` to read only newer events and `limit` (1 to 1000, default 200).
+`events?after=<seq>` to read only newer events and `limit` (1 to 1000, default 200).
 An `after` newer than the gateway's newest event fails with `invalid_request`;
 read once without it to start again.
 
@@ -245,17 +282,14 @@ Errors are JSON, and the message names the JSON path to fix:
   layout, named in the message with its path. Resend without it, or ask the
   user to update Lykta and open it once.
 
-A 502 or a refused connection usually means the gateway is restarting for an
-update; retry after a few seconds. Repeating a PUT is safe, but a repeated
-`alert` lights up the phone again.
+Repeating a PUT is safe, but a repeated `alert` lights up the phone again.
 
 ## Examples
 
-Each example is a complete PUT body at the skill's own address, such as
-`examples/homelab.json` next to this file. Fetch all of them in one action
-before designing your first layout; [Design](#design) says how to use them.
-Their times are Unix seconds around 1793000000; replace them with real ones
-from `date +%s`.
+Each example is a complete PUT body, such as `examples/homelab.json` next to
+this file. Read all of them before designing your first layout, as
+[Design](#design) says. Their times are Unix seconds around 1793000000; set
+real ones with `now` rather than computing them.
 
 | Example | Shows |
 | --- | --- |

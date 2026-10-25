@@ -29,6 +29,12 @@ Harbor prints is the pass rate.
 
 ## Metrics
 
+Judge a change by what agents write and how often they call, before what they
+read. Output tokens cost GPT-6.1 Sol $10 per million against $0.10 for cached
+input, and every tool call resends the context and waits for a model turn, so
+a change that adds a page of docs to save one call or a hundred output tokens
+is a gain.
+
 Harbor keeps each trial's transcript, token counts, cost and timings, and each
 task's collect hook saves the gateway's events as `artifacts/events.json`.
 `scripts/eval-metrics` reads those from one or more job directories, and
@@ -92,9 +98,10 @@ sequenceDiagram
     participant A as Agent container
     participant G as lykta-gateway simulate
     H->>A: evals/prompt.md: the paste, then the request
-    A->>G: GET /skill/SKILL.md, PUT /v1/activities/{name}
+    A->>G: lykta setup: GET /skill/scripts/lykta and /skill/SKILL.md
+    A->>G: lykta docs, then lykta put activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
-    G-->>A: live, accepted, device active, layoutReadable true
+    G-->>A: live, accepted once SimulatedPhone took the push
     H->>A: Collect hook
     A->>G: GET /v1/events, saved as artifacts/events.json
     H->>A: tests/test.sh
@@ -135,11 +142,11 @@ container, setup took about three minutes per trial. The shared image installs
 both CLIs once, at the versions its Dockerfile pins, so runs stay comparable;
 raising the pins is how a run tries newer agents.
 
-**The container looks like a user's computer.** It has `curl`, `python3` and a
-local timezone in both `TZ` and `/etc/localtime`, because Codex reads the
-latter. In a UTC container one agent asked which timezone 17:42 was in and the
-other assumed UTC. Requests give relative times, so a run means the same at
-any hour.
+**The container looks like a user's computer.** It has `curl`, which `lykta`
+needs, `python3` and a local timezone in both `TZ` and `/etc/localtime`,
+because Codex reads the latter. In a UTC container one agent asked which
+timezone 17:42 was in and the other assumed UTC. Requests give relative times,
+so a run means the same at any hour.
 
 **Docker's default isolation, for now.** The agent has root and the open
 internet, and only Harbor's log directories for the trial are mounted from the

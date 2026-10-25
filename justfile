@@ -1,10 +1,11 @@
 default:
     @just --list
 
-# Run the core and gateway tests
+# Run the core and gateway tests, then both lykta scripts against a simulated gateway
 test:
     swift test --package-path Core
     swift test --package-path Gateway
+    scripts/check-cli
 
 # Run the gateway with LYKTA_* settings from the environment
 gateway:

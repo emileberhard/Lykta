@@ -25,12 +25,13 @@ struct Alert: Codable, Equatable, Sendable {
 
 struct ActivityRequest: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case title, layout, data, alert, staleAfter, endAfter, relevance, ifRevision
+        case title, layout, data, now, alert, staleAfter, endAfter, relevance, ifRevision
     }
 
     let title: String?
     let layout: JSONValue?
     let data: JSONValue?
+    let now: [String: Double]?
     let alert: Alert?
     let staleAfter: Int?
     let endAfter: Int?
@@ -87,11 +88,11 @@ struct ActivityDetail: Encodable, Sendable {
 }
 
 struct ActivityPut: Encodable, Sendable {
-    let status: ActivityStatus
+    let detail: ActivityDetail
     let payloadBytes: Int
 
     func encode(to encoder: any Encoder) throws {
-        try status.encode(to: encoder)
+        try detail.encode(to: encoder)
         var fields = encoder.container(keyedBy: CodingKeys.self)
         try fields.encode(payloadBytes, forKey: .payloadBytes)
     }
@@ -120,6 +121,7 @@ struct Activity: Sendable {
     let alert: Alert?
     let dismissAt: Int?
     let revision: Int
+    let sentRevision: Int
     let channel: String?
     let channelEnvironment: PushEnvironment?
     let failures: Int
@@ -144,6 +146,7 @@ struct Activity: Sendable {
         alert = try row.optionalString("alert").map { try JSONDecoder().decode(Alert.self, from: Data($0.utf8)) }
         dismissAt = try row.optionalInteger("dismiss_at").map(Int.init)
         revision = Int(try row.integer("revision"))
+        sentRevision = Int(try row.integer("sent_revision"))
         channel = try row.optionalString("channel")
         channelEnvironment = try row.optionalText("channel_environment", as: PushEnvironment.init(rawValue:))
         failures = Int(try row.integer("failures"))
@@ -159,9 +162,10 @@ struct Activity: Sendable {
     }
 
     func status(layoutReadable: Bool?) -> ActivityStatus {
-        ActivityStatus(name: name, id: id, title: title, state: phase, revision: revision, delivery: delivery, device: deviceState,
-                       error: error, layoutReadable: layoutReadable, startedAt: Date(timeIntervalSince1970: Double(createdAt)),
-                       endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
+        let superseded = phase != .ended && revision > sentRevision && [.accepted, .failed, .unknown].contains(delivery)
+        return ActivityStatus(name: name, id: id, title: title, state: phase, revision: revision, delivery: superseded ? .pending : delivery,
+                              device: deviceState, error: superseded ? nil : error, layoutReadable: layoutReadable,
+                              startedAt: Date(timeIntervalSince1970: Double(createdAt)), endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
     }
 
     func fingerprint() throws -> String {

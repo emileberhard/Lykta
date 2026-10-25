@@ -11,24 +11,24 @@ agent. For a single moment, such as a finished job, the agent sends a
 notification that arrives like a message from a person, with the sender's
 name and picture, a sound of the agent's choosing and an image.
 
-```bash
-curl -X PUT "$LYKTA_URL/v1/activities/build" \
-  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
-  -d '{
-    "title": "Build",
-    "layout": {
-      "lockScreen": {"hstack": ["Build", {"spacer": true}, {"progress": "{{done}}", "style": "circular"}],
-                     "modifiers": [{"padding": 16}]},
-      "compactLeading": {"symbol": "hammer.fill"},
-      "compactTrailing": "{{percent}}%",
-      "minimal": {"progress": "{{done}}", "style": "circular"}
-    },
-    "data": {"done": 0.4, "percent": 40}
-  }'
+```sh
+lykta put activities/build <<'EOF'
+{
+  "title": "Build",
+  "layout": {
+    "lockScreen": {"hstack": ["Build", {"spacer": true}, {"progress": "{{done}}", "style": "circular"}],
+                   "modifiers": [{"padding": 16}]},
+    "compactLeading": {"symbol": "hammer.fill"},
+    "compactTrailing": "{{percent}}%",
+    "minimal": {"progress": "{{done}}", "style": "circular"}
+  },
+  "data": {"done": 0.4, "percent": 40}
+}
+EOF
 
-curl -X PUT "$LYKTA_URL/v1/notifications/print-42-done" \
-  -H "Authorization: Bearer $LYKTA_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}'
+lykta put notifications/print-42-done <<'EOF'
+{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}
+EOF
 ```
 
 ## How it works
@@ -44,9 +44,13 @@ tells the gateway what it showed.
 
 ## Use it from an agent
 
-In the app, Copy Agent Setup copies the gateway address, an agent token and a link
-to the agent skill the gateway serves at `/skill/SKILL.md`. The skill covers
-the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
+In the app, Copy Agent Setup copies one command for the agent to run. It
+installs `lykta`, a small command for sh with curl or for PowerShell that the
+gateway serves with its agent skill, saves the gateway address and an agent
+token in `~/.config/lykta`, and prints the [skill](Gateway/Sources/LyktaGateway/Skill/SKILL.md).
+`lykta` sends a request in one call and answers once Apple has, so agents
+spend their output on the activity rather than on HTTP plumbing. The skill
+covers the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node, modifier and reusable layout part, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
 covers senders, sounds and images. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping

@@ -45,6 +45,14 @@ struct NotificationTests {
         #expect(push.sent == ["notify"])
     }
 
+    @Test func aWaitingPutAnswersWithApplesOutcome() async throws {
+        async let sent = send("PUT", "/v1/notifications/done?wait=5", body: Self.printer)
+        try await deliverOnceClaimable(store, push, at: now)
+        let response = try await sent
+        #expect(response.status == 201)
+        #expect(try response.decoded() as Notified == Notified(state: "sent", error: nil, banners: "temporary"))
+    }
+
     @Test func aRepeatedRequestIsAnsweredBeforeTheLimitAndReadinessChecks() async throws {
         #expect(try await send("PUT", "/v1/notifications/done", body: Self.printer).status == 201)
         try await report(NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending))
@@ -291,7 +299,7 @@ struct NotificationTests {
         let later = now + Store.notificationLifetime
         await #expect(throws: APIError.self) { try await store.notification(device, name: Name(rawValue: "done")!, now: later) }
         let request = try NotificationRequest.decode(["sender": ["id": "printer", "name": "Printer"], "body": "Another day"])
-        #expect(try await store.putNotification(device, name: Name(rawValue: "done")!, request: request, now: later).created)
+        #expect(try await store.putNotification(device, name: Name(rawValue: "done")!, request: request, now: later))
     }
 
     @Test func aQueuedNotificationThatExpiresFails() async throws {
@@ -408,9 +416,9 @@ struct NotificationTests {
         let avatar = try await store.putMedium(device, bytes: Self.png(width: 256, height: 256), now: now).status.id
         let request = try NotificationRequest.decode(["sender": ["id": "printer", "name": "Printer", "avatar": .string(avatar.rawValue)], "body": "Done"])
         let used = now + Store.mediaRetention - 60
-        #expect(try await store.putNotification(device, name: Name(rawValue: "first")!, request: request, now: used).created)
+        #expect(try await store.putNotification(device, name: Name(rawValue: "first")!, request: request, now: used))
         try await store.housekeep(now: used + 120)
-        #expect(try await store.putNotification(device, name: Name(rawValue: "second")!, request: request, now: used + 120).created)
+        #expect(try await store.putNotification(device, name: Name(rawValue: "second")!, request: request, now: used + 120))
         try await store.housekeep(now: used + 120 + Store.mediaRetention)
         await #expect(throws: APIError.self) {
             try await store.putNotification(device, name: Name(rawValue: "third")!, request: request, now: used + 120 + Store.mediaRetention)

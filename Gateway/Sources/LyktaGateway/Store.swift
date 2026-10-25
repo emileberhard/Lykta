@@ -189,7 +189,7 @@ actor Store {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
 
-    func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> ActivityPut {
+    func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
         try db.transaction {
             let current = try liveActivity(device, name: name)
             if let expected = request.ifRevision, current?.revision != expected {
@@ -198,7 +198,11 @@ actor Store {
             guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
                 throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
             }
-            let data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
+            var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
+            for (path, offset) in request.now ?? [:] {
+                do { data = try data.setting(path, to: .number(Double(now) + offset)) }
+                catch { throw APIError(.invalidRequest, "now: \(error)") }
+            }
             let state = try Self.content(title: title, layout: layout, data: data)
             let expandedLayout: JSONValue
             do { expandedLayout = try layout.expandingParts() }
@@ -241,8 +245,14 @@ actor Store {
                 "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
                 "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
             ])
-            return ActivityPut(status: activity.status, payloadBytes: size)
+            return (activity, size)
         }
+    }
+
+    func attempted(_ activity: Activity, now: Int) throws -> Bool {
+        try !db.query("""
+            SELECT 1 FROM activities WHERE id = ? AND in_flight = 0 AND (sent_revision >= ? OR phase = 'ended' OR retry_at > ?)
+            """, activity.id, activity.revision, now).isEmpty
     }
 
     func end(_ device: Device, name: Name, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
@@ -291,7 +301,7 @@ actor Store {
         return activity.status(layoutReadable: observed[try activity.fingerprint()])
     }
 
-    func putNotification(_ device: Device, name: Name, request: NotificationRequest, now: Int) throws -> (status: NotificationStatus, created: Bool) {
+    func putNotification(_ device: Device, name: Name, request: NotificationRequest, now: Int) throws -> Bool {
         try db.transaction {
             try expireNotifications(now: now)
             try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ? AND in_flight = 0", device.id, name, now)
@@ -301,7 +311,7 @@ actor Store {
                     throw APIError(.conflict, "Another notification already uses the name \(name) until \(Self.time(try row.integer("expires_at"))). "
                                    + "Give each event its own name, and repeat a request only to retry it.")
                 }
-                return (try notificationStatus(row, of: device), false)
+                return false
             }
             for reference in request.references {
                 guard let medium = try db.query("SELECT kind FROM media WHERE id = ? AND device_id = ?", reference.id.rawValue, device.id).first else {
@@ -345,8 +355,14 @@ actor Store {
                 "image": request.image.map { .string($0.rawValue) } ?? .null, "fingerprint": .string(fingerprint(canonical.utf8)),
                 "payloadBytes": .number(Double(size)),
             ])
-            return (try notificationStatus(db.query("SELECT * FROM notifications WHERE id = ?", id)[0], of: device), true)
+            return true
         }
+    }
+
+    func notificationAttempted(_ device: Device, name: Name, now: Int) throws -> Bool {
+        try !db.query("""
+            SELECT 1 FROM notifications WHERE device_id = ? AND name = ? AND in_flight = 0 AND (state NOT IN ('queued', 'sending') OR retry_at > ?)
+            """, device.id, name, now).isEmpty
     }
 
     func notification(_ device: Device, name: Name, now: Int) throws -> NotificationStatus {

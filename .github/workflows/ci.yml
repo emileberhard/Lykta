@@ -14,11 +14,17 @@ jobs:
     container: swift:6.4.1-noble@sha256:19cbe56bdaec1918f7cf5fdeba42b9bd55bdd8a6149c9990d0e0e3a89a127d63
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev zlib1g-dev
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libicu74 libsqlite3-dev zlib1g-dev
       - name: Dependencies come only from Apple
         run: "! grep '\"location\"' Gateway/Package.resolved | grep -v '\"https://github.com/apple/'"
       - run: swift test --package-path Core
       - run: swift test --package-path Gateway --force-resolved-versions
+      - name: PowerShell 7.6.8 for the lykta.ps1 check
+        run: |
+          curl -fsSL -o /tmp/powershell.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.6.8/powershell-7.6.8-linux-x64.tar.gz
+          echo "59112e38ad83350e4f6dc0195953c66b5926792f300ca2e7691b8242e7a16e7f  /tmp/powershell.tar.gz" | sha256sum -c
+          mkdir -p /opt/powershell && tar -xzf /tmp/powershell.tar.gz -C /opt/powershell && ln -s /opt/powershell/pwsh /usr/local/bin/pwsh
+      - run: scripts/check-cli
 
   app:
     runs-on: xcode-27

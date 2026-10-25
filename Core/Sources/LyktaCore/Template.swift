@@ -44,6 +44,27 @@ extension JSONValue {
             throw LayoutError("data has no value at \"\(path)\"")
         }
     }
+
+    public func setting(_ path: String, to value: JSONValue) throws(LayoutError) -> JSONValue {
+        try setting(path.split(separator: ".", omittingEmptySubsequences: false)[...], to: value, path: path)
+    }
+
+    private func setting(_ parts: ArraySlice<Substring>, to value: JSONValue, path: String) throws(LayoutError) -> JSONValue {
+        guard let part = parts.first else { return value }
+        switch self {
+        case var .object(fields):
+            fields[String(part)] = try (fields[String(part)] ?? .object([:])).setting(parts.dropFirst(), to: value, path: path)
+            return .object(fields)
+        case var .array(items) where part.arrayIndex.map(items.indices.contains) == true:
+            items[part.arrayIndex!] = try items[part.arrayIndex!].setting(parts.dropFirst(), to: value, path: path)
+            return .array(items)
+        default:
+            let holder = path.split(separator: ".", omittingEmptySubsequences: false)[..<parts.startIndex].joined(separator: ".")
+            let place = holder.isEmpty ? "the data" : "data \"\(holder)\""
+            if case .array = self { throw LayoutError("\(place) has no item \(part) to hold \"\(path)\"") }
+            throw LayoutError("\(place) is not an object or a list, so it cannot hold \"\(path)\"")
+        }
+    }
 }
 
 private extension Substring {

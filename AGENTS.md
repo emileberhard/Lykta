@@ -19,6 +19,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
+| `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples and the home screen |
 | `scripts/app-store-draft` | Preparing a release's App Store version: its version string, What's New, screenshots and build, short of submitting it |
@@ -93,6 +94,16 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - `lykta-gateway simulate` keeps its store in memory and pushes to
   `SimulatedPhone`, never to APNs. `evals/prompt.md` is the app's Copy Agent
   Setup paste for that phone, so change it with `copySetup()` in `Model.swift`.
+- Agents pay most for what they write and for each tool call, not for what
+  they read. Keep each step of the skill's sending path to one `lykta`
+  command, fold steps agents would chain into the gateway or `lykta`, as the
+  waiting PUT, `now` and `media` do, and spend input, such as longer docs or
+  fuller answers, to save output or a call.
+- `lykta` and `lykta.ps1` are one contract: the same commands, output, exit
+  codes and setup in `~/.config/lykta`, so change both in one commit and
+  extend `scripts/check-cli` with them. They need only sh with curl, or
+  PowerShell 5.1 or later, never print the token, and retry only a refused
+  connection, because only that proves a request was never sent.
 - A phone registers only with a verified App Attest attestation of a new key
   over a challenge this gateway signed, or with a one-time invite an operator
   created. Never add a registration path without such proof.
@@ -212,7 +223,7 @@ maintainer, because the App Store privacy label must match.
 
 | Command | Use |
 | --- | --- |
-| `just test` | Core and gateway tests; CI runs them on Linux |
+| `just test` | Core and gateway tests, then `scripts/check-cli` with sh and PowerShell; CI runs them on Linux |
 | `just ios` | Compile the app and its extensions without signing |
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |

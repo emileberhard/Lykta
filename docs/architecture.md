@@ -7,6 +7,9 @@
 - An agent tells the user about a moment with one HTTP request, as a
   notification from a sender it names, with the picture, sound and image the
   agent chooses; nothing is bundled into the app.
+- What an agent writes is the activity or notification itself. Output tokens
+  and tool calls are an agent's dominant cost and latency, so sending, timing
+  and checking delivery take one command each, while the docs may be long.
 - One person can self-host the gateway. Apple Push Notification service is the
   only external service.
 - The codebase stays small: two Swift packages, Apple frameworks first, and
@@ -23,9 +26,10 @@ sequenceDiagram
     participant APNs
     participant Phone
     Phone->>Gateway: register, report push-to-start token
-    Agent->>Gateway: PUT layout + data
+    Agent->>Gateway: lykta put: layout + data
     Gateway->>Gateway: validate, compress, persist
     Gateway->>APNs: create channel, push-to-start
+    Gateway-->>Agent: status once APNs answered
     APNs->>Phone: start
     Agent->>Gateway: PUT data
     Gateway->>APNs: broadcast update
@@ -283,6 +287,35 @@ its downloads, its donation and its report with semaphores on the thread
 iOS called it on; every wait is bounded, 20 seconds for media and 3 each for
 the donation and the report, within the 30 iOS allows.
 
+**Agents send with a script the gateway serves.** The skill's `scripts`
+folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for
+PowerShell 5.1 and later, with the same commands, output and exit codes. Each
+command is one request, or one per file, so an agent writes a path and its JSON
+instead of HTTP code, and the token once at setup instead of in every request.
+A compiled binary would need one build per platform in every release and in
+every self-hosted image, or a download from GitHub, for no gain an agent
+notices: sh and curl start in about 8 ms, against hundreds of milliseconds of
+network and APNs and seconds of model time per call. The scripts stay readable
+before they run and come from the same commit as the gateway that serves them.
+Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
+set), the token readable only by the user, and `LYKTA_URL` and `LYKTA_TOKEN`
+take precedence. Nothing is cached: an agent reads the docs once per task, and
+a cache would only save input. curl takes the token as an argument, so other
+users of the same computer could see it while a request runs, as with the
+curl commands the skill showed before; PowerShell keeps it in the process.
+Only a refused connection is retried, for up to eight seconds while a gateway
+restarts, because only it proves the request was never sent.
+
+**A PUT can wait for Apple.** `wait` on `PUT /v1/activities/{name}` and
+`PUT /v1/notifications/{name}`, 0 to 25 seconds like `GET /v1/actions`, holds
+the answer until the delivery loop has pushed that revision, the activity has
+ended or a retry is scheduled, and `lykta put` sends 10. The answer then says
+what Apple did, so agents no longer read the status after a PUT. `delivery`
+describes the current revision: an update that has not been pushed reads
+`pending`, not the previous revision's `accepted`. `now` sets data paths to the
+gateway's clock plus an offset, as a button's `now` does but creating missing
+paths, so agents need no clock or script to time an activity.
+
 **One actor owns durable state.** `Store` owns the SQLite database; every
 mutation is one transaction. Delivery claims jobs from rows, so a restart
 resumes pending work. A start whose outcome is unknown becomes a live activity
@@ -348,6 +381,9 @@ limit bounds.
 - The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
   including the action report that installed apps send.
 - The `GET /v1/actions` cursor and record format, which agents poll.
+- The `lykta` commands, their output and exit codes and the setup in
+  `~/.config/lykta`, which installed copies, agents' instructions and their
+  saved scripts use, and the `wait` and `now` request fields.
 - The `/v1/notifications` and `/v1/media` contracts, their states, lifetimes,
   limits and error codes, the `lykta` payload object with its media IDs, and
   the report and media routes, which installed extensions use, and the
