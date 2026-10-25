@@ -97,13 +97,16 @@ struct CaptureView: View {
     }
 
     private func write(_ image: CGImage, scale: CGFloat, named name: String) throws {
-        let url = directory.appending(path: "\(name).png")
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw CaptureError("could not create \(url.path)")
+        let png = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil) else {
+            throw CaptureError("could not create a PNG encoder for \(name)")
         }
         let dpi = 72 * scale
         CGImageDestinationAddImage(destination, image, [kCGImagePropertyDPIWidth: dpi, kCGImagePropertyDPIHeight: dpi] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw CaptureError("could not write \(url.path)") }
+        guard CGImageDestinationFinalize(destination) else {
+            throw CaptureError("could not encode the \(image.width) × \(image.height) render of \(name) as PNG")
+        }
+        try (png as Data).write(to: directory.appending(path: "\(name).png"), options: .atomic)
     }
 }
 
