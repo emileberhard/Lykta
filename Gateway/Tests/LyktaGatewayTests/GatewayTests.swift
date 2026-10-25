@@ -45,7 +45,7 @@ struct GatewayTests {
 
     @Test func phonesThatReadTheCompactFormFitMoreContent() async throws {
         var longest: [Int] = []
-        for (name, version) in [("legacy", Version(0, 7, 1)), ("compact", Layout.version)] {
+        for (index, (name, version)) in [("legacy", Version(0, 7, 1)), ("compact", Layout.version)].enumerated() {
             try await reportVersion("1.0", layoutVersion: version)
             try await put(name, ["title": "Build", "layout": Self.layout("{{text}}"), "data": ["text": ""]])
             var length = 3_000
@@ -53,6 +53,10 @@ struct GatewayTests {
                 length += 20
             }
             longest.append(length)
+            try await deliver(at: now + 10 * index)
+            #expect(try await send("DELETE", "/v1/activities/\(name)").status == 200)
+            try await deliver(at: now + 10 * index + 2)
+            #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
         }
         #expect(longest[1] > longest[0] + 200, "\(longest)")
     }

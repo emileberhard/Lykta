@@ -194,7 +194,8 @@ extension Activity {
         let current = try envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64), layoutVersion: layoutVersion)
         var end = try envelope(.end, now: now, layoutVersion: layoutVersion)
         end.aps.dismissalDate = now + 4 * 3600
-        let stored = try encoder.encode(LyktaActivity(id: id, name: name.rawValue)).count + encoder.encode(current.aps.contentState).count
+        let escaping = JSONEncoder()
+        let stored = try escaping.encode(LyktaActivity(id: id, name: name.rawValue)).count + escaping.encode(current.aps.contentState).count
         return (max(try encoder.encode(current).count, try encoder.encode(end).count), stored)
     }
 

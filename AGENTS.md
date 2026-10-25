@@ -44,8 +44,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   layout version predates a feature in it; never let such a layout through.
 - Admission measures both of Apple's 4 KB limits, the APNs payload and the
   activity's attributes plus content, for the push of the current phase and
-  the end push, in the form the phone receives and as the previous release
-  would encode them, so every accepted activity can still end after a rollback. `payloadBytes` reports that
+  the end push, in the form the phone receives: pushes as the previous release
+  encodes them, attributes and content with Foundation's slash escaping. Every
+  accepted activity can therefore still end after a gateway rollback. `payloadBytes` reports that
   measurement only in PUT responses; reads never compress.
 - Phones reporting layout version 0.8.0 or later get compact content, framed
   with the legacy fingerprint and deflated with `WireDictionary.v1`; the
