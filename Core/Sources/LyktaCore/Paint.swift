@@ -7,6 +7,7 @@ public enum Paint: Decodable, Sendable {
     case color(ColorValue)
     case level(Level)
     case gradient([ColorValue], Direction)
+    case mesh(Mesh)
 
     public init(from decoder: any Decoder) throws {
         if let name = try? decoder.singleValueContainer().decode(String.self) {
@@ -19,11 +20,69 @@ public enum Paint: Decodable, Sendable {
             return
         }
         let fields = try decoder.container(keyedBy: Key.self)
-        try fields.allowOnly(["gradient", "direction"])
+        if fields.contains(Key(stringValue: "mesh")) {
+            try fields.allowOnly(["mesh"])
+            fields.recordKeys(in: "paint")
+            self = .mesh(try fields.required("mesh"))
+            return
+        }
+        try fields.allowOnly(["gradient", "direction", "mesh"])
         fields.recordKeys(in: "paint")
         let colors: [ColorValue] = try fields.required("gradient")
         guard (2...8).contains(colors.count) else { throw fields.invalid("expected 2 to 8 colors", at: "gradient") }
         self = .gradient(colors, try fields.optional("direction") ?? .vertical)
+    }
+}
+
+extension Paint {
+    public struct Mesh: Decodable, Sendable {
+        public struct Point: Decodable, Sendable {
+            public let position: SIMD2<Float>
+            public let color: ColorValue
+
+            public init(from decoder: any Decoder) throws {
+                var values = try decoder.unkeyedContainer()
+                guard values.count == 3 else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "expected [x, y, color]"))
+                }
+                func coordinate(_ decoder: any Decoder) throws -> Float {
+                    let value = try decoder.singleValueContainer().decode(Float.self)
+                    guard (0...1).contains(value) else {
+                        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "expected a coordinate within 0...1"))
+                    }
+                    return value
+                }
+                let x = try coordinate(values.superDecoder())
+                let y = try coordinate(values.superDecoder())
+                position = SIMD2(x, y)
+                color = try values.decode(ColorValue.self)
+            }
+        }
+
+        public let width: Int
+        public let height: Int
+        public let points: [Point]
+
+        public init(from decoder: any Decoder) throws {
+            var rows = try decoder.unkeyedContainer()
+            guard let height = rows.count, (2...4).contains(height) else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "expected 2 to 4 rows"))
+            }
+            var points: [Point] = []
+            var width = 0
+            while !rows.isAtEnd {
+                let rowDecoder = try rows.superDecoder()
+                var row = try rowDecoder.unkeyedContainer()
+                guard let count = row.count, (2...4).contains(count), width == 0 || width == count else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: rowDecoder.codingPath, debugDescription: "expected 2 to 4 points per row, with equal row lengths"))
+                }
+                width = count
+                while !row.isAtEnd { points.append(try row.decode(Point.self)) }
+            }
+            self.width = width
+            self.height = height
+            self.points = points
+        }
     }
 }
 

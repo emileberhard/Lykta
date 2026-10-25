@@ -159,6 +159,9 @@ extension Layout {
         "0.5.0": [
             "button.add", "button.add.since", "button.now", "button.set",
         ],
+        "0.8.0": [
+            "paint.mesh",
+        ],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

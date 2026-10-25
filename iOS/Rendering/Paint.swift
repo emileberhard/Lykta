@@ -10,6 +10,8 @@ extension Paint {
         case .level(.tertiary): AnyShapeStyle(.tertiary)
         case .level(.quaternary): AnyShapeStyle(.quaternary)
         case let .gradient(colors, direction): direction.style(Gradient(colors: colors.map(\.value)))
+        case let .mesh(mesh): AnyShapeStyle(MeshGradient(width: mesh.width, height: mesh.height,
+                                                       points: mesh.points.map(\.position), colors: mesh.points.map { $0.color.value }))
         }
     }
 }

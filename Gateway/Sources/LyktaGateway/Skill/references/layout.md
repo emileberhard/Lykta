@@ -114,11 +114,22 @@ Each modifier is an object with one key: `{"padding": 8}`.
 | `accessibilityLabel` | Text for VoiceOver |
 
 A paint is a color, a level (`primary`, `secondary`, `tertiary`,
-`quaternary`) or `{"gradient": [2 to 8 colors], "direction": d}` with `d` one
-of `vertical` (default), `horizontal`, `diagonal`, `radial`, `angular`. A color
+`quaternary`), `{"gradient": [2 to 8 colors], "direction": d}` with `d` one
+of `vertical` (default), `horizontal`, `diagonal`, `radial`, `angular`, or a
+mesh. A color
 is `#RGB`, `#RRGGBB`, `#RRGGBBAA`, `rgb(r, g, b)`, `rgba(r, g, b, a)` or one of `red`, `orange`, `yellow`, `green`, `mint`,
 `teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown`, `white`, `gray`,
 `black`, `clear`, `accent`.
+
+A mesh is a smooth two-dimensional color field: `{"mesh": rows}` with 2 to 4
+equal rows of 2 to 4 points, each `[x, y, color]` with `x` and `y` within 0 to
+1, left to right and top to bottom. Keep the outer points on the edges, since
+the area outside the mesh is transparent, and move inner points to bend the
+field. The Dynamic Island stays black, so put a mesh inside its content.
+
+```json
+{"shape": "roundedRectangle", "cornerRadius": 14, "fill": {"mesh": [[[0, 0, "indigo"], [1, 0, "pink"]], [[0, 1, "cyan"], [1, 1, "orange"]]]}}
+```
 
 ## Charts
 
