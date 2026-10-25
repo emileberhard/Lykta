@@ -76,7 +76,7 @@ def capture(simulator_runtime, target):
         except subprocess.TimeoutExpired:
             console = "The app was still running after 10 minutes."
         if not (staging / "home.png").exists():
-            sys.exit(f"The app did not capture the home screen.\n\n{diagnosis(udid, app.stem, bundle, staging, started, console)}")
+            sys.exit(f"The app did not capture the home screen.\n\n{diagnosis(udid, app.stem, staging, started, console)}")
         staging.rename(target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
@@ -85,14 +85,13 @@ def capture(simulator_runtime, target):
         subprocess.run(["xcrun", "simctl", "shutdown", udid], capture_output=True)
 
 
-def diagnosis(udid, executable, bundle, staging, started, console):
+def diagnosis(udid, executable, staging, started, console):
     written = sorted(path.name for path in staging.iterdir())
     parts = [console[-3000:].strip(), f"It wrote {len(written)} captures" + (f", the last {written[-1]}." if written else ".")]
     log = subprocess.run(["xcrun", "simctl", "spawn", udid, "log", "show", "--style", "compact",
                           "--start", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(started)), "--predicate",
-                          f'(process == "{executable}" AND (messageType == error OR messageType == fault)) OR eventMessage CONTAINS "{bundle}"'],
-                         text=True, capture_output=True)
-    parts.append("Simulator log since the launch:\n" + "\n".join((log.stdout + log.stderr).strip().splitlines()[-40:]))
+                          f'process == "{executable}"'], text=True, capture_output=True)
+    parts.append("The app's log since the launch:\n" + "\n".join((log.stdout + log.stderr).strip().splitlines()[-60:]))
     for report in sorted(CRASHES.glob(f"{executable}-*.ips")):
         if report.stat().st_mtime >= started:
             body = json.loads(report.read_text().split("\n", 1)[1])
