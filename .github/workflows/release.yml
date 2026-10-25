@@ -151,7 +151,7 @@ jobs:
       - name: Compose the screenshots
         run: scripts/screenshots
 
-      - name: Prepare the App Store version
+      - name: Submit the build for TestFlight review and prepare the App Store version
         env:
           GH_TOKEN: ${{ github.token }}
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
@@ -163,7 +163,7 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
           tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
-          scripts/app-store-draft "$VERSION" .local/screenshots "$RUNNER_TEMP/notes.md"
+          scripts/app-store-connect "$VERSION" .local/screenshots "$RUNNER_TEMP/notes.md"
 
   github-release:
     needs: [admit, testflight]

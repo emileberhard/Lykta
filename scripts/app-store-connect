@@ -15,6 +15,7 @@ from pathlib import Path
 API = "https://api.appstoreconnect.apple.com/v1/"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
 RELEASED = {"READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"}
+IN_BETA = {"WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "IN_BETA_TESTING"}
 UNPLACED_STATES = "AWAITING_UPLOAD,UPLOAD_COMPLETE,FAILED,COMPLETE,PREPARE_FOR_SUBMISSION"
 SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"}
 DEADLINE = time.monotonic() + 40 * 60
@@ -147,6 +148,26 @@ def processed_build(app, version):
     return builds[0]["id"] if state == "VALID" else None
 
 
+def submit_beta(app, version, build, notes):
+    for localization in api("GET", f"builds/{build}/betaBuildLocalizations", limit=50):
+        api("PATCH", f"betaBuildLocalizations/{localization['id']}", {"type": "betaBuildLocalizations",
+            "id": localization["id"], "attributes": {"whatsNew": notes}})
+    latest = api("GET", f"apps/{app}/appStoreVersions", limit=1, **{"filter[platform]": "IOS"})[0]["id"]
+    review_notes = api("GET", f"appStoreVersions/{latest}/appStoreReviewDetail")["attributes"]["notes"]
+    api("PATCH", f"betaAppReviewDetails/{app}", {"type": "betaAppReviewDetails", "id": app, "attributes": {"notes": review_notes}})
+    groups = api("GET", "betaGroups", limit=50, **{"filter[app]": app, "filter[isInternalGroup]": "false"})
+    if groups:
+        api("POST", f"builds/{build}/relationships/betaGroups", [{"type": "betaGroups", "id": g["id"]} for g in groups])
+    state = api("GET", f"builds/{build}/buildBetaDetail")["attributes"]["externalBuildState"]
+    if state == "READY_FOR_BETA_SUBMISSION":
+        api("POST", "betaAppReviewSubmissions", {"type": "betaAppReviewSubmissions", "relationships": {"build": link("builds", build)}})
+        print(f"Submitted the {version} build for TestFlight review for {', '.join(g['attributes']['name'] for g in groups)}.", file=sys.stderr)
+    elif state in IN_BETA:
+        print(f"The {version} build is already {state} in TestFlight.", file=sys.stderr)
+    else:
+        sys.exit(f"The {version} build is {state} in TestFlight, so it cannot go to external testers.")
+
+
 def processed_screenshots(placements):
     attributes = [api("GET", f"appAssetLibraryPlacements/{p}")["attributes"] for p in placements]
     failed = [a["stateDetails"] for a in attributes if a["state"] == "FAILED"]
@@ -167,6 +188,9 @@ def main(version, slides, notes):
     if not apps:
         sys.exit(f"No app has the bundle ID {os.environ['LYKTA_BUNDLE_ID']}.")
     app = apps[0]["id"]
+    notes = Path(notes).read_text().strip()
+    build = wait(f"The {version} build", lambda: processed_build(app, version))
+    submit_beta(app, version, build, notes)
     version_id, released = draft_version(app, version)
     library = api("GET", f"apps/{app}/assetLibrary")["id"]
     with concurrent.futures.ThreadPoolExecutor(len(slides)) as pool:
@@ -175,13 +199,12 @@ def main(version, slides, notes):
     for localization in api("GET", f"appStoreVersions/{version_id}/appStoreVersionLocalizations", limit=50):
         if released:
             api("PATCH", f"appStoreVersionLocalizations/{localization['id']}", {"type": "appStoreVersionLocalizations",
-                "id": localization["id"], "attributes": {"whatsNew": Path(notes).read_text().strip()}})
+                "id": localization["id"], "attributes": {"whatsNew": notes}})
         placements += place(localization["id"], images)
         print(f"Placed {len(images)} screenshots on {localization['attributes']['locale']}.", file=sys.stderr)
     delete_unplaced(library)
     if not released:
         print("Left What's New empty, because the App Store shows it only from the second release.", file=sys.stderr)
-    build = wait(f"The {version} build", lambda: processed_build(app, version))
     api("PATCH", f"appStoreVersions/{version_id}/relationships/build", {"type": "builds", "id": build})
     wait("The screenshots", lambda: processed_screenshots(placements))
     print(f"App Store version {version} is ready to submit for review.", file=sys.stderr)
@@ -189,7 +212,7 @@ def main(version, slides, notes):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        sys.exit("Usage: scripts/app-store-draft VERSION SCREENSHOTS NOTES")
+        sys.exit("Usage: scripts/app-store-connect VERSION SCREENSHOTS NOTES")
     try:
         main(*sys.argv[1:])
     except RequestFailed as failure:

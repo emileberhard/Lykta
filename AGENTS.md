@@ -22,7 +22,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples and the home screen |
-| `scripts/app-store-draft` | Preparing a release's App Store version: its version string, What's New, screenshots and build, short of submitting it |
+| `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots and build, short of App Review |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
@@ -267,12 +267,17 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    since the previous version, one short sentence per item, with no heading or
    intro line.
 6. After the upload, `app-store` composes the screenshots and runs
-   `scripts/app-store-draft`. It renames the App Store version that is still
+   `scripts/app-store-connect`. Once App Store Connect has processed the build,
+   it sets the build's What to Test to the tag message, copies the newest App
+   Store version's review notes to TestFlight's, adds the build to every
+   external group, such as the public link's, and submits it for TestFlight
+   review. It then renames the App Store version that is still
    editable to the tag or creates one, with manual release, sets What's New to
    the tag message from the second release on, replaces the iPhone screenshots,
    deletes the screenshots in the app's asset library that nothing places any
    more, except those App Review has seen, which Apple keeps, and attaches the
-   build once App Store Connect has processed it.
+   build. While a version waits for App Review or release, this step stops
+   with that version's state, after the TestFlight submission.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.
