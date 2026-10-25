@@ -218,7 +218,7 @@ maintainer, because the App Store privacy label must match.
 | `just image` | Build the gateway container |
 | `just evals <options>` | Run the fresh agents in `evals/job.yaml`, twice each, on every task in `evals/tasks` against a simulated phone and check each trial; options go to `harbor run` and override the job, such as `--include-task-name train` or `--agent codex --model gpt-6.1-sol`, and `~/.config/lykta/evals.env` sets endpoints and keys. Transcripts, rewards and the gateway's events land in `.local/evals`, and the run ends with each agent's tokens and timings from `scripts/eval-metrics`; read the trials with `harbor view .local/evals` |
 | `just render <inputs>` | Render request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded` and `--dark` narrow it. Close the project in Xcode before removing a worktree that rendered. |
-| `just screenshots` | Compose the App Store slides into `.local/screenshots`. Captures of the app are cached in `~/Library/Caches/lykta/captures`, shared by every checkout and keyed by the files that draw them, Xcode and the simulator, so only a UI change builds and launches the app again |
+| `just screenshots` | Compose the App Store slides into `.local/screenshots`. Captures of the app are cached in `~/Library/Caches/lykta/captures`, shared by every checkout and keyed by the sources that draw them, Xcode and the simulator, so only a change to what they show builds and launches the app again |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a
 run on an iPhone; compiling proves neither.
@@ -257,9 +257,10 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    intro line.
 6. After the upload, `app-store` composes the screenshots and runs
    `scripts/app-store-draft`. It renames the App Store version that is still
-   editable to the tag or creates one, sets What's New to the tag message from
-   the second release on, replaces the iPhone screenshots and attaches the
-   build once App Store Connect has processed it.
+   editable to the tag or creates one, with manual release, sets What's New to
+   the tag message from the second release on, replaces the iPhone screenshots,
+   deletes the screenshots in the app's asset library that nothing places any
+   more and attaches the build once App Store Connect has processed it.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.
@@ -267,7 +268,8 @@ release, so the maintainer decides when an approved version goes live.
 The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size, drawn by `just screenshots`. In capture mode, which
 `LYKTA_CAPTURE` turns on in Debug builds, the app renders every bundled
-example's Lock Screen card and islands and its home screen as PNGs and exits;
+example's Lock Screen card and islands and its home screen as PNGs, in US
+English with the clock at 9:41 like the composed Lock Screen, and exits;
 `iOS/AppStore/compose.swift` holds the captions and arranges the captures into
 opaque slides, as App Store Connect requires. Look at the slides after a change
 to the app's UI or the examples, because the release uploads them.

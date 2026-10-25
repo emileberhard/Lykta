@@ -15,7 +15,8 @@ OUTPUT = ROOT / ".local" / "screenshots"
 BUILD = ROOT / ".local" / "build"
 COMPOSER = "iOS/AppStore/compose.swift"
 EXAMPLES = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill" / "examples"
-INPUTS = ["Core", "iOS", "Gateway/Sources/LyktaGateway/Skill/examples", "scripts/screenshots"]
+INPUTS = ["Core/Package.swift", "Core/Sources", "iOS/App", "iOS/Avatars", "iOS/Config", "iOS/Lykta.xcodeproj", "iOS/Rendering",
+          "Gateway/Sources/LyktaGateway/Skill/examples", "scripts/screenshots"]
 DEVICE_TYPE = "iPhone 17 Pro"
 SIMULATOR = "Lykta Screenshots"
 KEPT_CAPTURES = 10
@@ -37,10 +38,9 @@ def runtime():
 
 
 def capture_key(simulator_runtime):
-    files = run("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *INPUTS,
-                f":!{COMPOSER}").split("\0")
+    files = run("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *INPUTS).split("\0")
     digest = hashlib.sha256()
-    for part in (run("xcodebuild", "-version"), simulator_runtime["buildversion"], DEVICE_TYPE):
+    for part in (run("xcodebuild", "-version"), simulator_runtime["buildversion"]):
         digest.update(part.encode() + b"\0")
     for name in sorted(filter(None, files)):
         path = ROOT / name

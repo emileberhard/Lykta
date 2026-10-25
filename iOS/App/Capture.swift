@@ -13,6 +13,11 @@ struct CaptureView: View {
     private static let scale: CGFloat = 6
     private static let width: CGFloat = 370
     private static let homeActivities = ["app-review", "agent-question"]
+    private static let locale = Locale(identifier: "en_US")
+    private static let timeZone: TimeZone = {
+        let offset = (9 * 3600 + 41 * 60 - Int(Date.now.timeIntervalSince1970) % 86400) / 60 * 60
+        return TimeZone(secondsFromGMT: (offset + 86400 + 43200) % 86400 - 43200)!
+    }()
 
     let directory: URL
     @State private var model: Model?
@@ -25,6 +30,8 @@ struct CaptureView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .environment(\.locale, Self.locale)
+        .environment(\.timeZone, Self.timeZone)
         .task {
             do {
                 try await capture()
@@ -53,8 +60,8 @@ struct CaptureView: View {
             try render(Image(uiImage: avatar).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle()), named: "\(example.id).avatar")
         }
         try render(Lights().frame(height: 400), named: "lights")
-        model = .preview(.ready, activities: Self.homeActivities.map { id in
-            let example = examples.first { $0.id == id }!
+        model = .preview(.ready, activities: try Self.homeActivities.map { id in
+            guard let example = examples.first(where: { $0.id == id }) else { throw CaptureError("no bundled example is called \(id)") }
             return LiveActivity(id: id, attributes: LyktaActivity(id: UUID(), name: id), content: example.preview, state: .active)
         })
         try await Task.sleep(for: .seconds(1))
@@ -62,7 +69,7 @@ struct CaptureView: View {
     }
 
     private func render(_ view: some View, named name: String) throws {
-        let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+        let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark).environment(\.locale, Self.locale).environment(\.timeZone, Self.timeZone))
         renderer.scale = Self.scale
         guard let image = renderer.cgImage else { throw CaptureError("could not render \(name)") }
         try write(image, scale: Self.scale, named: name)

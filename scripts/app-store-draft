@@ -15,8 +15,9 @@ from pathlib import Path
 API = "https://api.appstoreconnect.apple.com/v1/"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
 RELEASED = {"READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"}
+UNPLACED_STATES = "AWAITING_UPLOAD,UPLOAD_COMPLETE,FAILED,COMPLETE,PREPARE_FOR_SUBMISSION"
 SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"}
-PROCESSING_DEADLINE = 45 * 60
+DEADLINE = time.monotonic() + 40 * 60
 
 
 def token():
@@ -60,6 +61,10 @@ def link(kind, identifier):
     return {"data": {"type": kind, "id": identifier}}
 
 
+def parse(version):
+    return tuple(int(part) for part in version.split("."))
+
+
 def draft_version(app, version):
     versions = api("GET", f"apps/{app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 200})
     unreleased = [v for v in versions if v["attributes"]["appVersionState"] not in RELEASED]
@@ -72,11 +77,12 @@ def draft_version(app, version):
     state, name = draft["attributes"]["appVersionState"], draft["attributes"]["versionString"]
     if state not in EDITABLE:
         sys.exit(f"App Store version {name} is {state}; release it or remove it from review before preparing {version}.")
-    if name != version:
-        renamed = api("PATCH", f"appStoreVersions/{draft['id']}", {"type": "appStoreVersions", "id": draft["id"],
-                      "attributes": {"versionString": version}})
-        if renamed["attributes"]["versionString"] != version:
-            sys.exit(f"App Store Connect kept the draft's version as {renamed['attributes']['versionString']}.")
+    if parse(name) > parse(version):
+        sys.exit(f"App Store version {name} is newer than {version}.")
+    updated = api("PATCH", f"appStoreVersions/{draft['id']}", {"type": "appStoreVersions", "id": draft["id"],
+                  "attributes": {"releaseType": "MANUAL"} | ({"versionString": version} if name != version else {})})
+    if (updated["attributes"]["versionString"], updated["attributes"]["releaseType"]) != (version, "MANUAL"):
+        sys.exit(f"App Store Connect kept {name} as {updated['attributes']['versionString']} with release type {updated['attributes']['releaseType']}.")
     return draft["id"], released
 
 
@@ -92,17 +98,11 @@ def upload(library, slide):
     return image["id"]
 
 
-def replace_screenshots(library, localization, slides):
-    old = api("GET", f"appStoreVersionLocalizations/{localization}/placements", limit=50, include="image",
+def place(localization, images):
+    old = api("GET", f"appStoreVersionLocalizations/{localization}/placements", limit=50,
               **{f"filter[{key}]": value for key, value in SCREENSHOTS.items()})
     for placement in old:
         api("DELETE", f"appAssetLibraryPlacements/{placement['id']}")
-    for placement in old:
-        image = placement["relationships"]["image"]["data"]["id"]
-        if not api("GET", f"appAssetLibraryImages/{image}/relationships/placements"):
-            api("DELETE", f"appAssetLibraryImages/{image}")
-    with concurrent.futures.ThreadPoolExecutor(len(slides)) as pool:
-        images = list(pool.map(lambda slide: upload(library, slide), slides))
     placements = [api("POST", "appAssetLibraryPlacements", {"type": "appAssetLibraryPlacements", "attributes": SCREENSHOTS,
                       "relationships": {"image": link("appAssetLibraryImages", image),
                                         "appStoreVersionLocalization": link("appStoreVersionLocalizations", localization)}})["id"]
@@ -114,11 +114,18 @@ def replace_screenshots(library, localization, slides):
     return placements
 
 
+def delete_unplaced(library):
+    images = api("GET", f"appAssetLibraries/{library}/images", limit=200, include="placements", **{"limit[placements]": 1,
+                 "filter[category]": "APP_SCREENSHOTS_AND_PREVIEWS", "filter[state]": UNPLACED_STATES})
+    for image in images:
+        if not image["relationships"]["placements"]["data"]:
+            api("DELETE", f"appAssetLibraryImages/{image['id']}")
+
+
 def wait(description, check):
-    deadline = time.time() + PROCESSING_DEADLINE
     while (result := check()) is None:
-        if time.time() > deadline:
-            sys.exit(f"{description} did not finish processing within {PROCESSING_DEADLINE // 60} minutes.")
+        if time.monotonic() > DEADLINE:
+            sys.exit(f"{description} did not finish processing within 40 minutes of the start.")
         time.sleep(20)
     return result
 
@@ -154,13 +161,16 @@ def main(version, slides, notes):
     app = apps[0]["id"]
     version_id, released = draft_version(app, version)
     library = api("GET", f"apps/{app}/assetLibrary")["id"]
+    with concurrent.futures.ThreadPoolExecutor(len(slides)) as pool:
+        images = list(pool.map(lambda slide: upload(library, slide), slides))
     placements = []
     for localization in api("GET", f"appStoreVersions/{version_id}/appStoreVersionLocalizations", limit=50):
         if released:
             api("PATCH", f"appStoreVersionLocalizations/{localization['id']}", {"type": "appStoreVersionLocalizations",
                 "id": localization["id"], "attributes": {"whatsNew": Path(notes).read_text().strip()}})
-        placements += replace_screenshots(library, localization["id"], slides)
-        print(f"Placed {len(slides)} screenshots on {localization['attributes']['locale']}.", file=sys.stderr)
+        placements += place(localization["id"], images)
+        print(f"Placed {len(images)} screenshots on {localization['attributes']['locale']}.", file=sys.stderr)
+    delete_unplaced(library)
     if not released:
         print("Left What's New empty, because the App Store shows it only from the second release.", file=sys.stderr)
     build = wait(f"The {version} build", lambda: processed_build(app, version))
