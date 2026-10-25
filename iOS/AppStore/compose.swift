@@ -364,7 +364,7 @@ struct Faded: ViewModifier {
 }
 
 let slides: [(String, AnyView)] = [
-    ("1-agents", AnyView(Slide(title: "Watch your\nagents work", subtitle: "Live on your Lock Screen", glows: [
+    ("1-agents", AnyView(Slide(title: "Watch your\nagents work", subtitle: "Live Activities on your Lock Screen", glows: [
         Glow(light: .pink, x: 1060, y: 520, size: 1100, opacity: 0.85),
         Glow(light: .amber, x: 120, y: 1500, size: 900, opacity: 0.7),
         Glow(light: .blue, x: 700, y: 2550, size: 1300, opacity: 0.85),
