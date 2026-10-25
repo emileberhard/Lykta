@@ -64,6 +64,21 @@ same `Layout` type, so a layout the gateway accepts renders on the phone, and
 agents get errors with JSON paths when they send it. Budgets on bytes, nodes,
 depth and modifiers keep rendering bounded.
 
+**Parts shorten authored layouts without changing the wire.** A template's
+root `parts` maps names to nodes, and `use` copies one into any node position.
+Core expands parts before filling, without data, so placeholders and `each`
+variables have copy-paste scope at the use site; use-site modifiers append to
+the copied modifiers. Nested parts are allowed, cycles and unused definitions
+are refused, and expansion counts nodes as it copies, stopping at the layout
+budget before an exponential graph can build its result. This reuses the
+existing template filling and decoder rather than adding parameters or phone
+features. Admission validates the authored template with errors mapped back to
+parts, then stores only the expanded template. Data-only updates and taps refill
+that stored template, so a 0.7.1 gateway can still read and update it after a
+rollback; neither `parts` nor `use` needs a `Layout.introduced` row. The trade-off
+is unchanged stored and push size: this saves agent output tokens, while
+Deflate already compresses repeated nodes on the wire.
+
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`
 records every feature a layout uses (node kinds, keys, enum cases and value

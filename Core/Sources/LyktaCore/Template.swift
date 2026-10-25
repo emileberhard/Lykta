@@ -3,7 +3,16 @@ import Foundation
 extension JSONValue {
     public func filled(with data: JSONValue) throws(LayoutError) -> JSONValue {
         var template = Template(data: data)
-        return try template.fill(self, at: "", in: [:])
+        var parts = try Parts(self)
+        let expanded = try parts.expand(self)
+        let filled: JSONValue
+        do { filled = try template.fill(expanded, at: "", output: "", in: [:]) }
+        catch { throw parts.locating(error) }
+        if case let .object(fields) = self, fields["parts"] != nil {
+            do { _ = try Layout(json: filled.json) }
+            catch { throw parts.locating(template.locating(error)) }
+        }
+        return filled
     }
 
     public func value(at path: String) throws(LayoutError) -> JSONValue {
@@ -47,15 +56,28 @@ private struct Template {
     let data: JSONValue
     var repeated = 0
     var bytes = 0
+    private var locations: [String: String] = [:]
 
-    mutating func fill(_ value: JSONValue, at path: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
+    init(data: JSONValue) { self.data = data }
+
+    func locating(_ error: LayoutError) -> LayoutError {
+        for path in locations.keys.sorted(by: { $0.count > $1.count }) {
+            if error.description.hasPrefix(path + ":") || error.description.hasPrefix(path + ".") || error.description.hasPrefix(path + "[") {
+                return LayoutError(locations[path]! + error.description.dropFirst(path.count))
+            }
+        }
+        return error
+    }
+
+    mutating func fill(_ value: JSONValue, at path: String, output: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
+        if path != output { locations[output] = path }
         switch value {
         case let .object(fields):
             guard fields["each"] == nil else { throw LayoutError("\(path): each must be an item in a list") }
             var filled: [String: JSONValue] = [:]
             for (key, value) in fields where key != "toggle" {
                 try count(key.utf8.count)
-                filled[key] = try fill(value, at: Self.join(path, key), in: scope)
+                filled[key] = try fill(value, at: Self.join(path, key), output: Self.join(output, key), in: scope)
             }
             if let binding = fields["toggle"] {
                 filled.merge(try bind(binding, at: path, in: scope, existing: filled)) { $1 }
@@ -71,9 +93,9 @@ private struct Template {
             var filled: [JSONValue] = []
             for (index, item) in items.enumerated() {
                 if case let .object(fields) = item, fields["each"] != nil {
-                    filled += try repeating(fields, at: "\(path)[\(index)]", in: scope)
+                    filled += try repeating(fields, at: "\(path)[\(index)]", output: output, offset: filled.count, in: scope)
                 } else {
-                    filled.append(try fill(item, at: "\(path)[\(index)]", in: scope))
+                    filled.append(try fill(item, at: "\(path)[\(index)]", output: "\(output)[\(filled.count)]", in: scope))
                 }
             }
             return .array(filled)
@@ -109,7 +131,7 @@ private struct Template {
         }
     }
 
-    private mutating func repeating(_ fields: [String: JSONValue], at path: String, in scope: [String: String]) throws(LayoutError) -> [JSONValue] {
+    private mutating func repeating(_ fields: [String: JSONValue], at path: String, output: String, offset: Int, in scope: [String: String]) throws(LayoutError) -> [JSONValue] {
         guard Set(fields.keys) == ["each", "as", "do"], case let .string(source) = fields["each"], case let .string(name) = fields["as"],
               let item = fields["do"] else {
             throw LayoutError(#"\#(path): expected {"each": "list.path", "as": "name", "do": item}"#)
@@ -126,7 +148,7 @@ private struct Template {
         guard repeated <= Layout.maximumNodes else { throw LayoutError("each repeats more than \(Layout.maximumNodes) items") }
         var filled: [JSONValue] = []
         for index in items.indices {
-            filled.append(try fill(item, at: "\(path).do", in: scope.merging([name: "\(list).\(index)"]) { $1 }))
+            filled.append(try fill(item, at: "\(path).do", output: "\(output)[\(offset + index)]", in: scope.merging([name: "\(list).\(index)"]) { $1 }))
         }
         return filled
     }

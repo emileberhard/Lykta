@@ -200,6 +200,9 @@ actor Store {
             }
             let data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
             let state = try Self.content(title: title, layout: layout, data: data)
+            let expandedLayout: JSONValue
+            do { expandedLayout = try layout.expandingParts() }
+            catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
             try Self.admit(state, on: device)
             let content = try Self.encoded(state)
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
@@ -209,13 +212,13 @@ actor Store {
             let id: UUID
             if let current {
                 id = current.id
-                let changed = try title != current.title || layout != decode(current.layout) || data != decode(current.data) || alert != nil
+                let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
                     || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
                 if changed {
                     try db.run("""
                         UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
                           alert = COALESCE(?, alert), revision = revision + 1 WHERE id = ?
-                        """, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, id)
+                        """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, id)
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -229,7 +232,7 @@ actor Store {
                 try db.run("""
                     INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, ends_at, relevance, alert,
                       revision, delivery, created_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?)
-                    """, id, device.id, name, title, Self.text(layout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
+                    """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
             }
             let activity = try self.activity(id)
             let size = try Self.measure(activity, now: now)

@@ -132,7 +132,8 @@ reminder that only needs to alert the user at a time belongs in their reminders
 or calendar app.
 
 Write bodies as compact single-line JSON, and repeat similar rows with `each`
-over a data list instead of copying nodes; both cut the tokens you write. A
+over a data list instead of copying nodes; both cut the tokens you write.
+Reuse identical nodes across presentations with root `parts` and `{"use":"name"}`. A
 PUT returns the activity's status plus `payloadBytes`, the size Lykta checks
 against Apple's 4096-byte limit, so the difference is the room left.
 

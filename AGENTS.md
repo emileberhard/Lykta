@@ -75,6 +75,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   the one its phone registered with, and only `BadDeviceToken` moves it, once,
   to the other environment. An activity's updates go to its channel's
   environment.
+- Stored layout templates are expanded: `parts` and node `use` never reach
+  database layouts or the phone. Expand before filling, with copy-paste scope,
+  and bound expansion while copying by `Layout.maximumNodes`.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.
