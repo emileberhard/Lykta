@@ -152,7 +152,7 @@ def processed_screenshots(placements):
     failed = [a["stateDetails"] for a in attributes if a["state"] == "FAILED"]
     if failed:
         sys.exit(f"App Store Connect could not process a screenshot: {failed}")
-    return None if any(a["state"] == "ASSET_PROCESSING" for a in attributes) else True
+    return True if all(a["state"] == "ACTIVE" for a in attributes) else None
 
 
 def main(version, slides, notes):
