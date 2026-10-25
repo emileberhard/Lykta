@@ -176,21 +176,15 @@ def processed_screenshots(placements):
     return True if all(a["state"] == "ACTIVE" for a in attributes) else None
 
 
-def main(version, slides, notes):
-    missing = [name for name in ("APP_STORE_CONNECT_KEY_ID", "APP_STORE_CONNECT_ISSUER_ID", "APP_STORE_CONNECT_KEY_PATH", "LYKTA_BUNDLE_ID")
-               if not os.environ.get(name)]
-    if missing:
-        sys.exit(f"Set {', '.join(missing)}.")
+def testflight(app, version, notes):
+    build = wait(f"The {version} build", lambda: processed_build(app, version))
+    submit_beta(app, version, build, notes)
+
+
+def app_store(app, version, slides, notes):
     slides = sorted(Path(slides).glob("*.png"))
     if not slides:
         sys.exit("No screenshots to upload.")
-    apps = api("GET", "apps", **{"filter[bundleId]": os.environ["LYKTA_BUNDLE_ID"]})
-    if not apps:
-        sys.exit(f"No app has the bundle ID {os.environ['LYKTA_BUNDLE_ID']}.")
-    app = apps[0]["id"]
-    notes = Path(notes).read_text().strip()
-    build = wait(f"The {version} build", lambda: processed_build(app, version))
-    submit_beta(app, version, build, notes)
     version_id, released = draft_version(app, version)
     library = api("GET", f"apps/{app}/assetLibrary")["id"]
     with concurrent.futures.ThreadPoolExecutor(len(slides)) as pool:
@@ -205,14 +199,30 @@ def main(version, slides, notes):
     delete_unplaced(library)
     if not released:
         print("Left What's New empty, because the App Store shows it only from the second release.", file=sys.stderr)
+    build = wait(f"The {version} build", lambda: processed_build(app, version))
     api("PATCH", f"appStoreVersions/{version_id}/relationships/build", {"type": "builds", "id": build})
     wait("The screenshots", lambda: processed_screenshots(placements))
     print(f"App Store version {version} is ready to submit for review.", file=sys.stderr)
 
 
+def main(command, version, *paths):
+    missing = [name for name in ("APP_STORE_CONNECT_KEY_ID", "APP_STORE_CONNECT_ISSUER_ID", "APP_STORE_CONNECT_KEY_PATH", "LYKTA_BUNDLE_ID")
+               if not os.environ.get(name)]
+    if missing:
+        sys.exit(f"Set {', '.join(missing)}.")
+    apps = api("GET", "apps", **{"filter[bundleId]": os.environ["LYKTA_BUNDLE_ID"]})
+    if not apps:
+        sys.exit(f"No app has the bundle ID {os.environ['LYKTA_BUNDLE_ID']}.")
+    notes = Path(paths[-1]).read_text().strip()
+    if command == "testflight":
+        testflight(apps[0]["id"], version, notes)
+    else:
+        app_store(apps[0]["id"], version, paths[0], notes)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        sys.exit("Usage: scripts/app-store-connect VERSION SCREENSHOTS NOTES")
+    if sys.argv[1:2] not in (["testflight"], ["app-store"]) or len(sys.argv) != {"testflight": 4, "app-store": 5}[sys.argv[1]]:
+        sys.exit("Usage: scripts/app-store-connect testflight VERSION NOTES\n       scripts/app-store-connect app-store VERSION SCREENSHOTS NOTES")
     try:
         main(*sys.argv[1:])
     except RequestFailed as failure:

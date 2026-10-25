@@ -266,18 +266,19 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    annotated tag's message verbatim: a Markdown list of user-visible changes
    since the previous version, one short sentence per item, with no heading or
    intro line.
-6. After the upload, `app-store` composes the screenshots and runs
-   `scripts/app-store-connect`. Once App Store Connect has processed the build,
-   it sets the build's What to Test to the tag message, copies the newest App
-   Store version's review notes to TestFlight's, adds the build to every
-   external group, such as the public link's, and submits it for TestFlight
-   review. It then renames the App Store version that is still
-   editable to the tag or creates one, with manual release, sets What's New to
-   the tag message from the second release on, replaces the iPhone screenshots,
-   deletes the screenshots in the app's asset library that nothing places any
-   more, except those App Review has seen, which Apple keeps, and attaches the
-   build. While a version waits for App Review or release, this step stops
-   with that version's state, after the TestFlight submission.
+6. After the upload, `testflight-review` runs `scripts/app-store-connect
+   testflight`. Once App Store Connect has processed the build, it sets the
+   build's What to Test to the tag message, copies the newest App Store
+   version's review notes to TestFlight's, adds the build to every external
+   group, such as the public link's, and submits it for TestFlight review.
+7. Alongside it, `app-store` composes the screenshots and runs
+   `scripts/app-store-connect app-store`. It renames the App Store version
+   that is still editable to the tag or creates one, with manual release, sets
+   What's New to the tag message from the second release on, replaces the
+   iPhone screenshots, deletes the screenshots in the app's asset library that
+   nothing places any more, except those App Review has seen, which Apple
+   keeps, and attaches the build. While a version waits for App Review or
+   release, this job stops with that version's state.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.

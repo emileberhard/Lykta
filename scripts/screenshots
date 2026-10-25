@@ -31,9 +31,9 @@ def run(*args, **kwargs):
 
 def runtime():
     runtimes = [r for r in json.loads(run("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
-                if r["platform"] == "iOS" and r["isAvailable"]]
+                if r["platform"] == "iOS" and r["isAvailable"] and any(t["name"] == DEVICE_TYPE for t in r["supportedDeviceTypes"])]
     if not runtimes:
-        sys.exit("No iOS simulator runtime is installed.")
+        sys.exit(f"No installed iOS simulator runtime supports the {DEVICE_TYPE}.")
     return max(runtimes, key=lambda r: [int(part) for part in r["version"].split(".")])
 
 

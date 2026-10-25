@@ -134,6 +134,32 @@ jobs:
           done
           export_archive upload
 
+  testflight-review:
+    needs: testflight
+    runs-on: ubuntu-24.04
+    environment: testflight
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Submit the build for TestFlight review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: |
+          printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
+          scripts/app-store-connect testflight "$VERSION" "$RUNNER_TEMP/notes.md"
+
   app-store:
     needs: testflight
     runs-on: xcode-27
@@ -151,7 +177,7 @@ jobs:
       - name: Compose the screenshots
         run: scripts/screenshots
 
-      - name: Submit the build for TestFlight review and prepare the App Store version
+      - name: Prepare the App Store version
         env:
           GH_TOKEN: ${{ github.token }}
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
@@ -163,7 +189,7 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
           tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
-          scripts/app-store-connect "$VERSION" .local/screenshots "$RUNNER_TEMP/notes.md"
+          scripts/app-store-connect app-store "$VERSION" .local/screenshots "$RUNNER_TEMP/notes.md"
 
   github-release:
     needs: [admit, testflight]
