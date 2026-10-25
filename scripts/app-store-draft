@@ -20,6 +20,10 @@ SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNA
 DEADLINE = time.monotonic() + 40 * 60
 
 
+class RequestFailed(Exception):
+    pass
+
+
 def token():
     now = int(time.time())
     encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=")
@@ -40,11 +44,11 @@ def send(request):
         except urllib.error.HTTPError as error:
             retryable = error.code == 429 or error.code >= 500 and request.get_method() != "POST"
             if not retryable or attempt == 5:
-                sys.exit(f"{request.get_method()} {request.full_url} failed with {error.code}: {error.read().decode(errors='replace')[:2000]}")
+                raise RequestFailed(f"{request.get_method()} {request.full_url} failed with {error.code}: {error.read().decode(errors='replace')[:2000]}")
             delay = error.headers.get("Retry-After")
         except (urllib.error.URLError, TimeoutError) as error:
             if request.get_method() == "POST" or attempt == 5:
-                sys.exit(f"{request.get_method()} {request.full_url} failed: {error}")
+                raise RequestFailed(f"{request.get_method()} {request.full_url} failed: {error}")
             delay = None
         time.sleep(float(delay) if delay and delay.isdigit() else 2 ** attempt * random.uniform(0.5, 1))
 
@@ -119,7 +123,11 @@ def delete_unplaced(library):
                  "filter[category]": "APP_SCREENSHOTS_AND_PREVIEWS", "filter[state]": UNPLACED_STATES})
     for image in images:
         if not image["relationships"]["placements"]["data"]:
-            api("DELETE", f"appAssetLibraryImages/{image['id']}")
+            try:
+                api("DELETE", f"appAssetLibraryImages/{image['id']}")
+            except RequestFailed as failure:
+                if "ASSET_PREVIOUSLY_SUBMITTED_FOR_REVIEW" not in str(failure):
+                    raise
 
 
 def wait(description, check):
@@ -182,4 +190,7 @@ def main(version, slides, notes):
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         sys.exit("Usage: scripts/app-store-draft VERSION SCREENSHOTS NOTES")
-    main(*sys.argv[1:])
+    try:
+        main(*sys.argv[1:])
+    except RequestFailed as failure:
+        sys.exit(str(failure))

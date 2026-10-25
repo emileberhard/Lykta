@@ -260,7 +260,8 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    editable to the tag or creates one, with manual release, sets What's New to
    the tag message from the second release on, replaces the iPhone screenshots,
    deletes the screenshots in the app's asset library that nothing places any
-   more and attaches the build once App Store Connect has processed it.
+   more, except those App Review has seen, which Apple keeps, and attaches the
+   build once App Store Connect has processed it.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.
