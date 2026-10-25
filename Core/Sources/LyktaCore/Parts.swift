@@ -102,40 +102,46 @@ struct Parts {
         if case .null = value { return value }
         nodes += 1
         guard nodes <= Layout.maximumNodes else { throw LayoutError("parts expand to more than \(Layout.maximumNodes) nodes") }
-        if case let .object(fields) = value, fields["each"] != nil, let body = fields["do"] {
-            var fields = fields
-            fields["do"] = try node(body, at: "\(path).do", source: "\(source).do", stack: stack)
-            return .object(fields)
-        }
         guard case var .object(fields) = value else { return value }
         for key in fields.keys.sorted() {
             let at = "\(path).\(key)"
             let authored = "\(source).\(key)"
-            if ["hstack", "vstack", "zstack", "concat", "viewThatFits", "grid"].contains(key) {
-                fields[key] = try list(fields[key]!, at: at, source: authored, stack: stack)
+            if ["hstack", "vstack", "zstack", "concat", "viewThatFits"].contains(key) {
+                fields[key] = try list(fields[key]!, of: .node, at: at, source: authored, stack: stack)
+            } else if key == "grid" {
+                fields[key] = try list(fields[key]!, of: .row, at: at, source: authored, stack: stack)
             } else if ["then", "else", "label", "currentValueLabel", "minimumValueLabel", "maximumValueLabel"].contains(key) {
                 fields[key] = try node(fields[key]!, at: at, source: authored, stack: stack)
-            } else if key == "modifiers", case let .array(items) = fields[key] {
-                var modifiers: [JSONValue] = []
-                for (index, item) in items.enumerated() {
-                    modifiers.append(try modifier(item, at: "\(at)[\(index)]", source: "\(authored)[\(index)]", stack: stack))
-                }
-                fields[key] = .array(modifiers)
+            } else if key == "modifiers" {
+                fields[key] = try list(fields[key]!, of: .modifier, at: at, source: authored, stack: stack)
             }
         }
         return .object(fields)
     }
 
-    private mutating func list(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
+    private enum Element {
+        case node, row, modifier
+    }
+
+    private mutating func list(_ value: JSONValue, of kind: Element, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
         guard case let .array(items) = value else { return value }
         var result: [JSONValue] = []
         for (index, item) in items.enumerated() {
-            let at = "\(path)[\(index)]"
-            let authored = "\(source)[\(index)]"
-            if case .array = item { result.append(try list(item, at: at, source: authored, stack: stack)) }
-            else { result.append(try node(item, at: at, source: authored, stack: stack)) }
+            result.append(try element(item, as: kind, at: "\(path)[\(index)]", source: "\(source)[\(index)]", stack: stack))
         }
         return .array(result)
+    }
+
+    private mutating func element(_ value: JSONValue, as kind: Element, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
+        if case var .object(fields) = value, fields["each"] != nil, let body = fields["do"] {
+            fields["do"] = try element(body, as: kind, at: "\(path).do", source: "\(source).do", stack: stack)
+            return .object(fields)
+        }
+        return switch kind {
+        case .node: try node(value, at: path, source: source, stack: stack)
+        case .row: try list(value, of: .node, at: path, source: source, stack: stack)
+        case .modifier: try modifier(value, at: path, source: source, stack: stack)
+        }
     }
 
     private mutating func modifier(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {

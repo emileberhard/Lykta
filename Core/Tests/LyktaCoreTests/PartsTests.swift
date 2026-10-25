@@ -35,6 +35,17 @@ struct PartsTests {
         #expect(try plain.expandingParts() == plain)
     }
 
+    @Test func expandsPartsInsideEachGeneratedRowsAndModifiers() throws {
+        let template = try json(#"""
+        {"parts":{"cell":"{{row}}"},"lockScreen":{"grid":[{"each":"rows","as":"row","do":[{"use":"cell"}]}]},
+         "compactLeading":{"text":"a","modifiers":[{"each":"rows","as":"row","do":{"overlay":{"use":"cell"}}}]},"compactTrailing":"","minimal":""}
+        """#)
+        #expect(try template.expandingParts() == json(#"""
+        {"lockScreen":{"grid":[{"each":"rows","as":"row","do":["{{row}}"]}]},
+         "compactLeading":{"text":"a","modifiers":[{"each":"rows","as":"row","do":{"overlay":"{{row}}"}}]},"compactTrailing":"","minimal":""}
+        """#))
+    }
+
     @Test(arguments: [
         (#"{"parts":[],"minimal":""}"#, "parts: expected an object of named nodes"),
         (#"{"parts":{"z":"Z","a":"A"},"minimal":{"use":"missing"}}"#, #"minimal: unknown part "missing"; defined parts: a, z"#),
