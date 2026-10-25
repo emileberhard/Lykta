@@ -4,8 +4,8 @@ agents:
   - name: codex
     model_name: gpt-6.1-sol
     kwargs:
-      reasoning_effort: medium
+      reasoning_effort: xhigh
   - name: claude-code
     model_name: claude-opus-5-5
     kwargs:
-      reasoning_effort: medium
+      reasoning_effort: high
