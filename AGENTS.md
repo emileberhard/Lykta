@@ -77,7 +77,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   environment.
 - Stored layout templates are expanded: `parts` and node `use` never reach
   database layouts or the phone. Expand before filling, with copy-paste scope,
-  and bound expansion while copying by `Layout.maximumNodes`.
+  and bound expansion while copying by `Layout.maximumNodes`. `Parts` expands
+  only the node positions `Layout` decodes, so a new node-valued key joins it
+  in the same change.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.

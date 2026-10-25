@@ -52,7 +52,8 @@ let package = Package(
 def snippets():
     text = (SKILL / "references" / "layout.md").read_text()
     blocks = re.findall(r"```json\n(.*?)```", text, re.S)
-    return [json.dumps(json.loads(block), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() for block in blocks]
+    return [json.dumps(json.loads(block), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+            for block in blocks if '"use"' not in block]
 
 
 def main():
