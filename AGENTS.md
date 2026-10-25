@@ -21,6 +21,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples and the home screen |
+| `scripts/app-store-draft` | Preparing a release's App Store version: its version string, What's New, screenshots and build, short of submitting it |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the preview it drives, which shows the layouts staged in `.local/render` |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
@@ -254,6 +255,11 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    annotated tag's message verbatim: a Markdown list of user-visible changes
    since the previous version, one short sentence per item, with no heading or
    intro line.
+6. After the upload, `app-store` composes the screenshots and runs
+   `scripts/app-store-draft`. It renames the App Store version that is still
+   editable to the tag or creates one, sets What's New to the tag message from
+   the second release on, replaces the iPhone screenshots and attaches the
+   build once App Store Connect has processed it.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.

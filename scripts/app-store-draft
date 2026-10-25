@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+import base64
+import concurrent.futures
+import json
+import os
+import random
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+API = "https://api.appstoreconnect.apple.com/v1/"
+EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
+RELEASED = {"READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"}
+SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"}
+PROCESSING_DEADLINE = 45 * 60
+
+
+def token():
+    now = int(time.time())
+    encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=")
+    claims = {"iss": os.environ["APP_STORE_CONNECT_ISSUER_ID"], "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}
+    signed = encode({"alg": "ES256", "kid": os.environ["APP_STORE_CONNECT_KEY_ID"], "typ": "JWT"}) + b"." + encode(claims)
+    der = subprocess.run(["openssl", "dgst", "-sha256", "-sign", os.environ["APP_STORE_CONNECT_KEY_PATH"]],
+                         input=signed, capture_output=True, check=True).stdout
+    r, s = der[4:4 + der[3]], der[6 + der[3]:]
+    signature = r[-32:].rjust(32, b"\0") + s[-32:].rjust(32, b"\0")
+    return (signed + b"." + base64.urlsafe_b64encode(signature).rstrip(b"=")).decode()
+
+
+def send(request):
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return response.read()
+        except urllib.error.HTTPError as error:
+            retryable = error.code == 429 or error.code >= 500 and request.get_method() != "POST"
+            if not retryable or attempt == 5:
+                sys.exit(f"{request.get_method()} {request.full_url} failed with {error.code}: {error.read().decode(errors='replace')[:2000]}")
+            delay = error.headers.get("Retry-After")
+        except (urllib.error.URLError, TimeoutError) as error:
+            if request.get_method() == "POST" or attempt == 5:
+                sys.exit(f"{request.get_method()} {request.full_url} failed: {error}")
+            delay = None
+        time.sleep(float(delay) if delay and delay.isdigit() else 2 ** attempt * random.uniform(0.5, 1))
+
+
+def api(method, path, data=None, **params):
+    url = API + path + ("?" + urllib.parse.urlencode(params) if params else "")
+    body = json.dumps({"data": data}).encode() if data else None
+    response = send(urllib.request.Request(url, body, method=method, headers={
+        "Authorization": f"Bearer {token()}", "Content-Type": "application/json"}))
+    return json.loads(response)["data"] if response else None
+
+
+def link(kind, identifier):
+    return {"data": {"type": kind, "id": identifier}}
+
+
+def draft_version(app, version):
+    versions = api("GET", f"apps/{app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 200})
+    unreleased = [v for v in versions if v["attributes"]["appVersionState"] not in RELEASED]
+    released = len(unreleased) < len(versions)
+    if not unreleased:
+        return api("POST", "appStoreVersions", {"type": "appStoreVersions",
+                   "attributes": {"platform": "IOS", "versionString": version, "releaseType": "MANUAL"},
+                   "relationships": {"app": link("apps", app)}})["id"], released
+    draft = unreleased[0]
+    state, name = draft["attributes"]["appVersionState"], draft["attributes"]["versionString"]
+    if state not in EDITABLE:
+        sys.exit(f"App Store version {name} is {state}; release it or remove it from review before preparing {version}.")
+    if name != version:
+        renamed = api("PATCH", f"appStoreVersions/{draft['id']}", {"type": "appStoreVersions", "id": draft["id"],
+                      "attributes": {"versionString": version}})
+        if renamed["attributes"]["versionString"] != version:
+            sys.exit(f"App Store Connect kept the draft's version as {renamed['attributes']['versionString']}.")
+    return draft["id"], released
+
+
+def upload(library, slide):
+    contents = slide.read_bytes()
+    image = api("POST", "appAssetLibraryImages", {"type": "appAssetLibraryImages",
+                "attributes": {"fileName": slide.name, "fileSize": len(contents), "category": "APP_SCREENSHOTS_AND_PREVIEWS"},
+                "relationships": {"assetLibrary": link("appAssetLibraries", library)}})
+    for part in image["attributes"]["uploadOperations"]:
+        send(urllib.request.Request(part["url"], contents[part["offset"]:part["offset"] + part["length"]], method=part["method"],
+                                    headers={header["name"]: header["value"] for header in part["requestHeaders"]}))
+    api("PATCH", f"appAssetLibraryImages/{image['id']}", {"type": "appAssetLibraryImages", "id": image["id"], "attributes": {"uploaded": True}})
+    return image["id"]
+
+
+def replace_screenshots(library, localization, slides):
+    old = api("GET", f"appStoreVersionLocalizations/{localization}/placements", limit=50, include="image",
+              **{f"filter[{key}]": value for key, value in SCREENSHOTS.items()})
+    for placement in old:
+        api("DELETE", f"appAssetLibraryPlacements/{placement['id']}")
+    for placement in old:
+        image = placement["relationships"]["image"]["data"]["id"]
+        if not api("GET", f"appAssetLibraryImages/{image}/relationships/placements"):
+            api("DELETE", f"appAssetLibraryImages/{image}")
+    with concurrent.futures.ThreadPoolExecutor(len(slides)) as pool:
+        images = list(pool.map(lambda slide: upload(library, slide), slides))
+    placements = [api("POST", "appAssetLibraryPlacements", {"type": "appAssetLibraryPlacements", "attributes": SCREENSHOTS,
+                      "relationships": {"image": link("appAssetLibraryImages", image),
+                                        "appStoreVersionLocalization": link("appStoreVersionLocalizations", localization)}})["id"]
+                  for image in images]
+    api("POST", "appAssetLibraryPlacementOrderingRequests", {"type": "appAssetLibraryPlacementOrderingRequests",
+        "attributes": {"placementGroup": SCREENSHOTS["placementGroup"]},
+        "relationships": {"orderedPlacements": {"data": [{"type": "appAssetLibraryPlacements", "id": p} for p in placements]},
+                          "appStoreVersionLocalization": link("appStoreVersionLocalizations", localization)}})
+    return placements
+
+
+def wait(description, check):
+    deadline = time.time() + PROCESSING_DEADLINE
+    while (result := check()) is None:
+        if time.time() > deadline:
+            sys.exit(f"{description} did not finish processing within {PROCESSING_DEADLINE // 60} minutes.")
+        time.sleep(20)
+    return result
+
+
+def processed_build(app, version):
+    builds = api("GET", "builds", sort="-uploadedDate", limit=1, **{"filter[app]": app, "filter[preReleaseVersion.version]": version,
+                 "filter[preReleaseVersion.platform]": "IOS", "filter[buildAudienceType]": "APP_STORE_ELIGIBLE"})
+    state = builds[0]["attributes"]["processingState"] if builds else "PROCESSING"
+    if state in {"FAILED", "INVALID"}:
+        sys.exit(f"The {version} build is {state}.")
+    return builds[0]["id"] if state == "VALID" else None
+
+
+def processed_screenshots(placements):
+    attributes = [api("GET", f"appAssetLibraryPlacements/{p}")["attributes"] for p in placements]
+    failed = [a["stateDetails"] for a in attributes if a["state"] == "FAILED"]
+    if failed:
+        sys.exit(f"App Store Connect could not process a screenshot: {failed}")
+    return None if any(a["state"] == "ASSET_PROCESSING" for a in attributes) else True
+
+
+def main(version, slides, notes):
+    missing = [name for name in ("APP_STORE_CONNECT_KEY_ID", "APP_STORE_CONNECT_ISSUER_ID", "APP_STORE_CONNECT_KEY_PATH", "LYKTA_BUNDLE_ID")
+               if not os.environ.get(name)]
+    if missing:
+        sys.exit(f"Set {', '.join(missing)}.")
+    slides = sorted(Path(slides).glob("*.png"))
+    if not slides:
+        sys.exit("No screenshots to upload.")
+    apps = api("GET", "apps", **{"filter[bundleId]": os.environ["LYKTA_BUNDLE_ID"]})
+    if not apps:
+        sys.exit(f"No app has the bundle ID {os.environ['LYKTA_BUNDLE_ID']}.")
+    app = apps[0]["id"]
+    version_id, released = draft_version(app, version)
+    library = api("GET", f"apps/{app}/assetLibrary")["id"]
+    placements = []
+    for localization in api("GET", f"appStoreVersions/{version_id}/appStoreVersionLocalizations", limit=50):
+        if released:
+            api("PATCH", f"appStoreVersionLocalizations/{localization['id']}", {"type": "appStoreVersionLocalizations",
+                "id": localization["id"], "attributes": {"whatsNew": Path(notes).read_text().strip()}})
+        placements += replace_screenshots(library, localization["id"], slides)
+        print(f"Placed {len(slides)} screenshots on {localization['attributes']['locale']}.", file=sys.stderr)
+    if not released:
+        print("Left What's New empty, because the App Store shows it only from the second release.", file=sys.stderr)
+    build = wait(f"The {version} build", lambda: processed_build(app, version))
+    api("PATCH", f"appStoreVersions/{version_id}/relationships/build", {"type": "builds", "id": build})
+    wait("The screenshots", lambda: processed_screenshots(placements))
+    print(f"App Store version {version} is ready to submit for review.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        sys.exit("Usage: scripts/app-store-draft VERSION SCREENSHOTS NOTES")
+    main(*sys.argv[1:])
