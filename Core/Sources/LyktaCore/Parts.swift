@@ -39,12 +39,8 @@ struct Parts {
     }
 
     func locating(_ error: LayoutError) -> LayoutError {
-        for path in origins.keys.sorted(by: { $0.count > $1.count }) {
-            if error.description.hasPrefix(path + ":") || error.description.hasPrefix(path + ".") || error.description.hasPrefix(path + "[") {
-                return LayoutError(origins[path]! + error.description.dropFirst(path.count) + " (used at \(path))")
-            }
-        }
-        return error
+        guard let (source, path, rest) = error.origin(in: origins) else { return error }
+        return LayoutError(source + rest + " (used at \(path))")
     }
 
     private mutating func node(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {

@@ -25,6 +25,15 @@ public struct LayoutError: Error, Equatable, Sendable, CustomStringConvertible {
     }
 }
 
+extension LayoutError {
+    func origin(in origins: [String: String]) -> (source: String, path: String, rest: Substring)? {
+        for path in origins.keys.sorted(by: { $0.count > $1.count }) where [":", ".", "["].contains(where: { description.hasPrefix(path + $0) }) {
+            return (origins[path]!, path, description.dropFirst(path.count))
+        }
+        return nil
+    }
+}
+
 public protocol Choice: RawRepresentable<String>, CaseIterable, Decodable, Sendable {}
 
 extension Choice {

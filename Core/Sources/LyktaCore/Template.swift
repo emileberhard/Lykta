@@ -61,12 +61,7 @@ private struct Template {
     init(data: JSONValue) { self.data = data }
 
     func locating(_ error: LayoutError) -> LayoutError {
-        for path in locations.keys.sorted(by: { $0.count > $1.count }) {
-            if error.description.hasPrefix(path + ":") || error.description.hasPrefix(path + ".") || error.description.hasPrefix(path + "[") {
-                return LayoutError(locations[path]! + error.description.dropFirst(path.count))
-            }
-        }
-        return error
+        error.origin(in: locations).map { LayoutError($0.source + $0.rest) } ?? error
     }
 
     mutating func fill(_ value: JSONValue, at path: String, output: String, in scope: [String: String]) throws(LayoutError) -> JSONValue {
