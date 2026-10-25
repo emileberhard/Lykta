@@ -270,8 +270,15 @@ actor Store {
                                      device.id, name).first else {
             throw APIError(.notFound, "No activity is named \(name).")
         }
-        let activity = try Activity(row)
-        return ActivityDetail(status: try status(of: activity, observations: observations(device, of: [activity])), data: try decode(activity.data))
+        return try detail(device, of: try Activity(row))
+    }
+
+    func detail(_ device: Device, id: UUID) throws -> ActivityDetail {
+        try detail(device, of: try activity(id))
+    }
+
+    private func detail(_ device: Device, of activity: Activity) throws -> ActivityDetail {
+        ActivityDetail(status: try status(of: activity, observations: observations(device, of: [activity])), data: try decode(activity.data))
     }
 
     func list(_ device: Device) throws -> [ActivityStatus] {

@@ -166,7 +166,7 @@ struct API: Sendable {
             let (activity, payloadBytes) = try await store.put(device, name: name, request: try Self.activityRequest(request.body),
                                                                maximumLiveActivities: maximumLiveActivities, now: now)
             try await waiting(wait) { try await store.attempted(activity, now: Self.now()) }
-            return Self.json(200, ActivityPut(detail: try await store.detail(device, name: name), payloadBytes: payloadBytes))
+            return Self.json(200, ActivityPut(detail: try await store.detail(device, id: activity.id), payloadBytes: payloadBytes))
         case ("DELETE", "v1/activities/{name}"):
             let device = try await agent(request)
             let dismissAfter = try request.query["dismissAfter"].map { text in

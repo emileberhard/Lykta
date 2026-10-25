@@ -479,6 +479,17 @@ struct GatewayTests {
         #expect(push.sent == ["createChannel", "start", "update 5"])
     }
 
+    @Test func aWaitingPutAnswersForItsOwnActivityAfterAnotherTakesItsName() async throws {
+        struct Titled: Decodable { let title: String }
+        async let first = send("PUT", "/v1/activities/build?wait=1", body: Self.start)
+        while try await send("GET", "/v1/activities/build").status != 200 { await Task.yield() }
+        #expect(try await send("DELETE", "/v1/activities/build").status == 200)
+        guard case var .object(next) = Self.start else { return }
+        next["title"] = "Deploy"
+        #expect(try await send("PUT", "/v1/activities/build", body: .object(next)).status == 200)
+        #expect((try await first.decoded() as Titled).title == "Build")
+    }
+
     @Test func aWaitOutOfRangeChangesNothing() async throws {
         let response = try await send("PUT", "/v1/activities/build?wait=26", body: Self.start)
         #expect(try response.decoded() as Refusal == Refusal(error: "invalid_request", message: "wait must be 0 to 25 seconds."))
