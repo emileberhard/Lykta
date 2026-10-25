@@ -38,6 +38,15 @@ struct WireTests {
         #expect(received.layout != nil)
     }
 
+    @Test func bothFormsRoundTripThroughAPropertyListCoder() throws {
+        let legacy = try LyktaActivity.ContentState(title: "Boarding", layout: Self.json)
+        for state in [legacy, try legacy.encoded(for: LyktaActivity.ContentState.compactSince)] {
+            let decoded = try PropertyListDecoder().decode(LyktaActivity.ContentState.self, from: PropertyListEncoder().encode(state))
+            #expect(decoded == state)
+            #expect(decoded.layout != nil)
+        }
+    }
+
     @Test(arguments: ["~1", "~1em*q5{[@3`;*3", "~1em*q5{[@3`;*3U&@VG|6tYJK)/C}"])
     func malformedCompactLayoutsFailToDecode(layout: String) {
         #expect(throws: DecodingError.self) { try decode(title: "Boarding", layout: layout) }

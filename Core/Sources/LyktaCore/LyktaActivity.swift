@@ -46,8 +46,12 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
             String(hash, radix: 16)
         }
 
+        public static func isCompact(for layoutVersion: Version?) -> Bool {
+            layoutVersion.map { $0 >= compactSince } ?? false
+        }
+
         public func encoded(for layoutVersion: Version?) throws(LayoutError) -> Self {
-            guard form == .legacy, let layoutVersion, layoutVersion >= Self.compactSince else { return self }
+            guard form == .legacy, Self.isCompact(for: layoutVersion) else { return self }
             guard let json = Deflate.decompress(Array(packed), limit: Layout.maximumBytes) else {
                 throw LayoutError("the stored layout cannot be decompressed")
             }
@@ -57,8 +61,7 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
             title = try fields.decode(String.self, forKey: .title)
-            let text = try fields.decode(String.self, forKey: .layout)
-            if text.hasPrefix(Self.compactPrefix) {
+            if let text = try? fields.decode(String.self, forKey: .layout), text.hasPrefix(Self.compactPrefix) {
                 guard let bytes = Base92.decode(text.dropFirst(Self.compactPrefix.count)), bytes.count > 8 else {
                     throw DecodingError.dataCorruptedError(forKey: .layout, in: fields, debugDescription: "invalid compact layout")
                 }

@@ -101,7 +101,7 @@ struct Delivery: Sendable {
         var detail: [String: JSONValue] = [
             "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
             "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
-            "compact": .bool(job.layoutVersion.map { $0 >= LyktaActivity.ContentState.compactSince } ?? false),
+            "compact": .bool(LyktaActivity.ContentState.isCompact(for: job.layoutVersion)),
         ]
         let outcome: Outcome
         do {
