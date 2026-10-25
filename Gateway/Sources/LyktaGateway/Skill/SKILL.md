@@ -125,10 +125,10 @@ several in one call gets cut off.
 
 ```sh
 lykta docs references/layout.md
-lykta docs examples/recipe-steps.json examples/solar-eclipse.json examples/orion-return.json
-lykta docs examples/jira-release.json examples/printer.json examples/agent-question.json
-lykta docs examples/puppy-potty.json examples/app-review.json examples/shopping-list.json examples/pr-inbox.json
-lykta docs examples/homelab.json examples/movie-night.json examples/ai-usage.json
+lykta docs examples/recipe-steps.json examples/puppy-potty.json examples/pr-inbox.json
+lykta docs examples/jira-release.json examples/ai-usage.json examples/orion-return.json
+lykta docs examples/homelab.json examples/movie-night.json examples/printer.json
+lykta docs examples/solar-eclipse.json examples/agent-question.json examples/app-review.json examples/shopping-list.json
 ```
 
 Together they show the range: drawn scenery, charts,
