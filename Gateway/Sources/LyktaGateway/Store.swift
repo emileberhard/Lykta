@@ -52,6 +52,8 @@ actor Store {
     static let actionRetention = 86400
     static let maximumActionsPerDevice = 1000
     static let inviteLifetime = 3600
+    static let activityLifetime = 8 * 3600
+    static let latestActivityEnd = activityLifetime - 60
     static let notificationLifetime = 86400
     static let maximumNotificationsPerHour = 60
     static let mediaRetention = 86400
@@ -212,7 +214,7 @@ actor Store {
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
-            let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
+            let endsAt = request.endAfter.map { min(now + $0, (current?.createdAt ?? now) + Self.latestActivityEnd) } ?? current?.endsAt
             let id: UUID
             if let current {
                 id = current.id
@@ -563,7 +565,7 @@ actor Store {
 
     func housekeep(now: Int) throws {
         try db.transaction {
-            for row in try db.query("SELECT id, device_id FROM activities WHERE phase != 'ended' AND in_flight = 0 AND created_at <= ?", now - 8 * 3600) {
+            for row in try db.query("SELECT id, device_id FROM activities WHERE phase != 'ended' AND in_flight = 0 AND created_at <= ?", now - Self.activityLifetime) {
                 let id = try row.text("id", as: UUID.init(uuidString:))
                 try db.run("""
                     UPDATE activities SET phase = 'ended', ended_at = ?, error = COALESCE(error, 'Live Activities last at most 8 hours.') WHERE id = ?

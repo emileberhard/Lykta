@@ -199,15 +199,16 @@ struct GatewayTests {
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
-    @Test func endsAndRemovesAnActivityAtItsDeadline() async throws {
+    @Test(arguments: [(60, 60), (Store.activityLifetime, Store.latestActivityEnd)])
+    func endsAndRemovesAnActivityAtItsDeadlineBeforeIOSEndsIt(endAfter: Int, deadline: Int) async throws {
         guard case var .object(start) = Self.start else { return }
-        start["endAfter"] = .number(60)
+        start["endAfter"] = .number(Double(endAfter))
         try await put("build", .object(start))
         try await deliver(at: now)
-        try await put("build", ["data": ["step": "Sign"]])
-        try await deliver(at: now + 58)
+        try await put("build", ["data": ["step": "Sign"], "endAfter": .number(Double(endAfter))])
+        try await deliver(at: now + deadline - 2)
         #expect(try await status("build").state == "live")
-        try await deliver(at: now + 62)
+        try await deliver(at: now + deadline + 2)
         #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed"])
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }

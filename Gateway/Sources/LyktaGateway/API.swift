@@ -254,8 +254,9 @@ struct API: Sendable {
         guard request.alert.map({ (1...200).contains($0.body.count) && ($0.title?.count ?? 0) <= 120 }) != false else {
             throw invalid("alert title must be at most 120 characters and body 1 to 200.")
         }
-        guard request.staleAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("staleAfter must be 1 to 28800 seconds.") }
-        guard request.endAfter.map({ (1...8 * 3600).contains($0) }) != false else { throw invalid("endAfter must be 1 to 28800 seconds.") }
+        let lifetime = Store.activityLifetime
+        guard request.staleAfter.map({ (1...lifetime).contains($0) }) != false else { throw invalid("staleAfter must be 1 to \(lifetime) seconds.") }
+        guard request.endAfter.map({ (1...lifetime).contains($0) }) != false else { throw invalid("endAfter must be 1 to \(lifetime) seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         guard request.ifRevision.map({ $0 >= 1 }) != false else { throw invalid("ifRevision must be a revision from GET /v1/activities/{name}.") }
         let paths = request.now?.keys.sorted() ?? []
