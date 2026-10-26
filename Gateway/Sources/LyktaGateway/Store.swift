@@ -214,7 +214,7 @@ actor Store {
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let relevance = request.relevance ?? current?.relevance
-            let endsAt = request.endAfter.map { min(now + $0, (current?.createdAt ?? now) + Self.latestActivityEnd) } ?? current?.endsAt
+            let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
             let id: UUID
             if let current {
                 id = current.id
@@ -640,7 +640,9 @@ actor Store {
 
     func claim(now: Int, limit: Int) throws -> [Job] {
         try db.transaction {
-            for row in try db.query("SELECT * FROM activities WHERE phase IN ('starting', 'live') AND ends_at <= ?", now) {
+            for row in try db.query("""
+                SELECT * FROM activities WHERE phase IN ('starting', 'live') AND ends_at IS NOT NULL AND min(ends_at, created_at + ?) <= ?
+                """, Self.latestActivityEnd, now) {
                 _ = try end(Activity(row), dismissAt: now, now: now, ["dismissAfter": .number(0), "scheduled": .bool(true)])
             }
             try expireNotifications(now: now)

@@ -205,7 +205,7 @@ struct GatewayTests {
         start["endAfter"] = .number(Double(endAfter))
         try await put("build", .object(start))
         try await deliver(at: now)
-        try await put("build", ["data": ["step": "Sign"], "endAfter": .number(Double(endAfter))])
+        try await put("build", ["data": ["step": "Sign"]])
         try await deliver(at: now + deadline - 2)
         #expect(try await status("build").state == "live")
         try await deliver(at: now + deadline + 2)
