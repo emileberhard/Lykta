@@ -199,7 +199,7 @@ struct GatewayTests {
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
-    @Test(arguments: [(60, 60), (Store.activityLifetime, Store.latestActivityEnd)])
+    @Test(arguments: [(60, 60), (28_800, 28_740)])
     func endsAndRemovesAnActivityAtItsDeadlineBeforeIOSEndsIt(endAfter: Int, deadline: Int) async throws {
         guard case var .object(start) = Self.start else { return }
         start["endAfter"] = .number(Double(endAfter))

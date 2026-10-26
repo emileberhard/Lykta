@@ -156,7 +156,7 @@ from `a-z`, `0-9`, `-`, `_` and `.`.
 | `now` | `{"path": seconds}` sets each data path to the time the gateway receives the PUT, in Unix seconds, plus the seconds, such as `{"started": 0, "ends": 1500}` for a timer that ends in 25 minutes. Missing paths are created. |
 | `alert` | `{"title", "body", "sound": true}` lights up the screen and expands the Dynamic Island. Only `body` is required; up to 200 characters. Use it for moments that need attention. |
 | `staleAfter` | Seconds until the phone marks the activity as out of date. Each PUT renews it. |
-| `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen, at the latest a minute before iOS's eight-hour limit. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
+| `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen, at the latest 7 hours 59 minutes after the activity started. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
 | `relevance` | 0 to 100. The most relevant activity takes the Dynamic Island. |
 | `ifRevision` | Apply the PUT only if the activity is still at this `revision`; otherwise fail with `conflict`. |
 
@@ -238,9 +238,9 @@ sooner.
 
 iOS ends an activity eight hours after it starts and keeps it on the Lock
 Screen for up to four more, beside any new activity with its name. For status
-that outlasts that, such as a dashboard, send `endAfter` with every update:
-the gateway then removes the activity before the limit, and your next PUT
-starts a fresh one.
+that outlasts that, such as a dashboard, send `endAfter`, `title` and `layout`
+with every update: the gateway then removes the activity before the limit, and
+your next PUT starts a fresh one.
 
 ## Status
 

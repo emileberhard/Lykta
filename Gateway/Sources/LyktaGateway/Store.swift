@@ -53,7 +53,7 @@ actor Store {
     static let maximumActionsPerDevice = 1000
     static let inviteLifetime = 3600
     static let activityLifetime = 8 * 3600
-    static let latestActivityEnd = activityLifetime - 60
+    private static let latestActivityEnd = activityLifetime - 60
     static let notificationLifetime = 86400
     static let maximumNotificationsPerHour = 60
     static let mediaRetention = 86400
