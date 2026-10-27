@@ -17,8 +17,10 @@ Lykta app does not need to be open.
 Send everything with `lykta`, a small command the gateway serves with this
 skill: `lykta` for sh with curl, `lykta.ps1` for PowerShell. The setup the
 user copied from the Lykta app installs it as `~/.local/bin/lykta`, or
-`~\.local\bin\lykta.cmd` on Windows, saves the gateway and token, and says how
-to run it; when `lykta` is not on the PATH, run it by that path. `lykta` keeps
+`~\.local\bin\lykta.cmd` on Windows, saves the gateway and token, starts a
+Live Activity named `hello` that ends after five minutes, so the user sees the
+phone answer, and says how to run it; when `lykta` is not on the PATH, run it
+by that path. `lykta` keeps
 itself and each copy of this skill that `lykta install` made in step with the
 gateway. Such a copy is this file alone, and `lykta docs` prints the rest.
 Without that setup, a copy of this skill with its `scripts` folder runs

@@ -22,12 +22,32 @@ struct LyktaApp: App {
             if let directory = Capture.directory {
                 CaptureView(directory: directory)
             } else {
-                HomeView(model: model)
+                AppView(model: model)
             }
             #else
-            HomeView(model: model)
+            AppView(model: model)
             #endif
         }
         .onChange(of: scenePhase) { _, phase in model.sceneChanged(to: phase) }
+    }
+}
+
+private struct AppView: View {
+    let model: Model
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if model.isOnboarding {
+                Onboarding(model: model)
+                    .transition(.replace(reduceMotion: reduceMotion))
+            } else {
+                HomeView(model: model)
+                    .transition(.replace(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(.smooth(duration: 0.6), value: model.isOnboarding)
+        .onOpenURL { openURL($0) }
     }
 }

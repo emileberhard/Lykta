@@ -74,6 +74,7 @@ struct API: Sendable {
         "examples/notifications/print-finished.wav": PackageResources.print_finished_wav,
         "examples/notifications/printer-avatar.jpg": PackageResources.printer_avatar_jpg,
         "examples/notifications/tests-passed.json": PackageResources.tests_passed_json,
+        "scripts/hello.json": PackageResources.hello_json,
         "scripts/lykta": PackageResources.lykta,
         "scripts/lykta.ps1": PackageResources.lykta_ps1,
     ]

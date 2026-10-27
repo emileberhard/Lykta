@@ -132,6 +132,23 @@ prove the phone shows it, so the button's spinner lasts until the activity
 shows, for at most 10 seconds. A TipKit tip could own the same rule, but one
 flag in `Model` needs no datastore or extra observable state.
 
+**First launch introduces Lykta and waits for the agent's hello.** A new
+install opens on `Onboarding`, not the home screen: what Lykta shows, a page
+that explains notifications and asks for them when the user continues, as
+Apple's guidance has a screen give the reason before the system alert, then
+Connect, which copies the agent setup and waits until ActivityKit reports a
+live activity other than the gallery's `example`. `lykta setup` starts such an
+activity, a short hello that dismisses itself, so the agent's first command
+proves the token, the gateway, APNs and the phone together, and the user sees
+it arrive. The gate encourages without blocking: Set Up Later opens the home
+screen. `Model` keeps two `UserDefaults` flags. `onboarded` is set on the first
+launch of a release that has it, to whether an earlier release already ran,
+read from `bundleVersion`, so existing installs skip the introduction.
+`agentConnected` latches when the first agent activity appears and Reset
+clears it; while it is set, Copy Agent Setup moves from the home screen's
+buttons into its menu. Asking the gateway whether an agent ever wrote would
+need a device API field, and the phone already observes the activity.
+
 **The app shows each activity's times and ends it through the gateway.**
 Each card on the home screen has a header with the activity's title, status
 and last change, and a menu with Details, a sheet with its times and name, and
@@ -286,8 +303,8 @@ entitlement and no SiriKit. If the donation or the intent fails, the
 extension delivers the plain alert with its sound and image; if the extension runs out of time, iOS
 delivers the original with the default sound. The push reads
 correctly without the extension. The app asks for permission when the user
-taps Copy Agent Setup, or Allow on the home screen for installs set up
-earlier, registers for remote notifications, and reports the authorization,
+continues past the introduction's notifications page or taps Copy Agent Setup,
+or taps Allow on the home screen for installs set up earlier, registers for remote notifications, and reports the authorization,
 the banner style and the token in its device report, or the reason iOS gave
 for refusing one, which the gateway passes on in its `notifications_not_set_up`
 answer and the app shows on its home screen. A phone whose report
@@ -461,7 +478,12 @@ before they run and come from the same commit as the gateway that serves them.
 Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
 set), the token readable only by the user through mode 600, or on Windows an
 access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
-take precedence. The references and examples are not cached: an agent reads
+take precedence. Setup then starts `scripts/hello.json`, a Live Activity
+named `hello` that ends after five minutes, which proves the token, the
+gateway, APNs and the phone together, and which the app's introduction waits
+for. Setup prints the gateway's answer to the hello, or why it could not be
+sent, and a hello that fails never fails setup, because Live Activities may be off on a phone that still takes notifications
+and widgets. The references and examples are not cached: an agent reads
 them once per task with `lykta docs`, and a cache would only save input. curl takes the token as an argument, so other
 users of the same computer could see it while a request runs, as with the
 curl commands the skill showed before; PowerShell keeps it in the process.

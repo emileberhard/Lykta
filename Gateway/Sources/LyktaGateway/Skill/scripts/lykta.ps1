@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $usage = @'
 Usage: lykta COMMAND
 
-  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta and print the skill
+  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta, say hello on the phone and print the skill
   install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or piped in, to /v1/PATH and wait for Apple's answer
@@ -136,7 +136,7 @@ function Test-Refused($Exception) {
     $false
 }
 
-function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
+function Send-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
     $again = if ($Method -eq 'PUT') { 'it may have been applied, so read it with lykta get before sending it again' } else { 'retry in a few seconds' }
     for ($attempt = 1; ; $attempt++) {
         $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($Method), "$url$Target")
@@ -152,20 +152,32 @@ function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content)
                 Start-Sleep -Seconds 2
                 continue
             }
-            if (Test-Refused $cause) { Fail "could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" 3 }
-            Fail "$Method $Target got no answer from ${url}: $($cause.GetBaseException().Message); $again" 3
+            if (Test-Refused $cause) { return @{ Code = 3; Text = "lykta: could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" } }
+            return @{ Code = 3; Text = "lykta: $Method $Target got no answer from ${url}: $($cause.GetBaseException().Message); $again" }
         }
     }
     $script:served = Get-Served $response
     $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
     $status = [int]$response.StatusCode
-    if ($status -ge 200 -and $status -lt 300) { return $text }
-    if ($status -ge 400 -and $status -lt 500) {
-        [Console]::Error.WriteLine("lykta: $Method $Target was refused with HTTP ${status}:`n$text")
-        exit 1
+    if ($status -ge 200 -and $status -lt 300) { return @{ Code = 0; Text = $text } }
+    if ($status -ge 400 -and $status -lt 500) { return @{ Code = 1; Text = "lykta: $Method $Target was refused with HTTP ${status}:`n$text" } }
+    @{ Code = 3; Text = "lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text" }
+}
+
+function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
+    $result = Send-Gateway $Method $Target $Content
+    if ($result.Code -ne 0) {
+        [Console]::Error.WriteLine($result.Text)
+        exit $result.Code
     }
-    [Console]::Error.WriteLine("lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text")
-    exit 3
+    $result.Text
+}
+
+function Send-Hello {
+    $hello = Send-Gateway 'GET' '/skill/scripts/hello.json'
+    if ($hello.Code -ne 0) { return $hello }
+    $body = $hello.Text
+    Send-Gateway 'PUT' '/v1/activities/hello?wait=10' { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') }
 }
 
 function Get-ApiPath([string]$Path) {
@@ -221,6 +233,9 @@ function Invoke-Setup([string[]]$Arguments) {
     if ($found -and $found.Source -eq $run) { $run = 'lykta' }
     elseif ($run.StartsWith($HOME)) { $run = '~' + $run.Substring($HOME.Length) }
     Write-Output "Lykta is set up for $url. Run it as $run.`n"
+    $hello = Send-Hello
+    if ($hello.Code -eq 0) { Write-Output "Sent the phone a Live Activity named hello that ends after five minutes. The gateway answered:`n$($hello.Text)`n" }
+    else { Write-Output "Could not send the phone a Live Activity named hello:`n$($hello.Text)`n" }
     Write-Output "Install this skill so later sessions have it: run $run install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.`n"
     Write-Output (Invoke-Gateway 'GET' '/skill/SKILL.md')
 }

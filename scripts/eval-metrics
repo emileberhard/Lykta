@@ -31,13 +31,17 @@ def cache_writes(metrics):
                  if value is not None), None)
 
 
+def sent_by_agent(event):
+    return event["name"] == "notification.put" or event["name"] == "activity.put" and event["detail"].get("name") != "hello"
+
+
 def accepted(path, started):
     try:
         events = json.loads((path / "artifacts" / "events.json").read_text())["events"]
     except (OSError, ValueError, KeyError) as error:
         print(f"{path.name}: no gateway events in artifacts/events.json ({type(error).__name__}), so accepted is unknown.", file=sys.stderr)
         return None
-    at = next((event["at"] for event in events if event["name"] in ("activity.put", "notification.put")), None)
+    at = next((event["at"] for event in events if sent_by_agent(event)), None)
     if at is None and len(events) == 1000:
         print(f"{path.name}: the first 1000 gateway events hold no accepted activity or notification, so accepted is unknown.", file=sys.stderr)
         return None
@@ -50,7 +54,7 @@ def payload_measures(path):
     except (OSError, ValueError, KeyError):
         return {"payload bytes": None, "413s": None}
     sizes = [event["detail"]["payloadBytes"] for event in events
-             if event["name"] in ("activity.put", "notification.put") and "payloadBytes" in event["detail"]]
+             if sent_by_agent(event) and "payloadBytes" in event["detail"]]
     truncated = len(events) == 1000
     return {
         "payload bytes": max(sizes) if sizes else None,

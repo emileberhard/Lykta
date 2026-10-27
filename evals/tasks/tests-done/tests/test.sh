@@ -5,7 +5,8 @@ for attempt in $(seq 10); do
     -H "Authorization: Bearer lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b")
   verdict=$(python3 -c '
 import json, sys
-names = [e["name"] for e in json.load(sys.stdin)["events"]]
+events = [e for e in json.load(sys.stdin)["events"] if not (e["name"] == "activity.put" and e["detail"].get("name") == "hello")]
+names = [e["name"] for e in events]
 print("activity" if "activity.put" in names else "received" if "notification.received" in names else "waiting")' <<< "$events")
   case $verdict in
     activity)

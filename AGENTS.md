@@ -14,15 +14,15 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations, and the Lykta widget: its timeline provider, the states it draws and its push handler |
 | `iOS/Gateway` | The phone's link to its gateway, compiled into the app and the widget extension: `GatewayClient`, the Keychain items, among them the widget credential, the widget's `WidgetSelection` intent with its entity query, and `WidgetCache` |
-| `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the in-app Lock Screen cards with their headers and details sheet, and the example gallery with its hint to lock the phone after a start, until the app is left while it shows |
+| `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the first-launch introduction that waits for the agent's hello, the in-app Lock Screen cards with their headers and details sheet, and the example gallery with its hint to lock the phone after a start, until the app is left while it shows |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
 | `iOS/Avatars` | The initials avatar for a sender without a picture, drawn by both the extension and the app's gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
-| `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, and the check that runs both against `lykta-gateway simulate` |
+| `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, the `hello.json` activity its setup starts, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
-| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples and the home screen |
+| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples, the home screen and the Connect step of the introduction |
 | `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots and build, short of App Review |
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
@@ -334,7 +334,8 @@ release, so the maintainer decides when an approved version goes live.
 The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size, drawn by `just screenshots`. In capture mode, which
 `LYKTA_CAPTURE` turns on in Debug builds, the app renders every bundled
-example's Lock Screen card and islands and its home screen as PNGs, in US
+example's Lock Screen card and islands, its home screen and the introduction's
+Connect step as PNGs, in US
 English with the clock at 9:41 like the composed Lock Screen, and exits;
 `iOS/AppStore/compose.swift` holds the captions and arranges the captures into
 opaque slides, as App Store Connect requires. Look at the slides after a change

@@ -24,6 +24,8 @@ final class Model {
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
     private(set) var notifications: NotificationSettings?
     private(set) var error: String?
+    private(set) var isOnboarding: Bool
+    private(set) var isAgentConnected = UserDefaults.standard.bool(forKey: Model.agentConnected)
 
     private let gateway: GatewayClient?
     private let environment: PushEnvironment
@@ -48,6 +50,11 @@ final class Model {
         self.environment = environment
         gateway = GatewayClient.configured(timeout: 20)
         phase = gateway == nil ? .unconfigured : .connecting
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.onboarded) == nil {
+            defaults.set(defaults.string(forKey: "bundleVersion") != nil, forKey: Self.onboarded)
+        }
+        isOnboarding = !defaults.bool(forKey: Self.onboarded)
         registrationObservation = NotificationCenter.default.addObserver(for: NotificationRegistration.self) { [weak self] in
             self?.registered($0)
         }
@@ -87,6 +94,16 @@ final class Model {
             }
             syncWidgets()
         }
+    }
+
+    var agentActivity: LiveActivity? {
+        activities.first { $0.attributes.name != Example.activityName && [.pending, .active, .stale].contains($0.state) }
+    }
+
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboarded)
+        isOnboarding = false
+        telemetry.record("app.onboarding", ["agentConnected": .bool(isAgentConnected)])
     }
 
     func loadExamples() async {
@@ -258,6 +275,8 @@ final class Model {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
             activities = []
+            isAgentConnected = false
+            UserDefaults.standard.removeObject(forKey: Self.agentConnected)
             isLockHintPending = false
             phase = .connecting
             telemetry.record("app.reset")
@@ -483,6 +502,10 @@ final class Model {
             let id = $0.attributes.id
             return LiveActivity($0, times: times[id], isEnding: requestedEnds.contains(id))
         }
+        if !isAgentConnected, agentActivity != nil {
+            isAgentConnected = true
+            UserDefaults.standard.set(true, forKey: Self.agentConnected)
+        }
     }
 
     @discardableResult
@@ -543,6 +566,8 @@ final class Model {
     }()
 
     private static let lockHintLearned = "lockHintLearned"
+    private static let onboarded = "onboarded"
+    private static let agentConnected = "agentConnected"
 
     private static var bundleInstance: UUID {
         let defaults = UserDefaults.standard
@@ -590,6 +615,7 @@ extension Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
+        model.isAgentConnected = model.agentActivity != nil
         model.areActivitiesEnabled = areActivitiesEnabled
         model.notifications = notifications
         return model

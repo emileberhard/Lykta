@@ -5,7 +5,7 @@ usage() {
 	cat <<'EOF'
 Usage: lykta COMMAND
 
-  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta and print the skill
+  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta, say hello on the phone and print the skill
   install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or on stdin, to /v1/PATH and wait for Apple's answer
@@ -146,9 +146,21 @@ setup() {
 	[ "$(command -v lykta 2>/dev/null)" = "$cli" ] && run=lykta
 	case $run in "$HOME"/*) run="~${run#"$HOME"}" ;; esac
 	printf 'Lykta is set up for %s. Run it as %s.\n\n' "$url" "$run"
+	if note=$(hello 2>&1); then
+		printf 'Sent the phone a Live Activity named hello that ends after five minutes. The gateway answered:\n%s\n\n' "$note"
+	else
+		printf 'Could not send the phone a Live Activity named hello:\n%s\n\n' "$note"
+	fi
 	printf 'Install this skill so later sessions have it: run %s install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.\n\n' "$run"
 	call nothing GET /skill/SKILL.md
 	printf '%s\n' "$response"
+}
+
+hello() {
+	call nothing GET /skill/scripts/hello.json
+	body=$response
+	call json PUT '/v1/activities/hello?wait=10' -H 'Content-Type: application/json' --data-binary @-
+	printf '%s' "$response"
 }
 
 install_skill() {

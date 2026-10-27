@@ -51,7 +51,9 @@ tells the gateway what it showed.
 In the app, Copy Agent Setup copies one command for the agent to run. It
 installs `lykta`, a small command for sh with curl or for PowerShell that the
 gateway serves with its agent skill, saves the gateway address and an agent
-token in `~/.config/lykta`, and prints the [skill](Gateway/Sources/LyktaGateway/Skill/SKILL.md).
+token in `~/.config/lykta`, says hello on the phone with a short Live Activity
+and prints the [skill](Gateway/Sources/LyktaGateway/Skill/SKILL.md). On a new
+install, the app waits for that hello to show that the agent is connected.
 The agent then installs the skill in the folder it reads personal skills from,
 such as `~/.claude/skills` or `~/.agents/skills`, with `lykta install`, so later
 sessions know Lykta, and `lykta` keeps that copy and itself in step with the

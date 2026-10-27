@@ -41,7 +41,8 @@ Harbor keeps each trial's transcript, token counts, cost and timings, and each
 task's collect hook saves the gateway's events as `artifacts/events.json`.
 `scripts/eval-metrics` reads those from one or more job directories, and
 `just evals` runs it on the job it just finished. It prints a table for each
-agent, version and model, with a median row:
+agent, version and model, with a median row. Like the checks, it skips the
+activity `hello`, which setup starts by itself:
 
 - `accepted`: seconds from the start of Harbor's agent phase to the first
   activity or notification the gateway accepted, or `none` when it accepted
@@ -100,7 +101,7 @@ sequenceDiagram
     participant A as Agent container
     participant G as lykta-gateway simulate
     H->>A: evals/prompt.md: the paste, then the request
-    A->>G: lykta setup: GET /skill/scripts/lykta and /skill/SKILL.md
+    A->>G: lykta setup: GET /skill/scripts/lykta, PUT activities/hello, GET /skill/SKILL.md
     A->>G: lykta install: GET /skill/SKILL.md into the harness's skills folder
     A->>G: lykta docs, then lykta put activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
@@ -160,7 +161,8 @@ as Docker Sandboxes, waits until a transcript shows an agent wandering there.
 
 **Binary checks from the gateway.** A check reads the trial's gateway, which
 knows what the agent sent and what the phone drew, rather than the transcript,
-which says what the agent claims. It passes or fails, without judging how the
+which says what the agent claims. Every check skips the activity `hello`,
+which setup starts by itself. It passes or fails, without judging how the
 activity looks, so a failure means the agent missed the request. An agent
 that does nothing, or schedules the activity with something that dies with the
 container, also starts nothing now, so the reminder's check passes it; the

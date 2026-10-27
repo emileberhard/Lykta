@@ -5,7 +5,7 @@ struct HomeView: View {
     let model: Model
     @State private var isConfirmingReset = false
     @State private var details: LiveActivity?
-    @Environment(\.openURL) private var openURL
+    @State private var copies = 0
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,6 +24,16 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarOverflowMenu {
+                    if model.isAgentConnected {
+                        Button("Copy Agent Setup", systemImage: "doc.on.doc") {
+                            Task {
+                                if await model.copySetup() {
+                                    copies += 1
+                                }
+                            }
+                        }
+                        .disabled(!model.phase.isReady)
+                    }
                     Button("Reset", systemImage: "arrow.counterclockwise", role: .destructive) { isConfirmingReset = true }
                         .disabled(!model.isRegistered)
                 }
@@ -48,7 +58,7 @@ struct HomeView: View {
             }
             .animation(.smooth(duration: reduceMotion ? 0.2 : model.showsLockHint ? 0.45 : 0.25), value: model.showsLockHint)
         }
-        .onOpenURL { openURL($0) }
+        .sensoryFeedback(.success, trigger: copies)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await model.loadExamples()
@@ -91,7 +101,7 @@ struct HomeView: View {
 private struct Header: View {
     var body: some View {
         VStack(spacing: 6) {
-            Lights()
+            Lights(separation: 0)
                 .frame(height: 104)
                 .padding(.bottom, 18)
             Text("Lykta")
@@ -114,10 +124,12 @@ private struct Actions: View {
     var body: some View {
         GlassEffectContainer {
             VStack(spacing: 10) {
-                ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", working: "Copying…", done: "Copied") {
-                    await model.copySetup()
+                if !model.isAgentConnected {
+                    ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", working: "Copying…", done: "Copied") {
+                        await model.copySetup()
+                    }
+                    .disabled(!model.phase.isReady)
                 }
-                .disabled(!model.phase.isReady)
 
                 NavigationLink(value: Gallery.Route()) {
                     Label("Examples", systemImage: "rectangle.stack")

@@ -437,7 +437,7 @@ let slides: [(String, AnyView)] = [
     ]) {
         Phone(scale: 2.15) {
             ZStack(alignment: .top) {
-                Image(nsImage: capture("home")).resizable().interpolation(.high)
+                Image(nsImage: capture("connect")).resizable().interpolation(.high)
                 StatusBar()
             }
         }
