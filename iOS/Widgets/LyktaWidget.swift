@@ -20,8 +20,8 @@ struct WidgetEntryView: View {
 
     var body: some View {
         switch entry.state {
-        case let .content(layout, family, isStale):
-            WidgetView(layout: layout, family: family, isStale: isStale)
+        case let .content(layout, family, widget, isStale):
+            WidgetView(layout: layout, family: family, widget: widget, isStale: isStale)
                 .containerBackground(for: .widget) { WidgetBackground(background: layout.background, isStale: isStale) }
         case let .unreachable(title):
             Notice(title: title, detail: "Can’t reach the gateway", symbol: "wifi.exclamationmark")

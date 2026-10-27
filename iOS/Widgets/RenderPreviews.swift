@@ -35,7 +35,7 @@ private enum Staged {
             } catch {
                 layout = try! WidgetLayout(json: Array(#"{"\#(family.rawValue)": \#(report(error, for: url))}"#.utf8))
             }
-            return WidgetEntry(date: .now, state: .content(layout, family, isStale: false))
+            return WidgetEntry(date: .now, state: .content(layout, family, widget: nil, isStale: false))
         }
     }
 

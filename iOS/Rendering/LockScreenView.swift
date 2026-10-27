@@ -22,20 +22,24 @@ struct LockScreenView: View {
             .widgetURL(state.layout?.link)
     }
 
+    private var target: Action.Target? {
+        activity.map(Action.Target.activity)
+    }
+
     @ViewBuilder private var content: some View {
         if let layout = state.layout {
             if family == .small, let small = layout.small {
-                Root(node: small, activity: activity, isStale: isStale)
+                Root(node: small, target: target, isStale: isStale)
             } else if family == .small {
                 HStack {
-                    Root(node: layout.compactLeading, activity: activity, isStale: isStale)
+                    Root(node: layout.compactLeading, target: target, isStale: isStale)
                     Spacer(minLength: 4)
-                    Root(node: layout.compactTrailing, activity: activity, isStale: isStale)
+                    Root(node: layout.compactTrailing, target: target, isStale: isStale)
                 }
                 .compact()
                 .padding(12)
             } else {
-                Root(node: layout.lockScreen, activity: activity, isStale: isStale)
+                Root(node: layout.lockScreen, target: target, isStale: isStale)
             }
         } else {
             Fallback(title: state.title).padding(16)
@@ -45,14 +49,14 @@ struct LockScreenView: View {
 
 struct Root: View {
     let node: Node?
-    let activity: UUID?
+    let target: Action.Target?
     let isStale: Bool
 
     var body: some View {
         if let node {
             NodeView(node)
                 .environment(\.isActivityStale, isStale)
-                .environment(\.activityID, activity)
+                .environment(\.actionTarget, target)
         }
     }
 }

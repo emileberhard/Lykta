@@ -51,7 +51,7 @@ struct WidgetPreview: View {
 
     var body: some View {
         if family.isAccessory {
-            WidgetView(layout: layout, family: family, isStale: false)
+            WidgetView(layout: layout, family: family, widget: nil, isStale: false)
                 .frame(width: family.size.width, height: family.size.height)
                 .foregroundStyle(.white)
                 .grayscale(1)
@@ -61,7 +61,7 @@ struct WidgetPreview: View {
                 .environment(\.widgetRenderingMode, .vibrant)
                 .dynamicTypeSize(LockScreenCard.textSizes)
         } else {
-            WidgetView(layout: layout, family: family, isStale: false)
+            WidgetView(layout: layout, family: family, widget: nil, isStale: false)
                 .padding(16)
                 .frame(width: family.size.width, height: family.size.height)
                 .background { WidgetBackground(background: layout.background, isStale: false) }

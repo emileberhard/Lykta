@@ -4,7 +4,7 @@ import WidgetKit
 
 nonisolated struct WidgetEntry: TimelineEntry {
     enum State: Sendable {
-        case content(WidgetLayout, WidgetLayout.Family, isStale: Bool)
+        case content(WidgetLayout, WidgetLayout.Family, widget: UUID?, isStale: Bool)
         case unreachable(title: String)
         case removed(title: String)
         case updateApp(title: String)
@@ -35,7 +35,7 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
         guard let example = Self.example, let family = WidgetLayout.Family(context.family), example.presentations[family] != nil else {
             return WidgetEntry(date: .now, state: .choose)
         }
-        return WidgetEntry(date: .now, state: .content(example, family, isStale: false))
+        return WidgetEntry(date: .now, state: .content(example, family, widget: nil, isStale: false))
     }
 
     func snapshot(for configuration: WidgetSelection, in context: Context) async -> WidgetEntry {
@@ -86,9 +86,9 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
             return once(.unsupported(title: snapshot.title), at: now, policy: .after(now + reconciliation))
         }
         let isStale = !isCurrent || snapshot.staleAt.map { $0 <= now } == true
-        var entries = [WidgetEntry(date: now, state: .content(layout, family, isStale: isStale))]
+        var entries = [WidgetEntry(date: now, state: .content(layout, family, widget: snapshot.id, isStale: isStale))]
         if !isStale, let staleAt = snapshot.staleAt {
-            entries.append(WidgetEntry(date: staleAt, state: .content(layout, family, isStale: true)))
+            entries.append(WidgetEntry(date: staleAt, state: .content(layout, family, widget: snapshot.id, isStale: true)))
         }
         return Timeline(entries: entries, policy: .after(reload))
     }

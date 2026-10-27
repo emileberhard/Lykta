@@ -129,7 +129,7 @@ private struct IslandRegion: View {
     let node: Node?
 
     var body: some View {
-        Root(node: node, activity: nil, isStale: false)
+        Root(node: node, target: nil, isStale: false)
             .environment(\.colorScheme, .dark)
             .allowsHitTesting(false)
     }

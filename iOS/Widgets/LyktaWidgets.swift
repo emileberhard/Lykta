@@ -20,31 +20,31 @@ struct LyktaLiveActivity: Widget {
             let activity = context.attributes.id
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Root(node: layout?.expanded?.leading, activity: activity, isStale: isStale).dynamicIsland(verticalPlacement: .belowIfTooWide)
+                    Root(node: layout?.expanded?.leading, target: .activity(activity), isStale: isStale).dynamicIsland(verticalPlacement: .belowIfTooWide)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Root(node: layout?.expanded?.trailing, activity: activity, isStale: isStale).dynamicIsland(verticalPlacement: .belowIfTooWide)
+                    Root(node: layout?.expanded?.trailing, target: .activity(activity), isStale: isStale).dynamicIsland(verticalPlacement: .belowIfTooWide)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Root(node: layout?.expanded?.center, activity: activity, isStale: isStale)
+                    Root(node: layout?.expanded?.center, target: .activity(activity), isStale: isStale)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     if layout == nil {
                         Fallback(title: context.state.title)
                     } else {
-                        Root(node: layout?.expanded?.bottom, activity: activity, isStale: isStale)
+                        Root(node: layout?.expanded?.bottom, target: .activity(activity), isStale: isStale)
                     }
                 }
             } compactLeading: {
-                Root(node: layout?.compactLeading, activity: activity, isStale: isStale).compact()
+                Root(node: layout?.compactLeading, target: .activity(activity), isStale: isStale).compact()
             } compactTrailing: {
                 if layout == nil {
                     Text(context.state.title).compact()
                 } else {
-                    Root(node: layout?.compactTrailing, activity: activity, isStale: isStale).compact()
+                    Root(node: layout?.compactTrailing, target: .activity(activity), isStale: isStale).compact()
                 }
             } minimal: {
-                Root(node: layout?.minimal, activity: activity, isStale: isStale).compact()
+                Root(node: layout?.minimal, target: .activity(activity), isStale: isStale).compact()
             }
             .keylineTint(layout?.keyline?.value)
             .widgetURL(layout?.link)

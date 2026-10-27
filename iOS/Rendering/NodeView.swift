@@ -205,7 +205,7 @@ private struct ButtonNodeView: View {
     let name: String
     let label: Node
     let style: Node.Content.ButtonStyle
-    @Environment(\.activityID) private var activity
+    @Environment(\.actionTarget) private var target
 
     var body: some View {
         switch style {
@@ -217,10 +217,10 @@ private struct ButtonNodeView: View {
     }
 
     @ViewBuilder private var button: some View {
-        if let activity {
-            Button(intent: ButtonIntent(activity: activity, button: name)) { NodeView(label) }
-        } else {
-            Button {} label: { NodeView(label) }
+        switch target {
+        case let .activity(activity): Button(intent: ButtonIntent(activity: activity, button: name)) { NodeView(label) }
+        case let .widget(widget): Button(intent: WidgetButtonIntent(widget: widget, button: name)) { NodeView(label) }
+        case nil: Button {} label: { NodeView(label) }
         }
     }
 }
@@ -230,7 +230,7 @@ private struct ToggleNodeView: View {
     let isOn: Bool
     let label: Node
     let style: Node.Content.ToggleStyle
-    @Environment(\.activityID) private var activity
+    @Environment(\.actionTarget) private var target
 
     var body: some View {
         switch style {
@@ -241,10 +241,10 @@ private struct ToggleNodeView: View {
     }
 
     @ViewBuilder private var toggle: some View {
-        if let activity {
-            Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
-        } else {
-            Toggle(isOn: .constant(isOn)) { NodeView(label) }
+        switch target {
+        case let .activity(activity): Toggle(isOn: isOn, intent: ToggleIntent(activity: activity, toggle: path, isOn: !isOn)) { NodeView(label) }
+        case let .widget(widget): Toggle(isOn: isOn, intent: WidgetToggleIntent(widget: widget, toggle: path, isOn: !isOn)) { NodeView(label) }
+        case nil: Toggle(isOn: .constant(isOn)) { NodeView(label) }
         }
     }
 }
@@ -310,7 +310,7 @@ private struct ConditionalNodeView: View {
 
 extension EnvironmentValues {
     @Entry var isActivityStale = false
-    @Entry var activityID: UUID?
+    @Entry var actionTarget: Action.Target?
 }
 
 private extension Text {
