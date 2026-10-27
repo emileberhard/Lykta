@@ -199,6 +199,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - A tap intent may run right after the system launches the app in the
   background for it, so intents only forward the action through `ActionSender`,
   which `LyktaApp.init` registers; register new intent dependencies there too.
+  Intent titles and descriptions never name an Apple product such as iPhone,
+  because App Store Connect rejects such a build after upload (ITMS-90626).
 - `Rendering` runs in the widget extension for every presentation of every
   update, so `Core` parses and derives while decoding and node views only map
   values onto concrete SwiftUI views. Type erasure stays in `NodeView`'s
@@ -290,6 +292,7 @@ Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
    build's What to Test to the tag message, copies the newest App Store
    version's review notes to TestFlight's, adds the build to every external
    group, such as the public link's, and submits it for TestFlight review.
+   When App Store Connect rejects the upload, it fails with Apple's errors.
 7. Alongside it, `app-store` composes the screenshots and runs
    `scripts/app-store-connect app-store`. It renames the App Store version
    that is still editable to the tag or creates one, with manual release, sets

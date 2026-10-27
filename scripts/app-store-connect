@@ -142,7 +142,13 @@ def wait(description, check):
 def processed_build(app, version):
     builds = api("GET", "builds", sort="-uploadedDate", limit=1, **{"filter[app]": app, "filter[preReleaseVersion.version]": version,
                  "filter[preReleaseVersion.platform]": "IOS", "filter[buildAudienceType]": "APP_STORE_ELIGIBLE"})
-    state = builds[0]["attributes"]["processingState"] if builds else "PROCESSING"
+    if not builds:
+        uploads = api("GET", f"apps/{app}/buildUploads", sort="-uploadedDate", limit=1, **{"filter[cfBundleShortVersionString]": version})
+        if uploads and (upload := uploads[0]["attributes"]["state"])["state"] == "FAILED":
+            sys.exit(f"App Store Connect rejected the {version} upload: "
+                     + "; ".join(f"{error['code']} {error['description']}" for error in upload["errors"]))
+        return None
+    state = builds[0]["attributes"]["processingState"]
     if state in {"FAILED", "INVALID"}:
         sys.exit(f"The {version} build is {state}.")
     return builds[0]["id"] if state == "VALID" else None
