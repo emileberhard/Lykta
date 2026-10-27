@@ -74,7 +74,7 @@ function Get-Stamp([string]$Path) {
 }
 
 function Set-SkillFile([string]$Name, [string]$Path, [string]$Format) {
-    $temp = Join-Path (Split-Path -Parent $Path) ".$(Split-Path -Leaf $Path).$PID"
+    $temp = Join-Path (Split-Path -Parent $Path) ".$(Split-Path -Leaf $Path).$([IO.Path]::GetRandomFileName())"
     $cancel = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(10))
     try {
         $response = $client.GetAsync("$url/skill/$Name", $cancel.Token).GetAwaiter().GetResult()
@@ -82,7 +82,9 @@ function Set-SkillFile([string]$Name, [string]$Path, [string]$Format) {
         if (-not $response.IsSuccessStatusCode -or -not $digest) { return $false }
         $script:served = $digest
         $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
-        [IO.File]::WriteAllBytes($temp, [byte[]]($bytes + [Text.Encoding]::UTF8.GetBytes("`n$($Format -f $digest)`n")))
+        $stamped = [byte[]]($bytes + [Text.Encoding]::UTF8.GetBytes("`n$($Format -f $digest)`n"))
+        $file = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+        try { $file.Write($stamped, 0, $stamped.Length) } finally { $file.Dispose() }
         if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temp, $Path, [NullString]::Value) } else { [IO.File]::Move($temp, $Path) }
         $true
     } catch {
@@ -109,16 +111,20 @@ function Update-File([string]$Name, [string]$Path, [string]$Format) {
 
 function Update-Installs {
     $want = $served
-    if (-not $want -or -not (Test-Saved)) { return }
-    $stamp = Get-Stamp $cli
-    if ($stamp -and $stamp -ne $want -and -not (Update-File 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) { return }
-    $registry = Join-Path $config 'skills'
-    if (-not (Test-Path -LiteralPath $registry)) { return }
-    foreach ($dir in @(Get-Content -LiteralPath $registry)) {
-        if (-not $dir -or -not (Test-Path -LiteralPath $dir -PathType Container) -or (Test-Link $dir)) { continue }
-        $skill = Join-Path $dir 'SKILL.md'
-        $stamp = Get-Stamp $skill
-        if ($stamp -and $stamp -ne $want -and -not (Update-File 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) { return }
+    try {
+        if (-not $want -or -not (Test-Saved)) { return }
+        $stamp = Get-Stamp $cli
+        if ($stamp -and $stamp -ne $want -and -not (Update-File 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) { return }
+        $registry = Join-Path $config 'skills'
+        if (-not (Test-Path -LiteralPath $registry)) { return }
+        foreach ($dir in @(Get-Content -LiteralPath $registry)) {
+            if (-not $dir -or -not (Test-Path -LiteralPath $dir -PathType Container) -or (Test-Link $dir)) { continue }
+            $skill = Join-Path $dir 'SKILL.md'
+            $stamp = Get-Stamp $skill
+            if ($stamp -and $stamp -ne $want -and -not (Update-File 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) { return }
+        }
+    } catch {
+        [Console]::Error.WriteLine("lykta: could not check the installed copies: $($_.Exception.Message); the next lykta command tries again")
     }
 }
 
@@ -196,7 +202,9 @@ function Invoke-Setup([string[]]$Arguments) {
     }
     $share = Split-Path -Parent $cli
     try { $null = New-Item -ItemType Directory -Force -Path $share } catch { Fail "could not create ${share}: $($_.Exception.Message)" 2 }
-    if (-not (Set-SkillFile 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) { Fail "could not install lykta in $share from $url" 3 }
+    if (-not (Set-SkillFile 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) {
+        Fail "could not install lykta in $share from $url; a gateway older than 0.15.0 cannot, so run the setup the Lykta app copies, which downloads that gateway's own lykta" 3
+    }
     $run = $cli
     if ($onWindows) {
         try {
@@ -223,8 +231,12 @@ function Invoke-Install([string[]]$Arguments) {
     try { $parent = (New-Item -ItemType Directory -Force -Path $Arguments[0]).FullName } catch { Fail "could not create $($Arguments[0])" 2 }
     $dir = Join-Path $parent 'lykta'
     $skill = Join-Path $dir 'SKILL.md'
-    if ((Test-Path -LiteralPath $dir) -and ((Test-Link $dir) -or -not (Get-Stamp $skill))) {
-        Fail "$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder" 2
+    $foreign = "$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder"
+    if (Test-Path -LiteralPath $dir) {
+        if (Test-Link $dir) { Fail $foreign 2 }
+        Get-ChildItem -LiteralPath $dir -Filter '.SKILL.md.*' -Force | Remove-Item -Force
+        if (-not (Get-ChildItem -LiteralPath $dir -Force)) { Remove-Item -LiteralPath $dir -Force }
+        elseif (-not (Get-Stamp $skill)) { Fail $foreign 2 }
     }
     try { $null = New-Item -ItemType Directory -Force -Path $dir } catch { Fail "could not create $dir" 2 }
     if (-not (Set-SkillFile 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) {

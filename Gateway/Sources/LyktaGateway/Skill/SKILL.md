@@ -16,12 +16,14 @@ Lykta app does not need to be open.
 
 Send everything with `lykta`, a small command the gateway serves with this
 skill: `lykta` for sh with curl, `lykta.ps1` for PowerShell. The setup the
-user copied from the Lykta app installs it, saves the gateway and token, and
-says how to run it. `lykta` keeps itself and every copy of this skill that
-`lykta install` made in step with the gateway. Without that setup, run
-`scripts/lykta` from this skill's folder, which uses `LYKTA_URL` and
-`LYKTA_TOKEN` when they are set, or first `scripts/lykta setup URL TOKEN` with
-the user's gateway and token.
+user copied from the Lykta app installs it as `~/.local/bin/lykta`, or
+`~\.local\bin\lykta.cmd` on Windows, saves the gateway and token, and says how
+to run it; when `lykta` is not on the PATH, run it by that path. `lykta` keeps
+itself and each copy of this skill that `lykta install` made in step with the
+gateway. Such a copy is this file alone, and `lykta docs` prints the rest.
+Without that setup, a copy of this skill with its `scripts` folder runs
+`scripts/lykta`, which uses `LYKTA_URL` and `LYKTA_TOKEN` when they are set, or
+first `scripts/lykta setup URL TOKEN` with the user's gateway and token.
 
 | Command | Does |
 | --- | --- |
@@ -53,16 +55,17 @@ Pick the form from what the user asked for:
 
 - **Notification** for "tell me when": one moment, such as a finished job, a
   failure or an answer that arrived. Read the
-  [notifications reference](references/notifications.md); a notification needs
-  nothing else from this file.
+  [notifications reference](references/notifications.md) with
+  `lykta docs references/notifications.md`; a notification needs nothing else
+  from this file.
 - **Live Activity** for "keep me posted": something ongoing worth a glance,
   such as a countdown, progress, a delivery or a checklist. The rest of this
   file covers activities.
 - **Widget** for "always show me": a value with no end that changes over
   hours, such as today's steps, a balance or a server's health, on the Home
   Screen or the Lock Screen. Read the
-  [widgets reference](references/widgets.md), which builds on the layout
-  reference.
+  [widgets reference](references/widgets.md) with
+  `lykta docs references/widgets.md`; it builds on the layout reference.
 - **An activity's `alert`** when an activity about the subject is already
   showing and a moment in it needs attention, such as a failed step of a
   deploy it tracks. Update the activity rather than sending a notification
@@ -127,10 +130,9 @@ activity look generated:
 
 Before designing your first layout, read the
 [layout reference](references/layout.md) and every [example](#examples) at
-once, with these commands, or the same files directly when this skill is on
-disk. Each prints about as much as one tool result shows, so run them as
-separate calls, in parallel where your harness allows; a script that runs
-several in one call gets cut off.
+once, with these commands. Each prints about as much as one tool result
+shows, so run them as separate calls, in parallel where your harness allows; a
+script that runs several in one call gets cut off.
 
 ```sh
 lykta docs references/layout.md
@@ -315,8 +317,8 @@ Repeating a PUT is safe, but a repeated `alert` lights up the phone again.
 
 ## Examples
 
-Each example is a complete PUT body, such as `examples/homelab.json` next to
-this file. Read all of them before designing your first layout, as
+Each example is a complete PUT body, such as `examples/homelab.json`, which
+`lykta docs` prints. Read all of them before designing your first layout, as
 [Design](#design) says. Their times are Unix seconds around 1793000000; set
 real ones with `now` rather than computing them.
 

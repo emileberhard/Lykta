@@ -168,8 +168,11 @@ transcript shows which. Harbor's `nop` agent, which does nothing, scores 0.2.
 The setup-only check reads the agent's container instead. Its paste asks only
 for setup, after which agents rightly ask what to show, so it passes when the
 skill is installed in the folder Claude Code or Codex reads personal skills
-from, which also needs a working setup. On 2026-10-27 all four trials, two on
-GPT-6.1 Terra and two on Claude Opus 5.5, installed it there.
+from, which also needs a working setup. It checks where the file lands for a
+default configuration, not that a later session finds it: Harbor points
+Claude Code's `CLAUDE_CONFIG_DIR` elsewhere, so a second session in the same
+container would not. On 2026-10-27 all four trials, two on GPT-6.1 Terra and
+two on Claude Opus 5.5, installed it there.
 
 ## Measured
 

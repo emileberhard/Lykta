@@ -126,9 +126,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   PowerShell 5.1 or later, never print the token, and retry only a refused
   connection, because only that proves a request was never sent. `lykta`
   writes only its own installed file and the SKILL.md of folders
-  `lykta install` created, each with one rename, and only over a file that ends
-  with its `lykta-skill` line; it never writes through a symlink, and it
-  updates them only from the gateway setup saved.
+  `lykta install` created, each through a temporary file it creates exclusively
+  and one rename, and replaces only a file that ends with its `lykta-skill`
+  line. It refuses a symlinked skill folder, updates only from the gateway
+  setup saved, and never lets a failed update change a command's result.
 - A phone registers only with a verified App Attest attestation of a new key
   over a challenge this gateway signed, or with a one-time invite an operator
   created. Never add a registration path without such proof.

@@ -95,7 +95,7 @@ owned() {
 
 place() {
 	name=$1 dest=$2 format=$3 mode=$4
-	tmp=${dest%/*}/.${dest##*/}.$$
+	tmp=$(mktemp "${dest%/*}/.${dest##*/}.XXXXXX") || return 1
 	if curl -fsS --connect-timeout 5 --max-time 10 -D "$head" -o "$tmp" "$url/skill/$name" && digest=$(served) && [ -n "$digest" ] &&
 		printf "\n$format\n" "$digest" >>"$tmp" && chmod "$mode" "$tmp" && mv -f "$tmp" "$dest"; then
 		return 0
@@ -140,7 +140,8 @@ setup() {
 	call nothing GET /v1/activities
 	(umask 077 && mkdir -p "$config" && rm -f "$config/token" && printf '%s\n' "$url" >"$config/url" && printf '%s\n' "$token" >"$config/token") ||
 		fail "could not save the setup in $config" 2
-	mkdir -p "${cli%/*}" && place scripts/lykta "$cli" '# lykta-skill %s' 755 || fail "could not install lykta in ${cli%/*} from $url" 3
+	mkdir -p "${cli%/*}" && place scripts/lykta "$cli" '# lykta-skill %s' 755 ||
+		fail "could not install lykta in ${cli%/*} from $url; a gateway older than 0.15.0 cannot, so run the setup the Lykta app copies, which downloads that gateway's own lykta" 3
 	run=$cli
 	[ "$(command -v lykta 2>/dev/null)" = "$cli" ] && run=lykta
 	case $run in "$HOME"/*) run="~${run#"$HOME"}" ;; esac
@@ -154,9 +155,11 @@ install_skill() {
 	[ $# -eq 1 ] || fail "usage: lykta install DIR, with the folder your agent reads personal skills from, such as ~/.claude/skills" 2
 	saved || fail "install keeps the skill in step with the gateway saved by lykta setup URL TOKEN, so run that first" 2
 	mkdir -p "$1" 2>/dev/null && dir=$(cd "$1" && pwd)/lykta || fail "could not create $1" 2
-	if [ -L "$dir" ] || { [ -e "$dir" ] && ! owned "$dir/SKILL.md"; }; then
-		fail "$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder" 2
-	fi
+	foreign="$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder"
+	[ ! -L "$dir" ] || fail "$foreign" 2
+	rm -f "$dir"/.SKILL.md.* 2>/dev/null
+	rmdir "$dir" 2>/dev/null
+	[ ! -e "$dir" ] || owned "$dir/SKILL.md" || fail "$foreign" 2
 	mkdir -p "$dir" 2>/dev/null || fail "could not create $dir" 2
 	if ! place SKILL.md "$dir/SKILL.md" '<!-- lykta-skill %s -->' 644; then
 		rmdir "$dir" 2>/dev/null
@@ -222,4 +225,4 @@ help | -h | --help) usage ;;
 '') usage >&2; exit 2 ;;
 *) usage >&2; fail "unknown command $verb" 2 ;;
 esac
-refresh
+refresh || :

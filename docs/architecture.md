@@ -494,9 +494,13 @@ over the skill's files. After a successful command has printed its result,
 per file, without changing the command's exit status. Only answers from the
 gateway setup saved count, so `LYKTA_URL` pointing at a test gateway writes
 nothing. A gateway rollback rolls the copies back too; a gateway older than
-0.15.0 sends no digest and leaves them as they are. The registry is only
-appended to, and a recorded folder that is gone or no longer `lykta`'s is
-skipped.
+0.15.0 sends no digest and leaves them as they are, and setup with a newer
+`lykta` fails there with a pointer to the app's setup, which downloads that
+gateway's own `lykta`. The registry is only appended to, so two installs at
+once may record a folder twice, which only repeats a check, and a recorded
+folder that is gone or no longer `lykta`'s is skipped. An install interrupted
+before its SKILL.md arrived leaves an empty folder or a staging file, which
+the next `install` clears.
 
 **A PUT can wait for Apple.** `wait` on `PUT /v1/activities/{name}` and
 `PUT /v1/notifications/{name}`, 0 to 25 seconds like `GET /v1/actions`, holds

@@ -74,6 +74,12 @@ for shell in sh pwsh; do
 	rm -rf "$HOME/skills/lykta"
 	expect '"activities":' 0 cli get activities
 	[ ! -e "$HOME/skills/lykta" ] || { printf '%s: lykta recreated a skill folder the user removed\n' "$shell" >&2; exit 1; }
+	mkdir -p "$HOME/fresh/lykta"
+	: >"$HOME/fresh/lykta/.SKILL.md.interrupted"
+	expect "Installed the Lykta skill in $HOME/fresh/lykta" 0 cli install "$HOME/fresh"
+	chmod 000 "$HOME/.config/lykta/skills"
+	expect '"activities":' 0 cli get activities
+	chmod 600 "$HOME/.config/lykta/skills"
 	expect '==> examples/printer.json <==' 0 cli docs references/layout.md examples/printer.json
 	expect 'refused with HTTP 404' 1 cli docs examples/missing.json
 	expect '"delivery":"accepted"' 0 cli put activities/printer "$skill/examples/printer.json"
