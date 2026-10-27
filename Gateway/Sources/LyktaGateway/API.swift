@@ -159,6 +159,44 @@ struct API: Sendable {
         case ("POST", "v1/media"):
             let (status, created) = try await store.putMedium(try await agent(request), bytes: request.body, now: now)
             return Self.json(created ? 201 : 200, status)
+        case ("POST", "v1/device/widgets/credential"):
+            return Self.json(200, try await store.widgetCredential(try await phone(request)))
+        case ("PUT", "v1/device/widgets"):
+            try await store.reportWidgets(try await widgetPhone(request), report: try Self.decode(request.body), now: now)
+            return .noContent
+        case ("GET", "v1/device/widgets"):
+            return Self.json(200, ["widgets": try await store.widgetSummaries(try await widgetPhone(request))])
+        case ("GET", "v1/device/widgets/{id}"):
+            let device = try await widgetPhone(request)
+            guard let id = UUID(uuidString: path[3]) else { throw Self.invalid("The widget id must be a UUID.") }
+            guard let familyText = request.query["family"], let family = WidgetLayout.Family(rawValue: familyText) else {
+                throw Self.invalid("family must name a widget family such as systemSmall.")
+            }
+            guard let layoutText = request.query["layout"], let layout = Version(layoutText) else {
+                throw Self.invalid("layout must be the extension's layout version.")
+            }
+            let have = try request.query["have"].map { value in
+                guard let revision = Int(value), revision >= 1 else { throw Self.invalid("have must be a positive revision.") }
+                return revision
+            }
+            if let snapshot = try await store.fetchWidget(device, id: id, family: family, have: have, layout: layout, now: now) {
+                return Self.json(200, snapshot)
+            }
+            return .noContent
+        case ("GET", "v1/widgets"):
+            return Self.json(200, ["widgets": try await store.widgetList(try await agent(request), now: now)])
+        case ("GET", "v1/widgets/{name}"):
+            return Self.json(200, try await store.widgetDetail(try await agent(request), name: try Self.name(path[2]), now: now))
+        case ("PUT", "v1/widgets/{name}"):
+            let device = try await agent(request)
+            let name = try Self.name(path[2])
+            let wait = try Self.wait(request)
+            let result = try await store.putWidget(device, name: name, request: try Self.decode(request.body), now: now)
+            try await waiting(wait) { try await store.widgetAttempted(device, id: result.id, deadline: now + wait, now: Self.now()) }
+            return Self.json(result.created ? 201 : 200, try await store.widgetDetail(device, name: name, now: Self.now()))
+        case ("DELETE", "v1/widgets/{name}"):
+            try await store.deleteWidget(try await agent(request), name: try Self.name(path[2]))
+            return .noContent
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -187,8 +225,9 @@ struct API: Sendable {
 
     private static func route(_ path: [String]) -> String {
         switch path.count {
-        case 3 where path[0] == "v1" && ["activities", "notifications"].contains(path[1]): "v1/\(path[1])/{name}"
+        case 3 where path[0] == "v1" && ["activities", "notifications", "widgets"].contains(path[1]): "v1/\(path[1])/{name}"
         case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "activities": "v1/device/activities/{id}"
+        case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "widgets" && path[3] != "credential": "v1/device/widgets/{id}"
         case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"
         case 6 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "media": "v1/device/notifications/{id}/media/{media}"
         default: path.joined(separator: "/")
@@ -225,6 +264,11 @@ struct API: Sendable {
 
     private func phone(_ request: HTTPRequest) async throws -> Device {
         guard let device = try await store.device(secret: try Self.bearer(request)) else { throw Self.unauthorized }
+        return device
+    }
+
+    private func widgetPhone(_ request: HTTPRequest) async throws -> Device {
+        guard let device = try await store.widgetDevice(token: try Self.bearer(request)) else { throw Self.unauthorized }
         return device
     }
 

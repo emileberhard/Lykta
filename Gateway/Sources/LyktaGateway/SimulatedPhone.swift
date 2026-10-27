@@ -10,6 +10,9 @@ final class SimulatedPhone: PushService {
     private let channels = Mutex<[String: UUID]>([:])
     private let pushes: AsyncStream<Push>.Continuation
     private let notifications: AsyncStream<Data>.Continuation
+    private let store: Store
+    private let device: Device
+    private let widgetTask: Task<Void, Never>
 
     private struct Push {
         let aps: Payload.APS
@@ -23,6 +26,26 @@ final class SimulatedPhone: PushService {
                                        maximumDevices: 1, now: now)
         guard let device = try await store.device(secret: Self.credentials.deviceSecret) else {
             preconditionFailure("The simulated phone was just registered")
+        }
+        self.store = store
+        self.device = device
+        _ = try await store.widgetCredential(device)
+        widgetTask = Task {
+            var known = Set<UUID>()
+            while !Task.isCancelled {
+                do {
+                    let ids = Set(try await store.widgetSummaries(device).map(\.id))
+                    if ids != known {
+                        try await Self.refreshWidgets(in: store, device: device)
+                        known = ids
+                    }
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch is CancellationError { return }
+                catch {
+                    log("The simulated phone failed to refresh widgets: \(error)")
+                    return
+                }
+            }
         }
         let install = UUID()
         _ = try await store.sync(device, report: Self.report([:], install: install), now: now)
@@ -56,11 +79,34 @@ final class SimulatedPhone: PushService {
     deinit {
         pushes.finish()
         notifications.finish()
+        widgetTask.cancel()
     }
 
     func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         notifications.yield(payload)
         return id.uuidString.lowercased()
+    }
+
+    func reloadWidgets(deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        do { try await Self.refreshWidgets(in: store, device: device) }
+        catch { throw .unknown("The simulated phone failed to fetch widgets: \(error)") }
+        return id.uuidString.lowercased()
+    }
+
+    private static func refreshWidgets(in store: Store, device: Device) async throws {
+        let now = Int(Date().timeIntervalSince1970)
+        let widgets = try await store.widgetList(device, now: now)
+        var places: [WidgetPlace] = []
+        for widget in widgets {
+            let detail = try await store.widgetDetail(device, name: widget.name, now: now)
+            let layout = try WidgetLayout(json: detail.layout.filled(with: detail.data, for: .widget).json)
+            places += layout.presentations.keys.map { WidgetPlace(widget: widget.id, family: $0) }
+        }
+        try await store.reportWidgets(device, report: WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)),
+                                                                   layoutVersion: Layout.version, places: places), now: now)
+        for place in places {
+            _ = try await store.fetchWidget(device, id: place.widget, family: place.family, have: nil, layout: Layout.version, now: now)
+        }
     }
 
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {

@@ -414,9 +414,9 @@ struct GatewayTests {
         var features: Set<String> = []
         for fields in snippets + examples {
             let layout: JSONValue = if let layout = fields["layout"] {
-                try layout.filled(with: fields["data"] ?? .object([:]))
+                try layout.filled(with: fields["data"] ?? .object([:]), for: .activity)
             } else {
-                Self.layout(try JSONValue.object(fields).filled(with: Self.snippetData))
+                Self.layout(try JSONValue.object(fields).filled(with: Self.snippetData, for: .activity))
             }
             features.formUnion(try Layout(json: layout.json).features)
         }

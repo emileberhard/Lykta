@@ -4,6 +4,7 @@ import LyktaCore
 enum Job: Sendable {
     case activity(ActivityJob)
     case notification(NotificationJob)
+    case widgets(WidgetJob)
 }
 
 struct ActivityJob: Sendable {
@@ -27,6 +28,14 @@ struct NotificationJob: Sendable {
     let tokenMoved: Bool
     let fetchToken: String
     let expiresAt: Int
+}
+
+struct WidgetJob: Sendable {
+    let deviceID: UUID
+    let generation: Int
+    let token: PushToken
+    let environment: PushEnvironment
+    let tokenMoved: Bool
 }
 
 enum Outcome: Sendable {
@@ -74,10 +83,25 @@ struct Delivery: Sendable {
         var attempt = switch job {
         case let .activity(job): try await send(job, id: id, now: now)
         case let .notification(job): try await send(job, id: id)
+        case let .widgets(job): await send(job, id: id)
         }
         let elapsed = started.duration(to: clock.now).components
         attempt.detail["ms"] = .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
         return attempt
+    }
+
+    private func send(_ job: WidgetJob, id: UUID) async -> Attempt {
+        var detail: [String: JSONValue] = ["pushID": .string(id.uuidString.lowercased()),
+                                           "environment": .string(job.environment.rawValue), "generation": .number(Double(job.generation))]
+        guard !shutdown.isRequested else {
+            return Attempt(outcome: .retry("The gateway restarted before reloading widgets.", throttled: false), detail: detail)
+        }
+        do {
+            detail["uniqueID"] = try await push.reloadWidgets(deviceToken: job.token, environment: job.environment, id: id).map(JSONValue.string)
+            return Attempt(outcome: .accepted, detail: detail)
+        } catch {
+            return Attempt(outcome: outcome(of: error, sentTo: job.environment, tokenMoved: job.tokenMoved), detail: detail)
+        }
     }
 
     private func send(_ job: NotificationJob, id: UUID) async throws -> Attempt {

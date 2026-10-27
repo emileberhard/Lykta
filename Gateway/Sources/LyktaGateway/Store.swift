@@ -122,6 +122,7 @@ actor Store {
 
     func sync(_ device: Device, report: DeviceReport, now: Int) throws -> SyncResult {
         try db.transaction {
+            try raiseWidgetVersion(device, to: report.layoutVersion)
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
@@ -576,6 +577,7 @@ actor Store {
             UPDATE activities SET phase = 'live', delivery = 'unknown', error = 'The gateway restarted while starting this activity.'
               WHERE in_flight = 1 AND phase = 'starting' AND channel IS NOT NULL;
             UPDATE activities SET in_flight = 0;
+            UPDATE widget_phones SET in_flight = 0;
             """)
         try db.transaction {
             for row in try db.query("SELECT id, device_id, name FROM notifications WHERE state = 'sending'") {
@@ -673,6 +675,7 @@ actor Store {
             try expireNotifications(now: now)
             var free = limit - (try count(db.query("SELECT count(*) AS n FROM activities WHERE in_flight = 1")))
                 - (try count(db.query("SELECT count(*) AS n FROM notifications WHERE in_flight = 1")))
+                - (try count(db.query("SELECT count(*) AS n FROM widget_phones WHERE in_flight = 1")))
             guard free > 0 else { return [] }
             var jobs = try db.query("""
                 SELECT n.id, n.device_id, n.name, n.request, n.expires_at, d.environment, d.notification_token, d.moved_notification_token_hash
@@ -693,6 +696,9 @@ actor Store {
                     expiresAt: Int(try row.integer("expires_at"))))
             }
             free -= jobs.count
+            let widgets = try claimWidgets(now: now, limit: free)
+            jobs += widgets
+            free -= widgets.count
             guard free > 0 else { return jobs }
             let rows = try db.query("""
                 SELECT a.*, d.environment, d.push_token, d.moved_push_token_hash, d.layout_version FROM activities a JOIN devices d ON d.id = a.device_id
@@ -738,6 +744,7 @@ actor Store {
         switch job {
         case let .activity(job): try finish(job, attempt, now: now)
         case let .notification(job): try finish(job, attempt, now: now)
+        case let .widgets(job): try finish(job, attempt, now: now)
         }
     }
 
@@ -1004,5 +1011,278 @@ actor Store {
 
     private static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String($0 >> 4, radix: 16) + String($0 & 0xF, radix: 16) }.joined()
+    }
+}
+
+extension Store {
+    static let maximumWidgets = 32
+    static let widgetPushInterval = 20 * 60
+
+    private func widgetPhone(_ device: Device) throws -> Row {
+        try db.query("SELECT * FROM widget_phones WHERE device_id = ?", device.id)[0]
+    }
+
+    private func raiseWidgetVersion(_ device: Device, to version: Version?) throws {
+        try db.run("INSERT OR IGNORE INTO widget_phones (device_id, token_hash, layout_version) VALUES (?, ?, ?)",
+                   device.id, Self.hash(Self.token("lykta_widget_")), device.layoutVersion?.description)
+        let row = try widgetPhone(device)
+        let previous = try row.optionalText("layout_version", as: Version.init)
+        if let version, previous == nil || version > previous! {
+            try db.run("UPDATE widget_phones SET layout_version = ? WHERE device_id = ?", version.description, device.id)
+        }
+    }
+
+    func widgetCredential(_ device: Device) throws -> WidgetCredential {
+        try db.transaction {
+            try raiseWidgetVersion(device, to: device.layoutVersion)
+            let token = Self.token("lykta_widget_")
+            try db.run("UPDATE widget_phones SET token_hash = ? WHERE device_id = ?", Self.hash(token), device.id)
+            try record("widget.credential", device: device.id, activity: nil, [:])
+            return WidgetCredential(widgetToken: token)
+        }
+    }
+
+    func widgetDevice(token: String) throws -> Device? {
+        guard let row = try db.query("SELECT device_id FROM widget_phones WHERE token_hash = ?", Self.hash(token)).first else { return nil }
+        let id = try row.text("device_id", as: UUID.init(uuidString:))
+        guard let secret = try db.query("SELECT secret_hash FROM devices WHERE id = ?", id).first else { return nil }
+        return try device(column: "secret_hash", hash: secret.string("secret_hash"))
+    }
+
+    private func widget(_ device: Device, name: Name) throws -> Widget? {
+        try db.query("SELECT * FROM widgets WHERE device_id = ? AND name = ?", device.id, name).first.map(Widget.init)
+    }
+
+    private func widget(_ device: Device, id: UUID) throws -> Widget? {
+        try db.query("SELECT * FROM widgets WHERE device_id = ? AND id = ?", device.id, id).first.map(Widget.init)
+    }
+
+    private func widgetGeneration(_ device: Device, id: UUID?) throws -> Int {
+        let phone = try widgetPhone(device)
+        let placed = try id.map { try !db.query("SELECT 1 FROM widget_places WHERE widget_id = ?", $0).isEmpty } ?? false
+        if try phone.integer("places_known") == 0 || placed {
+            try db.run("UPDATE widget_phones SET generation = generation + 1, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ?", device.id)
+        }
+        return Int(try db.query("SELECT generation FROM widget_phones WHERE device_id = ?", device.id)[0].integer("generation"))
+    }
+
+    func putWidget(_ device: Device, name: Name, request: WidgetRequest, now: Int) throws -> (id: UUID, created: Bool) {
+        try db.transaction {
+            let current = try widget(device, name: name)
+            if let expected = request.ifRevision, expected != current?.revision {
+                throw APIError(.conflict, "The widget is no longer at revision \(expected). Read it again, then send your change.")
+            }
+            guard let title = request.title ?? current?.title, let template = request.layout ?? current?.layout else {
+                throw APIError(.invalidRequest, "Creating a widget needs a title and a layout.")
+            }
+            if current == nil, try count(db.query("SELECT count(*) AS n FROM widgets WHERE device_id = ?", device.id)) >= Self.maximumWidgets {
+                throw APIError(.tooManyWidgets, "Delete a widget before creating another; the limit is \(Self.maximumWidgets).")
+            }
+            var data = request.data ?? current?.data ?? .object([:])
+            for (path, offset) in request.now ?? [:] {
+                do { data = try data.setting(path, to: .number(Double(now) + offset)) }
+                catch { throw APIError(.invalidRequest, "$.now: \(error)") }
+            }
+            let layout: JSONValue
+            let content: JSONValue
+            let admitted: WidgetLayout
+            do {
+                layout = try template.expandingParts(for: .widget)
+                content = try layout.filled(with: data, for: .widget)
+                admitted = try WidgetLayout(json: content.json)
+            } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+            try raiseWidgetVersion(device, to: device.layoutVersion ?? Version(leading: device.appVersion))
+            let phone = try widgetPhone(device)
+            let version = try phone.optionalText("layout_version", as: Version.init)
+            if let requirement = admitted.requirement, version == nil || version! < requirement.version {
+                throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later. Ask the user to update Lykta and open it once.")
+            }
+            let staleAfter = request.staleAfter ?? current?.staleAfter
+            let id = current?.id ?? UUID()
+            let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || current?.staleAfter != staleAfter
+            if changed {
+                let generation = try widgetGeneration(device, id: current?.id)
+                try db.run("""
+                    INSERT INTO widgets (id, device_id, name, title, layout, data, content, requires, stale_after, revision, generation, created_at, updated_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                      ON CONFLICT(id) DO UPDATE SET title = excluded.title, layout = excluded.layout, data = excluded.data,
+                        content = excluded.content, requires = excluded.requires, stale_after = excluded.stale_after,
+                        revision = widgets.revision + 1, generation = excluded.generation, updated_at = excluded.updated_at
+                    """, id, device.id, name, title, Self.text(layout), Self.text(data), Self.text(content),
+                           (admitted.requirement?.version ?? Version(0, 12, 0)).description, staleAfter, generation, now, now)
+                let saved = try widget(device, id: id)!
+                try record("widget.put", device: device.id, activity: nil,
+                           ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": .number(Double(generation))])
+            }
+            return (id, current == nil)
+        }
+    }
+
+    func deleteWidget(_ device: Device, name: Name) throws {
+        try db.transaction {
+            guard let widget = try widget(device, name: name) else { throw APIError(.notFound, "No widget has the name \(name).") }
+            let generation = try widgetGeneration(device, id: widget.id)
+            try db.run("DELETE FROM widgets WHERE id = ?", widget.id)
+            try record("widget.delete", device: device.id, activity: nil,
+                       ["widget": .string(widget.id.uuidString), "revision": .number(Double(widget.revision)), "generation": .number(Double(generation))])
+        }
+    }
+
+    func widgetList(_ device: Device, now: Int) throws -> [WidgetStatus] {
+        try db.query("SELECT * FROM widgets WHERE device_id = ? ORDER BY updated_at DESC, id", device.id).map {
+            try widgetStatus(Widget($0), phone: widgetPhone(device), now: now)
+        }
+    }
+
+    func widgetDetail(_ device: Device, name: Name, now: Int) throws -> WidgetDetail {
+        guard let widget = try widget(device, name: name) else { throw APIError(.notFound, "No widget has the name \(name).") }
+        return try widgetDetail(widget, device: device, now: now)
+    }
+
+    private func widgetDetail(_ widget: Widget, device: Device, now: Int) throws -> WidgetDetail {
+        try WidgetDetail(status: widgetStatus(widget, phone: widgetPhone(device), now: now), layout: widget.layout, data: widget.data)
+    }
+
+    private func widgetStatus(_ widget: Widget, phone: Row, now: Int) throws -> WidgetStatus {
+        let places = try db.query("SELECT * FROM widget_places WHERE widget_id = ? ORDER BY family", widget.id)
+        let families = try places.map { try $0.text("family", as: WidgetLayout.Family.init(rawValue:)) }
+        let receipt = try places.compactMap { row -> WidgetStatus.Fetch? in
+            guard let revision = try row.optionalInteger("fetched_revision"), let at = try row.optionalInteger("fetched_at") else { return nil }
+            return WidgetStatus.Fetch(revision: Int(revision), at: Date(timeIntervalSince1970: Double(at)))
+        }.max { ($0.revision, $0.at) < ($1.revision, $1.at) }
+        let delivery: WidgetStatus.Delivery
+        var error: String?
+        var nextPush: Date?
+        if receipt?.revision == widget.revision {
+            delivery = .fetched
+        } else if families.isEmpty, try phone.integer("places_known") != 0 {
+            delivery = .notPlaced
+        } else if try phone.optionalString("push_token") == nil {
+            delivery = .failed
+            error = "The phone has not shared its widget push token yet. Open Lykta on the phone."
+        } else if let failure = try phone.optionalString("error"), try phone.integer("retry_at") == 0 {
+            delivery = .failed
+            error = failure
+        } else if widget.generation <= Int(try phone.integer("pushed_generation")) {
+            delivery = .accepted
+        } else {
+            delivery = .pending
+            let pushed = Int(try phone.integer("pushed_at"))
+            let next = max(now, pushed == 0 ? now : pushed + Self.widgetPushInterval, Int(try phone.integer("retry_at")))
+            nextPush = Date(timeIntervalSince1970: Double(next))
+        }
+        return WidgetStatus(name: widget.name, id: widget.id, title: widget.title, revision: widget.revision, delivery: delivery,
+                            nextPush: nextPush, error: error, placed: families, fetched: receipt,
+                            createdAt: Date(timeIntervalSince1970: Double(widget.createdAt)), updatedAt: Date(timeIntervalSince1970: Double(widget.updatedAt)))
+    }
+
+    func widgetAttempted(_ device: Device, id: UUID, deadline: Int, now: Int) throws -> Bool {
+        guard let widget = try widget(device, id: id) else { return true }
+        let status = try widgetStatus(widget, phone: widgetPhone(device), now: now)
+        return [.fetched, .notPlaced, .failed].contains(status.delivery) || status.nextPush.map { $0.timeIntervalSince1970 > Double(deadline) } == true
+    }
+
+    func reportWidgets(_ device: Device, report: WidgetReport, now: Int) throws {
+        try db.transaction {
+            try raiseWidgetVersion(device, to: report.layoutVersion)
+            if let token = report.pushToken {
+                try db.run("UPDATE widget_phones SET push_token = ?, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ? AND push_token IS NOT ?", token, device.id, token)
+            }
+            let existing = try db.query("SELECT p.widget_id, p.family FROM widget_places p JOIN widgets w ON w.id = p.widget_id WHERE w.device_id = ?", device.id)
+            let wanted = Set(report.places)
+            for row in existing {
+                let place = WidgetPlace(widget: try row.text("widget_id", as: UUID.init(uuidString:)), family: try row.text("family", as: WidgetLayout.Family.init(rawValue:)))
+                if !wanted.contains(place) {
+                    try db.run("DELETE FROM widget_places WHERE widget_id = ? AND family = ?", place.widget, place.family.rawValue)
+                    try record("widget.placed", device: device.id, activity: nil,
+                               ["widget": .string(place.widget.uuidString), "family": .string(place.family.rawValue), "placed": .bool(false)])
+                }
+            }
+            for place in wanted {
+                guard let widget = try widget(device, id: place.widget) else { continue }
+                let added = try db.query("SELECT 1 FROM widget_places WHERE widget_id = ? AND family = ?", place.widget, place.family.rawValue).isEmpty
+                try db.run("INSERT OR IGNORE INTO widget_places (widget_id, family) VALUES (?, ?)", place.widget, place.family.rawValue)
+                if added {
+                    let generation = try widgetGeneration(device, id: place.widget)
+                    try db.run("UPDATE widgets SET generation = ? WHERE id = ?", generation, place.widget)
+                    try record("widget.placed", device: device.id, activity: nil,
+                               ["widget": .string(widget.id.uuidString), "family": .string(place.family.rawValue), "placed": .bool(true), "generation": .number(Double(generation))])
+                }
+            }
+            try db.run("UPDATE widget_phones SET places_known = 1 WHERE device_id = ?", device.id)
+        }
+    }
+
+    func widgetSummaries(_ device: Device) throws -> [WidgetSummary] {
+        try db.query("SELECT * FROM widgets WHERE device_id = ? ORDER BY updated_at DESC, id", device.id).map {
+            let widget = try Widget($0)
+            return WidgetSummary(id: widget.id, title: widget.title, updatedAt: Date(timeIntervalSince1970: Double(widget.updatedAt)))
+        }
+    }
+
+    func fetchWidget(_ device: Device, id: UUID, family: WidgetLayout.Family, have: Int?, layout: Version, now: Int) throws -> WidgetSnapshot? {
+        try db.transaction {
+            guard let widget = try widget(device, id: id) else { throw APIError(.widgetDeleted, "This widget was deleted. Choose another widget.") }
+            try raiseWidgetVersion(device, to: layout)
+            let readable = layout >= widget.requires
+            try db.run("""
+                INSERT INTO widget_places (widget_id, family, fetched_revision, fetched_at) VALUES (?, ?, ?, ?)
+                  ON CONFLICT(widget_id, family) DO UPDATE SET fetched_revision = excluded.fetched_revision, fetched_at = excluded.fetched_at
+                """, id, family.rawValue, widget.revision, now)
+            try record("widget.fetch", device: device.id, activity: nil,
+                       ["widget": .string(id.uuidString), "revision": .number(Double(widget.revision)), "family": .string(family.rawValue), "readable": .bool(readable)])
+            if readable, have == widget.revision { return nil }
+            return WidgetSnapshot(id: id, title: widget.title, revision: widget.revision,
+                                  staleAt: widget.staleAfter.map { Date(timeIntervalSince1970: Double(widget.updatedAt) + Double($0)) },
+                                  content: readable ? .layout(widget.content) : .requires(widget.requires))
+        }
+    }
+
+    private func claimWidgets(now: Int, limit: Int) throws -> [Job] {
+        try db.query("""
+            SELECT p.*, d.environment FROM widget_phones p JOIN devices d ON d.id = p.device_id
+              WHERE p.generation > p.pushed_generation AND p.push_token IS NOT NULL AND p.in_flight = 0
+                AND (p.error IS NULL OR p.retry_at > 0) AND p.retry_at <= ? AND (p.pushed_at = 0 OR p.pushed_at <= ?)
+              ORDER BY p.retry_at, p.pushed_at LIMIT ?
+            """, now, now - Self.widgetPushInterval, limit).map { row in
+                let device = try row.text("device_id", as: UUID.init(uuidString:))
+                let token = try row.text("push_token", as: PushToken.init(hex:))
+                let moved = try row.optionalString("moved_push_token_hash") == Self.hash(token.description)
+                let environment = try row.text("environment", as: PushEnvironment.init(rawValue:))
+                try db.run("UPDATE widget_phones SET in_flight = 1 WHERE device_id = ?", device)
+                return .widgets(WidgetJob(deviceID: device, generation: Int(try row.integer("generation")), token: token,
+                                          environment: moved ? environment.other : environment, tokenMoved: moved))
+            }
+    }
+
+    private func finish(_ job: WidgetJob, _ attempt: Attempt, now: Int) throws {
+        try db.transaction {
+            guard let row = try db.query("SELECT * FROM widget_phones WHERE device_id = ?", job.deviceID).first else { return }
+            let error: String?
+            let result: String
+            switch attempt.outcome {
+            case .accepted:
+                result = "accepted"; error = nil
+                try db.run("UPDATE widget_phones SET pushed_generation = ?, pushed_at = ?, failures = 0, retry_at = 0, error = NULL WHERE device_id = ?", job.generation, now, job.deviceID)
+            case let .retry(message, _), let .unknown(message):
+                result = "retry"; error = message
+                let failures = Int(try row.integer("failures"))
+                let delay = min(1 << min(failures + 1, 9), 300)
+                try db.run("UPDATE widget_phones SET failures = failures + 1, retry_at = ?, error = ? WHERE device_id = ?", now + delay, message, job.deviceID)
+            case let .wrongEnvironment(message):
+                result = "wrongEnvironment"; error = message
+                try db.run("UPDATE widget_phones SET moved_push_token_hash = ? WHERE device_id = ? AND push_token = ?", Self.hash(job.token.description), job.deviceID, job.token)
+            case let .failed(message, clears):
+                result = "failed"; error = message
+                if clears {
+                    try db.run("UPDATE widget_phones SET push_token = NULL WHERE device_id = ? AND push_token = ?", job.deviceID, job.token)
+                }
+                try db.run("UPDATE widget_phones SET retry_at = ?, error = ? WHERE device_id = ? AND generation = ?", 0, message, job.deviceID, job.generation)
+            case .channelGone: preconditionFailure("Widget pushes use no channel")
+            }
+            try db.run("UPDATE widget_phones SET in_flight = 0 WHERE device_id = ?", job.deviceID)
+            try record("push.widgets", device: job.deviceID, activity: nil,
+                       attempt.detail.merging(["outcome": .string(result), "error": error.map(JSONValue.string) ?? .null]) { $1 })
+        }
     }
 }

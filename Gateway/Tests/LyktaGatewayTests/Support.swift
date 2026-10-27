@@ -150,6 +150,11 @@ final class FakePush: PushService {
         return nil
     }
 
+    func reloadWidgets(deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        try record("widgets", to: environment)
+        return "unique-\(id)"
+    }
+
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String {
         try record("createChannel")
         return UUID().uuidString

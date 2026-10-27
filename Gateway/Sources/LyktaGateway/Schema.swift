@@ -46,6 +46,31 @@ enum Schema {
           app_version TEXT NOT NULL,
           created_at INTEGER NOT NULL
         ) STRICT;
+        CREATE TABLE IF NOT EXISTS widgets (
+          id TEXT PRIMARY KEY,
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          name TEXT NOT NULL, title TEXT NOT NULL,
+          layout TEXT NOT NULL, data TEXT NOT NULL, content TEXT NOT NULL,
+          requires TEXT NOT NULL, stale_after INTEGER,
+          revision INTEGER NOT NULL, generation INTEGER NOT NULL,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        ) STRICT;
+        CREATE UNIQUE INDEX IF NOT EXISTS widget_names ON widgets(device_id, name);
+        CREATE TABLE IF NOT EXISTS widget_places (
+          widget_id TEXT NOT NULL REFERENCES widgets(id) ON DELETE CASCADE,
+          family TEXT NOT NULL CHECK (family IN ('systemSmall', 'systemMedium', 'systemLarge', 'accessoryCircular', 'accessoryRectangular', 'accessoryInline')),
+          fetched_revision INTEGER, fetched_at INTEGER,
+          PRIMARY KEY (widget_id, family)
+        ) STRICT;
+        CREATE TABLE IF NOT EXISTS widget_phones (
+          device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+          token_hash TEXT NOT NULL UNIQUE,
+          push_token TEXT, moved_push_token_hash TEXT, layout_version TEXT,
+          places_known INTEGER NOT NULL DEFAULT 0,
+          generation INTEGER NOT NULL DEFAULT 0, pushed_generation INTEGER NOT NULL DEFAULT 0,
+          pushed_at INTEGER NOT NULL DEFAULT 0, retry_at INTEGER NOT NULL DEFAULT 0,
+          failures INTEGER NOT NULL DEFAULT 0, in_flight INTEGER NOT NULL DEFAULT 0, error TEXT
+        ) STRICT;
         CREATE TABLE IF NOT EXISTS activities (
           id TEXT PRIMARY KEY,
           device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
