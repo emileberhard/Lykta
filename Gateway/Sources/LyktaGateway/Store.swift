@@ -1152,16 +1152,15 @@ extension Store {
             detail["toggle"] = .string(path)
             detail["isOn"] = .bool(isOn)
         }
-        let content: JSONValue
-        let requirement: Layout.Requirement
-        do { (_, content, requirement) = try Self.admitWidget(widget.layout, data: changed, on: device) }
-        catch let error as APIError where error.code == .invalidLayout { throw APIError(.conflict, error.message) }
-        let generation = try widgetGeneration(device, id: id)
-        try db.run("""
-            UPDATE widgets SET data = ?, content = ?, requires = ?, revision = revision + 1, generation = ?, updated_at = ? WHERE id = ?
-            """, Self.text(changed), Self.text(content), requirement.version.description, generation, now, id)
-        detail["revision"] = .number(Double(widget.revision + 1))
-        detail["generation"] = generation.map { .number(Double($0)) } ?? .null
+        if changed != widget.data {
+            let content: JSONValue
+            let requirement: Layout.Requirement
+            do { (_, content, requirement) = try Self.admitWidget(widget.layout, data: changed, on: device) }
+            catch let error as APIError where error.code == .invalidLayout { throw APIError(.conflict, error.message) }
+            try db.run("UPDATE widgets SET data = ?, content = ?, requires = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
+                       Self.text(changed), Self.text(content), requirement.version.description, now, id)
+            detail["revision"] = .number(Double(widget.revision + 1))
+        }
         try record("widget.action", device: device.id, activity: nil, detail)
     }
 

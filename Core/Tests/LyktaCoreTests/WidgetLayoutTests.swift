@@ -17,7 +17,7 @@ struct WidgetLayoutTests {
         (#"{"systemSmall": "a", "background": {"text": "a", "modifiers": [{"privacySensitive": true}]}}"#, "background.modifiers[0].privacySensitive: privacySensitive works only in a widget's presentations"),
         (#"{"accessoryInline": {"button": "go", "label": "Go"}}"#, "accessoryInline.button: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
         (#"{"accessoryInline": {"toggle": "done", "isOn": true, "label": "Done"}}"#, "accessoryInline.toggle: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
-        (#"{"systemSmall": "a", "background": {"button": "go", "label": "Go"}}"#, "background.button: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
+        (#"{"systemSmall": "a", "background": {"button": "go", "label": "Go"}}"#, "background.button: a widget's background takes no links, buttons or toggles"),
         (#"{"systemSmall": "a", "background": {"link": "https://example.com", "label": "Open"}}"#, "background.link: a widget's background takes no links, buttons or toggles"),
         (#"{"systemSmall": "a", "link": "http://example.com"}"#, "link: expected an https URL or an app URL such as shortcuts://"),
         (#"{"systemSmall": {"text": "a", "modifiers": [{"padding": 4}]}, "background": {"vstack": [], "colour": "red"}}"#, "background.colour: unknown key"),

@@ -22,7 +22,7 @@ enum Presentation {
         case (_, "privacySensitive"): "privacySensitive works only in a widget's presentations"
         case let (.activity(root), _):
             ["lockScreen", "expanded"].contains(root) ? nil : "links, buttons and toggles work only in lockScreen and expanded"
-        case (.widgetBackground, "button"), (.widgetBackground, "toggle"), (.widget(.accessoryInline), "button"), (.widget(.accessoryInline), "toggle"):
+        case (.widget(.accessoryInline), "button"), (.widget(.accessoryInline), "toggle"):
             "buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"
         case (.widgetBackground, _):
             "a widget's background takes no links, buttons or toggles"

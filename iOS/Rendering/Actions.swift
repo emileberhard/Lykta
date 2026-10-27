@@ -54,6 +54,7 @@ struct WidgetButtonIntent: AppIntent {
     static let isDiscoverable = false
     static var supportedModes: IntentModes { .background }
     static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    static let authenticationPolicy = IntentAuthenticationPolicy.requiresAuthentication
 
     @Parameter(title: "Widget") var widget: String
     @Parameter(title: "Button") var button: String
@@ -77,6 +78,7 @@ struct WidgetToggleIntent: AppIntent {
     static let isDiscoverable = false
     static var supportedModes: IntentModes { .background }
     static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    static let authenticationPolicy = IntentAuthenticationPolicy.requiresAuthentication
 
     @Parameter(title: "Widget") var widget: String
     @Parameter(title: "Toggle") var toggle: String

@@ -229,11 +229,14 @@ reach any https or app URL without a gateway round trip.
 run an AppIntent in the app and send the device action with a widget UUID.
 `Action.Target` requires exactly one activity or widget. `Store` owns the
 transaction that checks the current controls, applies effects, admits the
-result through the same path as PUT, increments the widget revision and its
-phone's generation, and writes the action and `widget.action` event. An
-accepted widget tap advances the revision even when its effects leave data
-unchanged, so the ensuing reload has a new revision. Hidden controls and
-invalid results change nothing. Agents read names under exactly one of
+result through the same path as PUT, increments the widget revision when the
+data changed, and writes the action and `widget.action` event. A tap raises no
+push generation: WidgetKit reloads a widget once its tap's intent returns, and
+the intent returns after the gateway committed, while a push would spend the
+phone's 20-minute push interval and hold the agent's answer to the tap behind
+it. The app reloads every Lykta widget after a tap, so other places of the same
+widget follow. Taps require an unlocked phone, as Live Activity taps do.
+Hidden controls and invalid results change nothing. Agents read names under exactly one of
 `activity` or `widget` in the existing log and cursor. A separate widget log
 would make agents coordinate two cursors for the same kind of interaction.
 
@@ -246,7 +249,9 @@ retention and cursor statements still work; its activity join omits widget
 taps. No other table references actions. Tests execute those old statements
 against the rebuilt table, including migration after pruning every action.
 This keeps rollback readable without a separate shadow log or compatibility
-writer. Changing those old statements or adding a foreign key to actions
+writer. A rolled-back gateway refuses a widget tap with 400, because its
+decoder knows only `activity`, and the reload after the tap reverts the
+control. Changing those old statements or adding a foreign key to actions
 requires revisiting the rebuild and rollback contract.
 
 **Notifications arrive as messages from their sender.** The gateway sends an

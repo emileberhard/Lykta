@@ -189,6 +189,9 @@ final class Model {
         telemetry.record(activity == nil ? "widget.action" : "activity.action", activity: activity, detail)
         do {
             try await gateway.act(action, secret: credentials.deviceSecret)
+            if activity == nil {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         } catch {
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error

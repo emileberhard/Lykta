@@ -126,10 +126,12 @@ From Lykta 0.14.0, `button` and `toggle` work in every family except
 `accessoryInline`, and never in the background. Their [layout rules](layout.md#links-buttons-and-toggles)
 are the same as for Live Activities: a toggle sets its data boolean, and a
 button applies `set`, `add` and `now` using the data from before the tap.
-The gateway commits the change and its action log together, raises the
-revision, and the phone reloads after the tap without waiting for a push.
-A tap that cannot fill or fit the resulting layout, or needs a newer app,
-changes nothing. A control hidden since the phone loaded it returns `conflict`.
+The gateway commits the change and its action log together and raises the
+revision when the data changed, and the phone reloads the widget right after
+the tap, so your answer to a press, a PUT, goes out as soon as you send it. A
+tap on a locked phone asks the user to unlock it first. A tap on a control
+your latest PUT removed, or one whose result cannot fill or fit the layout or
+needs a newer app, changes nothing and never appears in `actions`.
 
 Read taps with `lykta get 'actions?after=0'`. Widget and activity taps share
 one cursor; a widget record names `widget` instead of `activity`:

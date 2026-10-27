@@ -339,7 +339,7 @@ struct WidgetTests {
         return await send("POST", "/v1/device/actions", try! JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(action)), token: credentials.deviceSecret)
     }
 
-    @Test func widgetControlsChangeDataOnceAndShareTheActivityCursor() async throws {
+    @Test func widgetControlsChangeDataOnceWithoutAPushAndShareTheActivityCursor() async throws {
         let widget: Status = try await send("PUT", "/v1/widgets/water", Self.controls).decoded()
         try await report([widget.id])
         try await deliver(now)
@@ -347,10 +347,12 @@ struct WidgetTests {
         #expect(await act(widget.id, .button("drink"), actionID: action).status == 204)
         #expect(await act(widget.id, .button("drink"), actionID: action).status == 204)
         #expect(await act(widget.id, .toggle("done", isOn: true)).status == 204)
+        #expect(await act(widget.id, .toggle("done", isOn: true)).status == 204)
         let detail: Status = try await send("GET", "/v1/widgets/water").decoded()
         #expect(detail.revision == 3)
         #expect(detail.data == ["count": .number(1), "done": .bool(true)])
-        #expect(detail.delivery == "pending")
+        try await deliver(now + Store.widgetPushInterval)
+        #expect(push.sent == ["widgets"])
         let device = try #require(await store.device(secret: credentials.deviceSecret))
         _ = try await store.sync(device, report: DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)),
                                   appVersion: Layout.version.description, layoutVersion: Layout.version, bundleInstance: UUID(), activities: [],
@@ -360,10 +362,10 @@ struct WidgetTests {
         #expect(await send("POST", "/v1/device/actions", try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(activityAction)), token: credentials.deviceSecret).status == 204)
         let log: JSONValue = try await send("GET", "/v1/actions?after=0").decoded()
         guard case let .array(entries) = try log.value(at: "actions") else { Issue.record("No actions"); return }
-        #expect(entries.count == 3)
+        #expect(entries.count == 4)
         #expect(try entries[0].value(at: "widget") == "water")
-        #expect(try entries[1].value(at: "isOn") == .bool(true))
-        #expect(try entries[2].value(at: "activity") == "deploy")
+        #expect(try entries[2].value(at: "isOn") == .bool(true))
+        #expect(try entries[3].value(at: "activity") == "deploy")
         #expect(entries.allSatisfy { entry in
             guard case let .object(fields) = entry else { return false }
             return (fields["activity"] == nil) != (fields["widget"] == nil)
@@ -373,7 +375,7 @@ struct WidgetTests {
         #expect(try empty.value(at: "actions") == .array([]))
         #expect(await send("PUT", "/v1/widgets/water", ["data": ["count": .number(10), "done": .bool(false)], "ifRevision": .number(1)]).status == 409)
         let events: Events = try await send("GET", "/v1/events").decoded()
-        #expect(events.events.filter { $0.name == "widget.action" }.count == 2)
+        #expect(events.events.filter { $0.name == "widget.action" }.count == 3)
         #expect(await act(widget.id, .toggle("missing", isOn: true)).status == 409)
         #expect(await act(UUID(), .button("drink")).status == 404)
         #expect(await send("DELETE", "/v1/widgets/water").status == 204)
