@@ -74,7 +74,7 @@ function Get-Stamp([string]$Path) {
 }
 
 function Set-SkillFile([string]$Name, [string]$Path, [string]$Format) {
-    $temp = Join-Path (Split-Path -Parent $Path) ".$(Split-Path -Leaf $Path).$([IO.Path]::GetRandomFileName())"
+    $temp = Join-Path (Split-Path -Parent (Split-Path -Parent $Path)) ".lykta.$([IO.Path]::GetRandomFileName())"
     $cancel = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(10))
     try {
         $response = $client.GetAsync("$url/skill/$Name", $cancel.Token).GetAwaiter().GetResult()
@@ -234,9 +234,8 @@ function Invoke-Install([string[]]$Arguments) {
     $foreign = "$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder"
     if (Test-Path -LiteralPath $dir) {
         if (Test-Link $dir) { Fail $foreign 2 }
-        Get-ChildItem -LiteralPath $dir -Filter '.SKILL.md.*' -Force | Remove-Item -Force
-        if (-not (Get-ChildItem -LiteralPath $dir -Force)) { Remove-Item -LiteralPath $dir -Force }
-        elseif (-not (Get-Stamp $skill)) { Fail $foreign 2 }
+        if (Get-ChildItem -LiteralPath $dir -Force) { if (-not (Get-Stamp $skill)) { Fail $foreign 2 } }
+        else { [IO.Directory]::Delete($dir) }
     }
     try { $null = New-Item -ItemType Directory -Force -Path $dir } catch { Fail "could not create $dir" 2 }
     if (-not (Set-SkillFile 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) {

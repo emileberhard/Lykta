@@ -52,7 +52,9 @@ for shell in sh pwsh; do
 	expect '# Lykta' 0 cat "$HOME/skills/lykta/SKILL.md"
 	mkdir -p "$HOME/theirs/lykta" "$HOME/linked"
 	cp "$skill/SKILL.md" "$HOME/theirs/lykta/SKILL.md"
+	: >"$HOME/theirs/lykta/.SKILL.md.backup"
 	expect 'lykta did not install it' 2 cli install "$HOME/theirs"
+	expect "$HOME/theirs/lykta/.SKILL.md.backup" 0 find "$HOME/theirs/lykta" -name .SKILL.md.backup
 	ln -s "$HOME/skills/lykta" "$HOME/linked/lykta"
 	expect 'lykta did not install it' 2 cli install "$HOME/linked"
 	stale=$(printf '%064d' 0)
@@ -75,7 +77,6 @@ for shell in sh pwsh; do
 	expect '"activities":' 0 cli get activities
 	[ ! -e "$HOME/skills/lykta" ] || { printf '%s: lykta recreated a skill folder the user removed\n' "$shell" >&2; exit 1; }
 	mkdir -p "$HOME/fresh/lykta"
-	: >"$HOME/fresh/lykta/.SKILL.md.interrupted"
 	expect "Installed the Lykta skill in $HOME/fresh/lykta" 0 cli install "$HOME/fresh"
 	chmod 000 "$HOME/.config/lykta/skills"
 	expect '"activities":' 0 cli get activities

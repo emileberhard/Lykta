@@ -95,7 +95,7 @@ owned() {
 
 place() {
 	name=$1 dest=$2 format=$3 mode=$4
-	tmp=$(mktemp "${dest%/*}/.${dest##*/}.XXXXXX") || return 1
+	tmp=$(mktemp "${dest%/*/*}/.lykta.XXXXXX") || return 1
 	if curl -fsS --connect-timeout 5 --max-time 10 -D "$head" -o "$tmp" "$url/skill/$name" && digest=$(served) && [ -n "$digest" ] &&
 		printf "\n$format\n" "$digest" >>"$tmp" && chmod "$mode" "$tmp" && mv -f "$tmp" "$dest"; then
 		return 0
@@ -157,7 +157,6 @@ install_skill() {
 	mkdir -p "$1" 2>/dev/null && dir=$(cd "$1" && pwd)/lykta || fail "could not create $1" 2
 	foreign="$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder"
 	[ ! -L "$dir" ] || fail "$foreign" 2
-	rm -f "$dir"/.SKILL.md.* 2>/dev/null
 	rmdir "$dir" 2>/dev/null
 	[ ! -e "$dir" ] || owned "$dir/SKILL.md" || fail "$foreign" 2
 	mkdir -p "$dir" 2>/dev/null || fail "could not create $dir" 2

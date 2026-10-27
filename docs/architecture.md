@@ -498,9 +498,10 @@ nothing. A gateway rollback rolls the copies back too; a gateway older than
 `lykta` fails there with a pointer to the app's setup, which downloads that
 gateway's own `lykta`. The registry is only appended to, so two installs at
 once may record a folder twice, which only repeats a check, and a recorded
-folder that is gone or no longer `lykta`'s is skipped. An install interrupted
-before its SKILL.md arrived leaves an empty folder or a staging file, which
-the next `install` clears.
+folder that is gone or no longer `lykta`'s is skipped. Each write stages in
+the folder above its target, so an install interrupted before its SKILL.md
+arrived leaves an empty folder, which the next `install` reuses, and `lykta`
+deletes no file it did not just create.
 
 **A PUT can wait for Apple.** `wait` on `PUT /v1/activities/{name}` and
 `PUT /v1/notifications/{name}`, 0 to 25 seconds like `GET /v1/actions`, holds
