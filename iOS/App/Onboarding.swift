@@ -445,6 +445,7 @@ private struct Arrival: View {
             }
         }
         .frame(minHeight: model.isAgentConnected ? nil : 96)
+        .animation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.6), value: model.agentActivity?.id)
     }
 }
 

@@ -136,8 +136,8 @@ flag in `Model` needs no datastore or extra observable state.
 install opens on `Onboarding`, not the home screen: what Lykta shows, a page
 that explains notifications and asks for them when the user continues, as
 Apple's guidance has a screen give the reason before the system alert, then
-Connect, which copies the agent setup and waits until ActivityKit reports an
-activity other than the gallery's `example`. `lykta setup` starts such an
+Connect, which copies the agent setup and waits until ActivityKit reports a
+live activity other than the gallery's `example`. `lykta setup` starts such an
 activity, a short hello that dismisses itself, so the agent's first command
 proves the token, the gateway, APNs and the phone together, and the user sees
 it arrive. The gate encourages without blocking: Set Up Later opens the home
@@ -481,8 +481,8 @@ access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
 take precedence. Setup then starts `scripts/hello.json`, a Live Activity
 named `hello` that ends after five minutes, which proves the token, the
 gateway, APNs and the phone together, and which the app's introduction waits
-for. A hello that fails only adds the gateway's answer to setup's output,
-because Live Activities may be off on a phone that still takes notifications
+for. Setup prints the gateway's answer to the hello, or why it could not be
+sent, and a hello that fails never fails setup, because Live Activities may be off on a phone that still takes notifications
 and widgets. The references and examples are not cached: an agent reads
 them once per task with `lykta docs`, and a cache would only save input. curl takes the token as an argument, so other
 users of the same computer could see it while a request runs, as with the
