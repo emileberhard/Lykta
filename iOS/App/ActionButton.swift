@@ -37,9 +37,10 @@ struct ActionButton: View {
     }
 }
 
-private extension View {
+extension View {
     func shown(_ isShown: Bool) -> some View {
         opacity(isShown ? 1 : 0)
             .accessibilityHidden(!isShown)
+            .allowsHitTesting(isShown)
     }
 }

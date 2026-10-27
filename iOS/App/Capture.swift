@@ -59,7 +59,7 @@ struct CaptureView: View {
             guard let avatar = UIImage(data: example.avatar) else { throw CaptureError("could not read the avatar of \(example.id)") }
             try render(Image(uiImage: avatar).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle()), named: "\(example.id).avatar")
         }
-        try render(Lights().frame(height: 400), named: "lights")
+        try render(Lights(separation: 0).frame(height: 400), named: "lights")
         model = .preview(.ready, activities: try Self.homeActivities.map { id in
             guard let example = examples.first(where: { $0.id == id }) else { throw CaptureError("no bundled example is called \(id)") }
             let attributes = LyktaActivity(id: UUID(), name: id)

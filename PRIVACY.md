@@ -67,6 +67,8 @@ gateway a log of what it observes:
 - the phone model and iOS version
 - which activities appeared and their state, and which ones you ended in the
   app
+- when you finish or skip the introduction, and whether an agent had
+  connected by then
 - fingerprints of the content and push tokens it received
 - errors, and Apple's MetricKit crash, hang and performance reports
 
@@ -96,7 +98,9 @@ at most 64 files and 64 MiB, and removes the oldest first. The widget keeps
 the last content it loaded for at most 64 widgets, so it can still show them
 while the gateway is unreachable; Reset deletes it. The app remembers whether
 you left it while it asked you to lock the phone after starting an example, so
-it asks only until then; Reset keeps this. iOS keeps a
+it asks only until then; Reset keeps this. It remembers whether you finished
+its introduction, and whether an agent has started an activity on the phone,
+which Reset forgets. iOS keeps a
 notification's image with the notification until you clear it. Deleting the
 app deletes them.
 
