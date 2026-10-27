@@ -24,14 +24,16 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarOverflowMenu {
-                    Button("Copy Agent Setup", systemImage: "doc.on.doc") {
-                        Task {
-                            if await model.copySetup() {
-                                copies += 1
+                    if model.isAgentConnected {
+                        Button("Copy Agent Setup", systemImage: "doc.on.doc") {
+                            Task {
+                                if await model.copySetup() {
+                                    copies += 1
+                                }
                             }
                         }
+                        .disabled(!model.phase.isReady)
                     }
-                    .disabled(!model.phase.isReady)
                     Button("Reset", systemImage: "arrow.counterclockwise", role: .destructive) { isConfirmingReset = true }
                         .disabled(!model.isRegistered)
                 }

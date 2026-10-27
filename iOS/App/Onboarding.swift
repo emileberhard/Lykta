@@ -3,12 +3,12 @@ import SwiftUI
 import UIKit
 
 struct Onboarding: View {
-    private enum Step {
+    private enum Step: String {
         case welcome, notifications, connect, prompts
     }
 
     let model: Model
-    @State private var step = Step.welcome
+    @SceneStorage("onboardingStep") private var step = Step.welcome
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -21,10 +21,10 @@ struct Onboarding: View {
                 Notifications(model: model) { advance(from: .notifications, to: .connect) }
                     .transition(pageTransition)
             case .connect:
-                Connect(model: model, next: { advance(from: .connect, to: .prompts) }, later: finish)
+                Connect(model: model, next: { advance(from: .connect, to: .prompts) }, later: model.finishOnboarding)
                     .transition(pageTransition)
             case .prompts:
-                Prompts(done: finish)
+                Prompts(done: model.finishOnboarding)
                     .transition(pageTransition)
             }
         }
@@ -42,10 +42,6 @@ struct Onboarding: View {
     private func advance(from current: Step, to next: Step) {
         guard step == current else { return }
         withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.5)) { step = next }
-    }
-
-    private func finish() {
-        model.finishOnboarding()
     }
 }
 
@@ -116,6 +112,7 @@ private struct Welcome: View {
 
     let next: () -> Void
     @State private var isShown = false
+    @ScaledMetric(relativeTo: .title) private var iconWidth = 44.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -142,7 +139,7 @@ private struct Welcome: View {
                             Image(systemName: feature.symbol)
                                 .font(.title.weight(.medium))
                                 .foregroundStyle(feature.color.gradient)
-                                .frame(width: 44)
+                                .frame(width: iconWidth)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(feature.title)
@@ -240,7 +237,7 @@ private struct LockScreenWallpaper: View {
     }
 }
 
-private struct Connect: View {
+struct Connect: View {
     private enum Progress {
         case ready, copied, waiting
     }
@@ -261,7 +258,7 @@ private struct Connect: View {
                     Title(isConnected ? "Your Agent Is Connected" : "Connect Your Agent")
                         .id(isConnected)
                         .transition(.replace(reduceMotion: reduceMotion))
-                    Text(isConnected ? "It just said hello on this iPhone." : "Paste the setup into Claude Code, Codex or any agent that runs commands.")
+                    Text(isConnected ? "It said hello on this iPhone." : "Paste the setup into Claude Code, Codex or any agent that runs commands.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .id(isConnected)
@@ -269,8 +266,6 @@ private struct Connect: View {
                 }
                 Arrival(model: model)
             }
-            .animation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.6), value: isConnected)
-            .animation(.smooth(duration: 0.4), value: progress)
         } actions: {
             Button {
                 if isConnected {
@@ -281,9 +276,12 @@ private struct Connect: View {
             } label: {
                 ZStack {
                     Group {
-                        if isConnected {
+                        switch (isConnected, model.phase) {
+                        case (true, _):
                             Text("Continue")
-                        } else {
+                        case (false, .connecting):
+                            Label { Text("Connecting…") } icon: { ProgressView() }
+                        case (false, _):
                             switch progress {
                             case .ready: Label("Copy Setup", systemImage: "doc.on.doc")
                             case .copied: Label("Copied", systemImage: "checkmark")
@@ -297,13 +295,10 @@ private struct Connect: View {
             }
             .buttonStyle(.glassProminent)
             .disabled(!isConnected && (progress != .ready || !model.phase.isReady))
-            .animation(.smooth(duration: 0.35), value: progress)
-            .animation(.smooth(duration: 0.35), value: isConnected)
             Button("Copy Again", action: copy)
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .shown(!isConnected && progress == .waiting)
-                .animation(.easeOut(duration: 0.2), value: progress)
         }
         .safeAreaBar(edge: .top) {
             Button("Set Up Later", action: later)
@@ -311,8 +306,10 @@ private struct Connect: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 24)
                 .shown(!isConnected)
-                .animation(.easeOut(duration: 0.2), value: isConnected)
         }
+        .animation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.6), value: isConnected)
+        .animation(.smooth(duration: 0.4), value: progress)
+        .animation(.smooth(duration: 0.4), value: model.phase.isReady)
         .sensoryFeedback(.success, trigger: copies)
         .sensoryFeedback(.success, trigger: isConnected) { !$0 && $1 }
         .onChange(of: isConnected) { _, isConnected in
@@ -447,7 +444,7 @@ private struct Arrival: View {
                 }
             }
         }
-        .frame(minHeight: 96)
+        .frame(minHeight: model.isAgentConnected ? nil : 96)
     }
 }
 

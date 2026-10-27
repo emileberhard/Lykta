@@ -97,7 +97,7 @@ final class Model {
     }
 
     var agentActivity: LiveActivity? {
-        activities.first { $0.isFromAgent && [.pending, .active, .stale].contains($0.state) }
+        activities.first { $0.attributes.name != Example.activityName && [.pending, .active, .stale].contains($0.state) }
     }
 
     func finishOnboarding() {
@@ -502,7 +502,7 @@ final class Model {
             let id = $0.attributes.id
             return LiveActivity($0, times: times[id], isEnding: requestedEnds.contains(id))
         }
-        if !isAgentConnected, activities.contains(where: \.isFromAgent) {
+        if !isAgentConnected, agentActivity != nil {
             isAgentConnected = true
             UserDefaults.standard.set(true, forKey: Self.agentConnected)
         }
@@ -599,10 +599,6 @@ struct LiveActivity: Identifiable, Equatable {
     var canEnd: Bool {
         times != nil && !isEnding && [.pending, .active, .stale].contains(state)
     }
-
-    var isFromAgent: Bool {
-        attributes.name != Example.activityName
-    }
 }
 
 private extension LiveActivity {
@@ -619,7 +615,7 @@ extension Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
-        model.isAgentConnected = activities.contains(where: \.isFromAgent)
+        model.isAgentConnected = model.agentActivity != nil
         model.areActivitiesEnabled = areActivitiesEnabled
         model.notifications = notifications
         return model
