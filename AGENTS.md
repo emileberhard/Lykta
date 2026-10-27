@@ -70,8 +70,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   to one widget credential and records an answer only while that credential is
   current, and only 410 `widget_deleted`, a 401, a new credential, Reset and
   its 64-entry limit remove cached content. Widget reports apply in the order
-  of a `sequence` the app and extension share under that lock, and only fetched
-  content the phone can draw counts as `fetched`.
+  of a `sequence` the app and extension share under that lock, reset by a new
+  install, and only fetched content the phone can draw counts as `fetched`.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
   from the same commit. A notification example names its media files, kept

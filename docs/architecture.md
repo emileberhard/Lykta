@@ -394,11 +394,12 @@ report from `WidgetCenter.currentPushInfo` and `currentConfigurations()` each
 time it becomes active, one at a time, which recovers a report the extension
 could not send. Each report carries a `sequence` that the app and the
 extension take from one counter in the app group, under the cache's file lock:
-the larger of the last one plus one and the time in milliseconds, so it keeps
-rising after a reinstall erases the counter. The gateway ignores a report no
-newer than the last it applied, so a delayed one cannot restore an old token or
-old places. The fence never expires, because only the phone orders its reports;
-a clock that ran ahead only makes later sequences start higher.
+the larger of the last one plus one and the time in milliseconds. The gateway
+ignores a report no newer than the last it applied, so a delayed one cannot
+restore an old token or old places. The fence never expires, because only the
+phone orders its reports, but a new install or update of the app, which its
+device report shows, resets it: a reinstall erases the counter, and a clock
+that once ran ahead would otherwise lock the new install's reports out.
 
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for

@@ -254,7 +254,7 @@ final class Model {
         guard let gateway, let credentials, !Task.isCancelled else { return }
         do {
             let places = WidgetSelection.places(in: try await WidgetCenter.shared.currentConfigurations())
-            let report = try WidgetReports.make(pushToken: await Self.widgetPushToken(), places: places, at: .now)
+            let report = try await WidgetReports.make(pushToken: await Self.widgetPushToken(), places: places, at: .now)
             guard let credential = try KeychainItem.widget.load() else {
                 try await gateway.report(report, widgetToken: createWidgetCredential(gateway, credentials).widgetToken)
                 return
