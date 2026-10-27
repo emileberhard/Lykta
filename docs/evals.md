@@ -101,6 +101,7 @@ sequenceDiagram
     participant G as lykta-gateway simulate
     H->>A: evals/prompt.md: the paste, then the request
     A->>G: lykta setup: GET /skill/scripts/lykta and /skill/SKILL.md
+    A->>G: lykta install: GET /skill/SKILL.md into the harness's skills folder
     A->>G: lykta docs, then lykta put activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
     G-->>A: live, accepted once SimulatedPhone took the push
@@ -164,6 +165,11 @@ activity looks, so a failure means the agent missed the request. An agent
 that does nothing, or schedules the activity with something that dies with the
 container, also starts nothing now, so the reminder's check passes it; the
 transcript shows which. Harbor's `nop` agent, which does nothing, scores 0.2.
+The setup-only check reads the agent's container instead. Its paste asks only
+for setup, after which agents rightly ask what to show, so it passes when the
+skill is installed in the folder Claude Code or Codex reads personal skills
+from, which also needs a working setup. On 2026-10-27 all four trials, two on
+GPT-6.1 Terra and two on Claude Opus 5.5, installed it there.
 
 ## Measured
 
