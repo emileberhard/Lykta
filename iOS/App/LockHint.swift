@@ -9,6 +9,7 @@ struct LockHint: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var isShown = false
+    @AccessibilityFocusState private var isTitleFocused: Bool
 
     var body: some View {
         PhaseAnimator(reduceMotion ? [.locked] : Step.allCases) { step in
@@ -17,12 +18,14 @@ struct LockHint: View {
                     Spacer()
                     Image(systemName: step == .locked ? "lock.fill" : "lock.open.fill")
                         .font(.system(size: 76, weight: .semibold))
-                        .contentTransition(.symbolEffect(.replace.magic(fallback: .replace)))
+                        .contentTransition(.symbolEffect(step == .open ? .replace.offUp : .replace))
                         .scaleEffect(step == .pressed ? 0.92 : 1)
                         .accessibilityHidden(true)
                     Text("Lock to See It")
                         .font(.title.bold())
                         .multilineTextAlignment(.center)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($isTitleFocused)
                     Spacer()
                     Button("Not Now", action: dismiss)
                         .buttonStyle(.glass)
@@ -42,19 +45,18 @@ struct LockHint: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            Rectangle()
-                .fill(.regularMaterial)
-                .ignoresSafeArea()
-        }
+        .background(.regularMaterial)
         .contentShape(.rect)
         .onTapGesture(perform: dismiss)
         .onAppear {
             withAnimation(.smooth(duration: 0.45)) { isShown = true }
+            isTitleFocused = true
         }
+        .statusBarHidden()
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape, dismiss)
     }
 }
 
@@ -65,7 +67,7 @@ private struct SideButtonGlow: View {
         GeometryReader { geometry in
             Capsule()
                 .fill(.white)
-                .frame(width: 12, height: geometry.size.height * 0.09)
+                .frame(width: 12, height: geometry.size.height * 0.105)
                 .shadow(color: .white.opacity(isLit ? 0.9 : 0.5), radius: isLit ? 14 : 8)
                 .offset(x: isLit ? -3 : 0)
                 .position(x: geometry.size.width, y: geometry.size.height * 0.28)

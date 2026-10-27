@@ -94,7 +94,9 @@ data deleted from the gateway is gone from its copies 14 days later.
 The app keeps the sounds and sender pictures it downloads for notifications,
 at most 64 files and 64 MiB, and removes the oldest first. The widget keeps
 the last content it loaded for at most 64 widgets, so it can still show them
-while the gateway is unreachable; Reset deletes it. iOS keeps a
+while the gateway is unreachable; Reset deletes it. The app remembers whether
+the phone has been locked while it asked you to lock it after starting an
+example, so it asks only until then; Reset keeps this. iOS keeps a
 notification's image with the notification until you clear it. Deleting the
 app deletes them.
 

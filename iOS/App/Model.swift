@@ -74,8 +74,10 @@ final class Model {
         @unknown default: "unknown"
         }
         telemetry.record("app.scene", ["phase": .string(name)])
-        if scenePhase == .background, showsLockHint {
-            UserDefaults.standard.set(true, forKey: Self.lockHintLearned)
+        if scenePhase == .background {
+            if showsLockHint {
+                UserDefaults.standard.set(true, forKey: Self.lockHintLearned)
+            }
             isLockHintPending = false
         }
         if scenePhase == .active, phase.isReady {
@@ -132,12 +134,29 @@ final class Model {
             }
             try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
         }
-        isLockHintPending = isSent && !UserDefaults.standard.bool(forKey: Self.lockHintLearned)
-        return isSent
+        guard isSent else { return false }
+        isLockHintPending = UIApplication.shared.applicationState == .active && !UserDefaults.standard.bool(forKey: Self.lockHintLearned)
+        await withTaskGroup { group in
+            group.addTask { await self.exampleShows() }
+            group.addTask { _ = try? await Task.sleep(for: .seconds(10)) }
+            await group.next()
+            group.cancelAll()
+        }
+        return true
+    }
+
+    private func exampleShows() async {
+        for await isShowing in Observations({ self.isExampleShowing }) where isShowing {
+            return
+        }
     }
 
     var showsLockHint: Bool {
-        isLockHintPending && activities.contains { $0.attributes.name == Example.activityName && [.active, .stale].contains($0.state) }
+        isLockHintPending && isExampleShowing
+    }
+
+    private var isExampleShowing: Bool {
+        activities.contains { $0.attributes.name == Example.activityName && [.active, .stale].contains($0.state) }
     }
 
     func dismissLockHint() {
@@ -238,6 +257,7 @@ final class Model {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
             activities = []
+            isLockHintPending = false
             phase = .connecting
             telemetry.record("app.reset")
         }

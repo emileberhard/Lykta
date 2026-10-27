@@ -120,6 +120,18 @@ is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
 
+**A started example asks to lock the phone, until the phone is locked once.**
+iOS keeps an app's own Live Activity out of the Dynamic Island and banners
+while the app is in front, so starting an example seemed to do nothing. Once
+ActivityKit reports the example active, `Model` shows `LockHint` over the app.
+Going to the background clears it, and if it was showing, `Model` records in
+`UserDefaults` that the hint did its job and never shows it again; Not Now
+hides it only that time. The hint and the Start button wait for ActivityKit
+rather than the PUT's answer, because the gateway accepting a start does not
+prove the phone shows it, so the button's spinner lasts until the activity
+shows, for at most 10 seconds. A TipKit tip could own the same rule, but one
+flag in `Model` needs no datastore or extra observable state.
+
 **The app shows each activity's times and ends it through the gateway.**
 Each card on the home screen has a header with the activity's title, status
 and last change, and a menu with Details, a sheet with its times and name, and

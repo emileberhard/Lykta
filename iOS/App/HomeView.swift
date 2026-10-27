@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var details: LiveActivity?
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -45,7 +46,7 @@ struct HomeView: View {
                         .transition(.opacity)
                 }
             }
-            .animation(.smooth(duration: model.showsLockHint ? 0.45 : 0.25), value: model.showsLockHint)
+            .animation(.smooth(duration: reduceMotion ? 0.2 : model.showsLockHint ? 0.45 : 0.25), value: model.showsLockHint)
         }
         .onOpenURL { openURL($0) }
         .task(id: scenePhase) {
