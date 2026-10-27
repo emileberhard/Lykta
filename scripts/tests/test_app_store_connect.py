@@ -75,6 +75,32 @@ class ReviewPolicyTests(unittest.TestCase):
             self.assertFalse(any(call.args[0] == "POST" for call in api.call_args_list))
 
 
+class UploadFenceTests(unittest.TestCase):
+    def test_a_build_already_uploaded_for_the_version_is_reused(self):
+        with patch.object(asc, "uploaded_build_numbers", return_value=["9", "12"]), patch.object(asc, "next_build_number") as reserve:
+            self.assertEqual((12, True), asc.reserve_build("app", "1.3.2", fenced=False))
+            reserve.assert_not_called()
+
+    def test_a_first_attempt_without_an_upload_reserves_the_next_number(self):
+        with patch.object(asc, "uploaded_build_numbers", return_value=[]), patch.object(asc, "next_build_number", return_value=13), \
+             patch.object(asc.time, "sleep") as sleep:
+            self.assertEqual((13, False), asc.reserve_build("app", "1.3.2", fenced=False))
+            sleep.assert_not_called()
+
+    def test_a_fenced_rerun_waits_for_the_build_and_never_reserves_a_second_number(self):
+        with patch.object(asc, "uploaded_build_numbers", side_effect=[[], [], ["12"]]), patch.object(asc, "next_build_number") as reserve, \
+             patch.object(asc.time, "sleep"):
+            self.assertEqual((12, True), asc.reserve_build("app", "1.3.2", fenced=True))
+            reserve.assert_not_called()
+
+    def test_a_fenced_rerun_fails_when_no_build_appears(self):
+        with patch.object(asc, "uploaded_build_numbers", return_value=[]), patch.object(asc, "next_build_number") as reserve, \
+             patch.object(asc.time, "sleep"), patch.object(asc.time, "monotonic", side_effect=[0, 1, 1000]):
+            with self.assertRaisesRegex(SystemExit, "do not upload again"):
+                asc.reserve_build("app", "1.3.2", fenced=True)
+            reserve.assert_not_called()
+
+
 class UploadCleanupTests(unittest.TestCase):
     def test_cleanup_keeps_placed_images_and_only_deletes_owned_images(self):
         requests = []

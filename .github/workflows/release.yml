@@ -62,6 +62,7 @@ jobs:
       build: ${{ steps.build.outputs.number }}
     timeout-minutes: 60
     permissions:
+      actions: read
       contents: read
     env:
       VERSION: ${{ github.ref_name }}
@@ -88,18 +89,35 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$RUNNER_TEMP/AuthKey.p8"
 
-      - name: Select the next global build number
+      - name: Check whether an earlier attempt started uploading
+        id: fence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fenced=false
+          for ((attempt = 1; attempt < GITHUB_RUN_ATTEMPT; attempt++)); do
+            started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$attempt/jobs" \
+              --jq '[.jobs[] | select(.name == "testflight") | .steps[] | select(.name == "Upload to TestFlight" and .conclusion != "skipped" and .started_at != null)] | length')
+            (( started == 0 )) || fenced=true
+          done
+          echo "fenced=$fenced" >> "$GITHUB_OUTPUT"
+
+      - name: Select the build number, or the build an earlier attempt uploaded
         id: build
         env:
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          FENCED: ${{ steps.fence.outputs.fenced }}
         run: |
-          number=$(scripts/app-store-connect build-number)
+          result=$(scripts/app-store-connect build-number "$VERSION" "$([[ $FENCED == true ]] && echo fenced || echo open)")
+          read -r number state <<< "$result"
           echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "uploaded=$([[ $state == uploaded ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Archive
+        if: steps.build.outputs.uploaded != 'true'
         env:
           BUILD_NUMBER: ${{ steps.build.outputs.number }}
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
@@ -123,24 +141,31 @@ jobs:
             sleep 15
           done
 
-      - name: Sign, check the entitlements and upload to TestFlight
+      - name: Check the entitlements
+        if: steps.build.outputs.uploaded != 'true'
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
         run: |
-          export_archive() {
-            xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/$1" \
-              -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
-              -exportOptionsPlist "$RUNNER_TEMP/$1.plist" -allowProvisioningUpdates \
-              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
-          }
           plutil -replace destination -string export -o "$RUNNER_TEMP/check.plist" iOS/Config/ExportOptions.plist
-          cp iOS/Config/ExportOptions.plist "$RUNNER_TEMP/upload.plist"
-          export_archive check
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/check" \
+            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
+            -exportOptionsPlist "$RUNNER_TEMP/check.plist" -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
           unzip -q "$RUNNER_TEMP/check/Lykta.ipa" -d "$RUNNER_TEMP/check"
           scripts/sign-bundles check "$RUNNER_TEMP/check/Payload/Lykta.app"
-          export_archive upload
+
+      - name: Upload to TestFlight
+        if: steps.build.outputs.uploaded != 'true'
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/upload" \
+            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
+            -exportOptionsPlist iOS/Config/ExportOptions.plist -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
 
   testflight-review:
     needs: testflight

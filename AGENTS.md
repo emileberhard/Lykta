@@ -277,11 +277,16 @@ does the rest, gateway first:
    equal the tag, which must then be `X.Y.0`) and waits for `main`'s CI run on
    the same commit, without running the tests again. Missing CI fails after
    two minutes; running CI has a 35-minute bound.
-2. After admission, the serialized `testflight` job selects a build number
-   higher than every App Store Connect build and pending upload, then builds
+2. After admission, the serialized `testflight` job reuses the build or
+   processing upload App Store Connect holds for the tag's version, or selects
+   a build number higher than every build and pending upload. If an earlier
+   attempt started the separate `Upload to TestFlight` step, it waits up to
+   15 minutes for that upload to appear, then fails rather than upload again.
+   An existing build skips archiving, signing and uploading. A new one builds
    an archive with the tag as its version and that exact build number on a
-   hosted runner without certificates. `scripts/sign-bundles` signs every
-   bundle ad hoc with the entitlements in `iOS/Config/entitlements.json`,
+   hosted runner without certificates. `scripts/sign-bundles` signs embedded
+   frameworks deepest first, then every bundle ad hoc with the entitlements
+   in `iOS/Config/entitlements.json`,
    because the export keeps only the capabilities the archive's signatures
    request. The map must cover exactly the app and both extensions.
 3. The production gateway's host polls for admitted tags and deploys them
@@ -290,7 +295,8 @@ does the rest, gateway first:
    exports the archive through Xcode's cloud signing with the `testflight`
    environment's App Store Connect key without renumbering, fails unless every
    mapped bundle claims its entitlements file with the production push
-   environment, and then uploads it. Both following App Store Connect jobs
+   environment and every framework has an Apple Distribution signature, then
+   uploads it. Both following App Store Connect jobs
    receive that build number and select only that upload, including on retries.
 5. The GitHub release is titled with the bare version, and its notes are the
    annotated tag's message verbatim: a Markdown list of user-visible changes

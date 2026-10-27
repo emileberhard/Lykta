@@ -19,6 +19,15 @@ def main(mode, app):
     shipped = {"."} | {str(p.relative_to(app)) for pattern in ("*.app", "*.appex") for p in app.rglob(pattern)}
     if set(bundles) != shipped:
         raise SystemExit(f"The entitlement map must cover exactly the app bundles: {sorted(shipped)}")
+    frameworks = sorted(app.rglob("*.framework"), key=lambda path: len(path.parts), reverse=True)
+    if mode == "sign":
+        for framework in frameworks:
+            run("codesign", "--force", "--sign", "-", str(framework))
+    else:
+        for framework in frameworks:
+            signature = subprocess.run(["codesign", "-dvv", str(framework)], capture_output=True, text=True).stderr
+            if "Authority=Apple Distribution" not in signature:
+                raise SystemExit(f"Exported {framework.name} is not signed with the distribution certificate:\n{signature}")
     for bundle, source in sorted(bundles.items(), key=lambda item: len(Path(item[0]).parts), reverse=True):
         path = app / bundle
         wanted = {}
