@@ -146,10 +146,10 @@ setup() {
 	[ "$(command -v lykta 2>/dev/null)" = "$cli" ] && run=lykta
 	case $run in "$HOME"/*) run="~${run#"$HOME"}" ;; esac
 	printf 'Lykta is set up for %s. Run it as %s.\n\n' "$url" "$run"
-	if note=$( (hello) 2>&1); then
-		printf 'It said hello on the phone with a Live Activity named hello that ends after five minutes.\n\n'
+	if note=$(hello 2>&1); then
+		printf 'Sent the phone a Live Activity named hello that ends after five minutes. The gateway answered:\n%s\n\n' "$note"
 	else
-		printf 'The hello Live Activity did not start, so tell the user why:\n%s\n\n' "$note"
+		printf 'Could not send the phone a Live Activity named hello:\n%s\n\n' "$note"
 	fi
 	printf 'Install this skill so later sessions have it: run %s install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.\n\n' "$run"
 	call nothing GET /skill/SKILL.md
@@ -160,6 +160,7 @@ hello() {
 	call nothing GET /skill/scripts/hello.json
 	body=$response
 	call json PUT '/v1/activities/hello?wait=10' -H 'Content-Type: application/json' --data-binary @-
+	printf '%s' "$response"
 }
 
 install_skill() {

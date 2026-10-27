@@ -44,7 +44,7 @@ for shell in sh pwsh; do
 	expect "Lykta is set up for $url" 0 cli setup "$url/" "$token"
 	cp "$work/out" "$work/setup"
 	expect '# Lykta' 0 cat "$work/setup"
-	expect 'It said hello on the phone' 0 cat "$work/setup"
+	expect 'Sent the phone a Live Activity named hello' 0 cat "$work/setup"
 	expect '"delivery":"accepted"' 0 cli get activities/hello
 	expect "$HOME/.config/lykta/token" 0 find "$HOME/.config/lykta/token" -perm 600
 	if [ "$shell" = sh ]; then installed=$HOME/.local/bin/lykta; else installed=$HOME/.local/share/lykta/lykta.ps1; fi

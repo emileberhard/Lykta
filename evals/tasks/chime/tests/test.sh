@@ -7,7 +7,7 @@ for attempt in $(seq 10); do
 import json, sys
 events = json.load(sys.stdin)["events"]
 sounds = [e["detail"].get("sound") for e in events if e["name"] == "notification.received"]
-print("activity" if any(e["name"] == "activity.put" for e in events) else "custom" if "custom" in sounds else "other" if sounds else "waiting")' <<< "$events")
+print("activity" if any(e["name"] == "activity.put" and e["detail"].get("name") != "hello" for e in events) else "custom" if "custom" in sounds else "other" if sounds else "waiting")' <<< "$events")
   case $verdict in
     activity)
       echo "The agent started a Live Activity for a one-off moment."

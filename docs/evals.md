@@ -160,8 +160,8 @@ as Docker Sandboxes, waits until a transcript shows an agent wandering there.
 
 **Binary checks from the gateway.** A check reads the trial's gateway, which
 knows what the agent sent and what the phone drew, rather than the transcript,
-which says what the agent claims. The activity checks skip `hello`, which
-setup starts by itself. It passes or fails, without judging how the
+which says what the agent claims. Every check skips the activity `hello`,
+which setup starts by itself. It passes or fails, without judging how the
 activity looks, so a failure means the agent missed the request. An agent
 that does nothing, or schedules the activity with something that dies with the
 container, also starts nothing now, so the reminder's check passes it; the

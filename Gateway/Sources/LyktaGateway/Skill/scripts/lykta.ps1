@@ -234,8 +234,8 @@ function Invoke-Setup([string[]]$Arguments) {
     elseif ($run.StartsWith($HOME)) { $run = '~' + $run.Substring($HOME.Length) }
     Write-Output "Lykta is set up for $url. Run it as $run.`n"
     $hello = Send-Hello
-    if ($hello.Code -eq 0) { Write-Output "It said hello on the phone with a Live Activity named hello that ends after five minutes.`n" }
-    else { Write-Output "The hello Live Activity did not start, so tell the user why:`n$($hello.Text)`n" }
+    if ($hello.Code -eq 0) { Write-Output "Sent the phone a Live Activity named hello that ends after five minutes. The gateway answered:`n$($hello.Text)`n" }
+    else { Write-Output "Could not send the phone a Live Activity named hello:`n$($hello.Text)`n" }
     Write-Output "Install this skill so later sessions have it: run $run install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.`n"
     Write-Output (Invoke-Gateway 'GET' '/skill/SKILL.md')
 }
