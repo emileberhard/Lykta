@@ -32,7 +32,7 @@ struct NotificationExampleView: View {
         .navigationTitle(example.sender)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaBar(edge: .bottom) {
-            ActionButton(title: "Send Notification", systemImage: "bell.badge", done: "Sent") {
+            ActionButton(title: "Send Notification", systemImage: "bell.badge", working: "Sending…", done: "Sent") {
                 await model.send(example)
             }
             .buttonStyle(.glassProminent)

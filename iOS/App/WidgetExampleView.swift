@@ -28,7 +28,7 @@ struct WidgetExampleView: View {
         .navigationTitle(example.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaBar(edge: .bottom) {
-            ActionButton(title: "Send Widget", systemImage: "square.and.arrow.up.on.square", done: "Sent") {
+            ActionButton(title: "Send Widget", systemImage: "square.and.arrow.up.on.square", working: "Sending…", done: "Sent") {
                 await model.send(example)
             }
             .buttonStyle(.glassProminent)

@@ -113,7 +113,7 @@ private struct Actions: View {
     var body: some View {
         GlassEffectContainer {
             VStack(spacing: 10) {
-                ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", done: "Copied") {
+                ActionButton(title: "Copy Agent Setup", systemImage: "doc.on.doc", working: "Copying…", done: "Copied") {
                     await model.copySetup()
                 }
                 .disabled(!model.phase.isReady)

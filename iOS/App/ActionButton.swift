@@ -5,6 +5,7 @@ struct ActionButton: View {
 
     let title: LocalizedStringKey
     let systemImage: String
+    let working: LocalizedStringKey
     let done: LocalizedStringKey
     let action: () async -> Bool
     @State private var phase = Phase.ready
@@ -19,7 +20,7 @@ struct ActionButton: View {
             Label(title, systemImage: systemImage)
                 .shown(phase == .ready)
                 .overlay {
-                    Label { Text(title) } icon: { ProgressView() }
+                    Label { Text(working) } icon: { ProgressView() }
                         .shown(phase == .working)
                     Label(done, systemImage: "checkmark")
                         .shown(phase == .done)
