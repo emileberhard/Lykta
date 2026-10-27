@@ -141,8 +141,6 @@ one cursor; a widget record names `widget` instead of `activity`:
 The [water example](../examples/widgets/water-widget.json) has a button and a
 toggle that work without an agent. Read `widgets/{name}` before rewriting its
 data, and send `ifRevision` so your update cannot overwrite a concurrent tap.
-A failed tap surfaces an error on the phone; read `widget.action` events for
-successful taps and the request failure event for a refusal.
 
 ## Read, list and delete
 
@@ -161,6 +159,6 @@ old to draw.
 
 `lykta get events` shows `widget.put`, `widget.delete`, `widget.placed` (a size
 added or removed on the phone), `push.widgets` with Apple's outcome and
-`widget.fetch` (a place loaded a revision), and `widget.action` for taps. A `push.widgets` without a later
-`widget.fetch` means iOS has not reloaded yet, which it does when its budget
-allows.
+`widget.fetch` (a place loaded a revision), and `widget.action` for taps. A
+`push.widgets` without a later `widget.fetch` means iOS has not reloaded yet,
+which it does when its budget allows.
