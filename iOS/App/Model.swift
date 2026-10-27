@@ -95,7 +95,7 @@ final class Model {
         let url = gateway.url.absoluteString
         let script = gateway.url.appending(path: "skill/scripts/lykta").absoluteString
         UIPasteboard.general.string = """
-            Show Live Activities and send notifications on my iPhone with Lykta. Set it up and read its instructions with this command:
+            Show Live Activities and widgets and send notifications on my iPhone with Lykta. Set it up and read its instructions with this command:
             curl -fsS --create-dirs -o ~/.local/bin/lykta \(script) && sh ~/.local/bin/lykta setup \(url) \(credentials.agentToken)
             Or in PowerShell:
             irm \(script).ps1 -UseBasicParsing -OutFile $env:TEMP\\lykta.ps1; powershell -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\lykta.ps1 setup \(url) \(credentials.agentToken)
