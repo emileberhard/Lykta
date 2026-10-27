@@ -2,7 +2,7 @@ n_attempts: 2
 n_concurrent_trials: 20
 agents:
   - name: codex
-    model_name: gpt-6.1-sol
+    model_name: gpt-6.1-terra
     kwargs:
       reasoning_effort: xhigh
   - name: claude-code

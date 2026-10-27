@@ -582,6 +582,17 @@ struct GatewayTests {
         #expect(Set(commands.joined()) == Set(["references/layout.md"] + (try Self.exampleFiles()).map { "examples/\($0)" }))
     }
 
+    @Test func everyAnswerCarriesTheSameSkillDigest() async throws {
+        let answers = [
+            await api.handle(HTTPRequest(method: "GET", target: "/skill/SKILL.md", headers: [:], body: [])),
+            try await send("GET", "/v1/activities"),
+            await api.handle(HTTPRequest(method: "GET", target: "/v1/activities", headers: [:], body: [])),
+        ]
+        #expect(answers.map(\.status) == [200, 200, 401])
+        let digests = Set(answers.map { $0.headers["lykta-skill"] })
+        #expect(digests.count == 1 && digests.first??.count == 64)
+    }
+
     @Test func requiresTheAgentToken() async throws {
         let response = await api.handle(HTTPRequest(method: "GET", target: "/v1/activities",
                                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))

@@ -1,14 +1,11 @@
 #!/bin/bash
 set -euo pipefail
-for attempt in $(seq 10); do
-  activities=$(curl -fsS --max-time 5 http://lykta:8080/v1/activities \
-    -H "Authorization: Bearer lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b")
-  if python3 -c 'import json, sys; sys.exit(not any(a["layoutReadable"] for a in json.load(sys.stdin)["activities"]))' <<< "$activities"; then
-    echo "The phone drew an activity the agent sent."
+for dir in "$HOME/.claude/skills/lykta" "$HOME/.agents/skills/lykta" "$HOME/.codex/skills/lykta"; do
+  if tail -n 1 "$dir/SKILL.md" 2>/dev/null | grep -q 'lykta-skill [0-9a-f]\{64\}'; then
+    echo "The agent set up Lykta and installed the skill in $dir."
     echo 1 > /logs/verifier/reward.txt
     exit 0
   fi
-  sleep 0.5
 done
-echo "No activity the agent sent reached the phone in a form it could draw."
+echo "The agent did not install the skill where Claude Code or Codex reads personal skills."
 echo 0 > /logs/verifier/reward.txt

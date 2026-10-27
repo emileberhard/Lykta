@@ -5,7 +5,8 @@ usage() {
 	cat <<'EOF'
 Usage: lykta COMMAND
 
-  setup URL TOKEN   Save the gateway URL and agent token, check them and print the skill
+  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta and print the skill
+  install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or on stdin, to /v1/PATH and wait for Apple's answer
   get PATH          GET /v1/PATH, such as activities/deploy or actions?wait=25
@@ -24,6 +25,7 @@ fail() {
 }
 
 config=${XDG_CONFIG_HOME:-$HOME/.config}/lykta
+cli=$HOME/.local/bin/lykta
 
 load() {
 	url=${LYKTA_URL:-}
@@ -52,7 +54,7 @@ call() {
 	shift 3
 	tries=1
 	while :; do
-		out=$($feed | curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -w '%{http_code}' "$@" "$url$target")
+		out=$($feed | curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -D "$head" -w '%{http_code}' "$@" "$url$target")
 		code=$?
 		[ "$code" -eq 7 ] && [ "$tries" -lt 5 ] || break
 		tries=$((tries + 1))
@@ -79,6 +81,55 @@ api() {
 	path=/v1/${path#v1/}
 }
 
+served() {
+	grep -i '^lykta-skill:' "$head" | sed -n 's/^[^:]*: *\([0-9a-f]\{64\}\).*/\1/p' | tail -n 1
+}
+
+stamp() {
+	sed -n '$s/^.*lykta-skill \([0-9a-f]\{64\}\).*$/\1/p' "$1" 2>/dev/null
+}
+
+owned() {
+	[ -f "$1" ] && [ ! -L "$1" ] && [ -n "$(stamp "$1")" ]
+}
+
+place() {
+	name=$1 dest=$2 format=$3 mode=$4
+	tmp=$(mktemp "${dest%/*/*}/.lykta.XXXXXX") || return 1
+	if curl -fsS --connect-timeout 5 --max-time 10 -D "$head" -o "$tmp" "$url/skill/$name" && digest=$(served) && [ -n "$digest" ] &&
+		printf "\n$format\n" "$digest" >>"$tmp" && chmod "$mode" "$tmp" && mv -f "$tmp" "$dest"; then
+		return 0
+	fi
+	rm -f "$tmp"
+	return 1
+}
+
+saved() {
+	[ "$url" = "$(cat "$config/url" 2>/dev/null)" ]
+}
+
+renew() {
+	if place "$@"; then
+		printf 'lykta: updated %s to the gateway'\''s version\n' "$2" >&2
+	else
+		printf 'lykta: could not update %s from %s; the next lykta command tries again\n' "$2" "$url" >&2
+		return 1
+	fi
+}
+
+refresh() {
+	want=$(served)
+	[ -n "$want" ] && saved || return 0
+	if owned "$cli" && [ "$(stamp "$cli")" != "$want" ]; then
+		renew scripts/lykta "$cli" '# lykta-skill %s' 755 || return 0
+	fi
+	[ -r "$config/skills" ] || return 0
+	while IFS= read -r dir; do
+		[ ! -L "$dir" ] && owned "$dir/SKILL.md" && [ "$(stamp "$dir/SKILL.md")" != "$want" ] || continue
+		renew SKILL.md "$dir/SKILL.md" '<!-- lykta-skill %s -->' 644 || return 0
+	done <"$config/skills"
+}
+
 setup() {
 	[ $# -eq 2 ] || fail "usage: lykta setup URL TOKEN" 2
 	url=${1%/} token=$2
@@ -89,16 +140,32 @@ setup() {
 	call nothing GET /v1/activities
 	(umask 077 && mkdir -p "$config" && rm -f "$config/token" && printf '%s\n' "$url" >"$config/url" && printf '%s\n' "$token" >"$config/token") ||
 		fail "could not save the setup in $config" 2
-	self=$0
-	run=$self
-	if [ -f "$self" ]; then
-		chmod +x "$self" 2>/dev/null
-		[ "$(command -v lykta 2>/dev/null)" = "$self" ] && run=lykta
-	fi
+	mkdir -p "${cli%/*}" && place scripts/lykta "$cli" '# lykta-skill %s' 755 ||
+		fail "could not install lykta in ${cli%/*} from $url; a gateway older than 0.15.0 cannot, so run the setup the Lykta app copies, which downloads that gateway's own lykta" 3
+	run=$cli
+	[ "$(command -v lykta 2>/dev/null)" = "$cli" ] && run=lykta
 	case $run in "$HOME"/*) run="~${run#"$HOME"}" ;; esac
 	printf 'Lykta is set up for %s. Run it as %s.\n\n' "$url" "$run"
+	printf 'Install this skill so later sessions have it: run %s install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.\n\n' "$run"
 	call nothing GET /skill/SKILL.md
 	printf '%s\n' "$response"
+}
+
+install_skill() {
+	[ $# -eq 1 ] || fail "usage: lykta install DIR, with the folder your agent reads personal skills from, such as ~/.claude/skills" 2
+	saved || fail "install keeps the skill in step with the gateway saved by lykta setup URL TOKEN, so run that first" 2
+	mkdir -p "$1" 2>/dev/null && dir=$(cd "$1" && pwd)/lykta || fail "could not create $1" 2
+	foreign="$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder"
+	[ ! -L "$dir" ] || fail "$foreign" 2
+	rmdir "$dir" 2>/dev/null
+	[ ! -e "$dir" ] || owned "$dir/SKILL.md" || fail "$foreign" 2
+	mkdir -p "$dir" 2>/dev/null || fail "could not create $dir" 2
+	if ! place SKILL.md "$dir/SKILL.md" '<!-- lykta-skill %s -->' 644; then
+		rmdir "$dir" 2>/dev/null
+		fail "could not download the skill from $url, or the gateway is older than 0.15.0 and cannot keep installed copies current" 3
+	fi
+	grep -qxF "$dir" "$config/skills" 2>/dev/null || printf '%s\n' "$dir" >>"$config/skills" || fail "could not record $dir in $config/skills" 2
+	printf 'Installed the Lykta skill in %s; lykta keeps it in step with the gateway.\n' "$dir"
 }
 
 docs() {
@@ -141,10 +208,13 @@ send() {
 }
 
 command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
+head=$(mktemp) || fail "could not create a temporary file" 2
+trap 'rm -f "$head"' EXIT
 verb=${1:-}
 [ $# -eq 0 ] || shift
 case $verb in
 setup) setup "$@" ;;
+install) load && install_skill "$@" ;;
 docs) load && docs "$@" ;;
 put) load && put "$@" ;;
 get) send GET get "$@" ;;
@@ -154,3 +224,4 @@ help | -h | --help) usage ;;
 '') usage >&2; exit 2 ;;
 *) usage >&2; fail "unknown command $verb" 2 ;;
 esac
+refresh || :

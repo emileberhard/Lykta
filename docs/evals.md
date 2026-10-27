@@ -19,8 +19,10 @@ harbor view .local/evals
 ```
 
 `just evals` runs the agents in `evals/job.yaml` twice on every task: Codex
-with GPT-6.1 Sol at extra high effort and Claude Code with Claude Opus 5.5 at
-high effort, the settings most users run, 20 trials at once. Options after it override the job;
+with GPT-6.1 Terra at extra high effort and Claude Code with Claude Opus 5.5 at
+high effort, 20 trials at once. The checks are smoke tests of whether a fresh
+agent sets up and sends what was asked, not of how good the result looks, so
+Terra, a little less capable than GPT-6.1 Sol, is enough. Options after it override the job;
 `--model` takes effect only with `--agent`, which replaces the job's agents
 and their efforts.
 
@@ -99,6 +101,7 @@ sequenceDiagram
     participant G as lykta-gateway simulate
     H->>A: evals/prompt.md: the paste, then the request
     A->>G: lykta setup: GET /skill/scripts/lykta and /skill/SKILL.md
+    A->>G: lykta install: GET /skill/SKILL.md into the harness's skills folder
     A->>G: lykta docs, then lykta put activities/{name}
     G->>G: Validate, store and push to SimulatedPhone
     G-->>A: live, accepted once SimulatedPhone took the push
@@ -162,6 +165,14 @@ activity looks, so a failure means the agent missed the request. An agent
 that does nothing, or schedules the activity with something that dies with the
 container, also starts nothing now, so the reminder's check passes it; the
 transcript shows which. Harbor's `nop` agent, which does nothing, scores 0.2.
+The setup-only check reads the agent's container instead. Its paste asks only
+for setup, after which agents rightly ask what to show, so it passes when the
+skill is installed in the folder Claude Code or Codex reads personal skills
+from, which also needs a working setup. It checks where the file lands for a
+default configuration, not that a later session finds it: Harbor points
+Claude Code's `CLAUDE_CONFIG_DIR` elsewhere, so a second session in the same
+container would not. On 2026-10-27 all four trials, two on GPT-6.1 Terra and
+two on Claude Opus 5.5, installed it there.
 
 ## Measured
 

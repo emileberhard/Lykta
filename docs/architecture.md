@@ -461,8 +461,8 @@ before they run and come from the same commit as the gateway that serves them.
 Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
 set), the token readable only by the user through mode 600, or on Windows an
 access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
-take precedence. Nothing is cached: an agent reads the docs once per task, and
-a cache would only save input. curl takes the token as an argument, so other
+take precedence. The references and examples are not cached: an agent reads
+them once per task with `lykta docs`, and a cache would only save input. curl takes the token as an argument, so other
 users of the same computer could see it while a request runs, as with the
 curl commands the skill showed before; PowerShell keeps it in the process.
 Only a refused connection is retried, for up to eight seconds while a gateway
@@ -474,6 +474,34 @@ default. cmd parses its arguments again, so in PowerShell an argument holding
 `&` needs double quotes inside single quotes, as tested on Windows PowerShell
 5.1; calling `powershell -File` directly would avoid cmd but cost some twenty
 output tokens on every call.
+
+**Agents install the skill, and `lykta` keeps it current.** Setup installs
+`lykta` at `~/.local/bin/lykta`, or `~/.local/share/lykta/lykta.ps1` with
+`lykta.cmd` on Windows, and asks the agent to run `lykta install DIR` with the
+folder its harness reads personal skills from, such as `~/.claude/skills` or
+`~/.agents/skills`. The agent knows its harness, so `lykta` has no per-client
+code; `npx skills` and `gh skill` would need Node or gh, which no system ships.
+An installed copy is SKILL.md alone, because agents read the references and
+examples live, so every write is one file and one rename. Each file `lykta`
+writes ends with a `lykta-skill` line naming the digest it came from. The line
+marks the file as `lykta`'s, so `install` refuses a symlink or a folder
+something else made, and it changes in the same rename as the content, so
+concurrent `lykta` processes need no lock and a copy from an older gateway is
+replaced on a later call. Every gateway answer carries `lykta-skill`, a SHA-256
+over the skill's files. After a successful command has printed its result,
+`lykta` compares the header with its own file and the copies recorded in
+`~/.config/lykta/skills` and downloads those that differ, ten seconds at most
+per file, without changing the command's exit status. Only answers from the
+gateway setup saved count, so `LYKTA_URL` pointing at a test gateway writes
+nothing. A gateway rollback rolls the copies back too; a gateway older than
+0.15.0 sends no digest and leaves them as they are, and setup with a newer
+`lykta` fails there with a pointer to the app's setup, which downloads that
+gateway's own `lykta`. The registry is only appended to, so two installs at
+once may record a folder twice, which only repeats a check, and a recorded
+folder that is gone or no longer `lykta`'s is skipped. Each write stages in
+the folder above its target, so an install interrupted before its SKILL.md
+arrived leaves an empty folder, which the next `install` reuses, and `lykta`
+deletes no file it did not just create.
 
 **A PUT can wait for Apple.** `wait` on `PUT /v1/activities/{name}` and
 `PUT /v1/notifications/{name}`, 0 to 25 seconds like `GET /v1/actions`, holds
@@ -588,7 +616,9 @@ limit bounds.
 - The `GET /v1/actions` cursor and record format, which agents poll.
 - The `lykta` commands, their output and exit codes and the setup in
   `~/.config/lykta`, which installed copies, agents' instructions and their
-  saved scripts use, and the `wait` and `now` request fields.
+  saved scripts use, and the `wait` and `now` request fields. The installed
+  `lykta` paths, the `lykta-skill` header and the line that ends each file
+  `lykta` installs, which installed copies of `lykta` compare.
 - The `/v1/notifications` and `/v1/media` contracts, their states, lifetimes,
   limits and error codes, the `lykta` payload object with its media IDs, and
   the report and media routes, which installed extensions use, and the

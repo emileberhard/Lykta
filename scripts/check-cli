@@ -7,6 +7,8 @@ skill=$PWD/Gateway/Sources/LyktaGateway/Skill
 url=http://127.0.0.1:$((20000 + $$ % 20000))
 token=lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b
 work=$(mktemp -d)
+cp "$skill/scripts/lykta" "$work/lykta.source"
+cp "$skill/scripts/lykta.ps1" "$work/lykta.ps1.source"
 LYKTA_HOST=127.0.0.1 LYKTA_PORT=${url##*:} "$gateway" simulate 2>"$work/gateway.log" &
 pid=$!
 trap 'kill "$pid" 2>/dev/null; rm -rf "$work"' EXIT
@@ -43,6 +45,42 @@ for shell in sh pwsh; do
 	cp "$work/out" "$work/setup"
 	expect '# Lykta' 0 cat "$work/setup"
 	expect "$HOME/.config/lykta/token" 0 find "$HOME/.config/lykta/token" -perm 600
+	if [ "$shell" = sh ]; then installed=$HOME/.local/bin/lykta; else installed=$HOME/.local/share/lykta/lykta.ps1; fi
+	expect 'install DIR' 0 cat "$work/setup"
+	expect 'Usage: lykta COMMAND' 0 cat "$installed"
+	expect "Installed the Lykta skill in $HOME/skills/lykta" 0 cli install "$HOME/skills"
+	expect '# Lykta' 0 cat "$HOME/skills/lykta/SKILL.md"
+	mkdir -p "$HOME/theirs/lykta" "$HOME/linked"
+	cp "$skill/SKILL.md" "$HOME/theirs/lykta/SKILL.md"
+	: >"$HOME/theirs/lykta/.SKILL.md.backup"
+	expect 'lykta did not install it' 2 cli install "$HOME/theirs"
+	expect "$HOME/theirs/lykta/.SKILL.md.backup" 0 find "$HOME/theirs/lykta" -name .SKILL.md.backup
+	ln -s "$HOME/skills/lykta" "$HOME/linked/lykta"
+	expect 'lykta did not install it' 2 cli install "$HOME/linked"
+	stale=$(printf '%064d' 0)
+	printf 'old\n<!-- lykta-skill %s -->\n' "$stale" >"$HOME/skills/lykta/SKILL.md"
+	printf 'old\n# lykta-skill %s\n' "$stale" >"$installed"
+	(export LYKTA_URL="http://localhost:${url##*:}"; expect '"activities":' 0 cli get activities)
+	expect "$stale" 0 cat "$HOME/skills/lykta/SKILL.md"
+	expect "$stale" 0 cat "$installed"
+	expect "updated $installed" 0 cli get activities
+	cp "$work/out" "$work/stdout"
+	cp "$work/err" "$work/stderr"
+	expect '"activities":' 0 cat "$work/stdout"
+	expect "updated $HOME/skills/lykta/SKILL.md" 0 cat "$work/stderr"
+	expect 0 1 grep -c updated "$work/stdout"
+	expect '# Lykta' 0 cat "$HOME/skills/lykta/SKILL.md"
+	expect 'Usage: lykta COMMAND' 0 cat "$installed"
+	expect 'Installed the Lykta skill' 0 cli install "$HOME/skills"
+	expect 1 0 grep -c . "$HOME/.config/lykta/skills"
+	rm -rf "$HOME/skills/lykta"
+	expect '"activities":' 0 cli get activities
+	[ ! -e "$HOME/skills/lykta" ] || { printf '%s: lykta recreated a skill folder the user removed\n' "$shell" >&2; exit 1; }
+	mkdir -p "$HOME/fresh/lykta"
+	expect "Installed the Lykta skill in $HOME/fresh/lykta" 0 cli install "$HOME/fresh"
+	chmod 000 "$HOME/.config/lykta/skills"
+	expect '"activities":' 0 cli get activities
+	chmod 600 "$HOME/.config/lykta/skills"
 	expect '==> examples/printer.json <==' 0 cli docs references/layout.md examples/printer.json
 	expect 'refused with HTTP 404' 1 cli docs examples/missing.json
 	expect '"delivery":"accepted"' 0 cli put activities/printer "$skill/examples/printer.json"
@@ -63,3 +101,5 @@ for shell in sh pwsh; do
 	(export LYKTA_URL=http://127.0.0.1:1 LYKTA_TOKEN=unused; expect 'could not connect' 3 cli get activities)
 	printf '%s: lykta works against the simulated gateway\n' "$shell"
 done
+cmp -s "$work/lykta.source" "$skill/scripts/lykta" && cmp -s "$work/lykta.ps1.source" "$skill/scripts/lykta.ps1" ||
+	{ echo 'lykta rewrote a copy it did not install' >&2; exit 1; }
