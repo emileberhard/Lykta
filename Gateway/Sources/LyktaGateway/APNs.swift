@@ -195,7 +195,7 @@ private final class Signer: Sendable {
 
 extension Activity {
     func payload(_ event: Payload.Event, now: Int, channel: String? = nil, layoutVersion: Version?) throws -> Data {
-        let state = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)).encoded(for: layoutVersion)
+        let state = try contentState().encoded(for: layoutVersion)
         return try Self.encoder().encode(envelope(event, now: now, channel: channel, contentState: state))
     }
 

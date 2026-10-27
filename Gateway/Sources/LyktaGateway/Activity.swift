@@ -170,7 +170,11 @@ struct Activity: Sendable {
                               startedAt: Date(timeIntervalSince1970: Double(createdAt)), endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
     }
 
+    func contentState() throws -> LyktaActivity.ContentState {
+        try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8))
+    }
+
     func fingerprint() throws -> String {
-        try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8)).fingerprint
+        try contentState().fingerprint
     }
 }

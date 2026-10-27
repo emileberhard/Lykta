@@ -43,6 +43,15 @@ struct GatewayTests {
         #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
+    @Test func aPutThatChangesNothingMeasuresTheStoredContent() async throws {
+        let composed = String(repeating: "\u{E9}", count: 120)
+        let decomposed = String(repeating: "e\u{301}", count: 120)
+        let started: Admitted = try await send("PUT", "/v1/activities/accent",
+                                               body: ["title": .string(composed), "layout": Self.layout("{{text}}"), "data": ["text": "x"]]).decoded()
+        let unchanged: Admitted = try await send("PUT", "/v1/activities/accent", body: ["title": .string(decomposed)]).decoded()
+        #expect(unchanged.payloadBytes == started.payloadBytes)
+    }
+
     @Test func phonesThatReadTheCompactFormFitMoreContent() async throws {
         var longest: [Int] = []
         for (index, (name, version)) in [("legacy", Version(0, 7, 1)), ("compact", Layout.version)].enumerated() {

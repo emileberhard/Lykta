@@ -233,6 +233,7 @@ actor Store {
             let relevance = request.relevance ?? current?.relevance
             let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
             let id: UUID
+            var stored = state
             if let current {
                 id = current.id
                 let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
@@ -242,6 +243,8 @@ actor Store {
                         UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
                           alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
                         """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
+                } else {
+                    stored = try current.contentState()
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -258,10 +261,10 @@ actor Store {
                     """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
             }
             let activity = try self.activity(id)
-            let size = try Self.measure(activity, contentState: state, on: device, now: now)
+            let size = try Self.measure(activity, contentState: stored, on: device, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
-                "fingerprint": .string(state.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+                "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
                 "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
             ])
             return (activity, size)
@@ -549,7 +552,7 @@ actor Store {
                 throw APIError(.notFound, "The activity has ended.")
             }
             let activity = try Activity(row)
-            let layout = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(activity.content.utf8)).layout
+            let layout = try activity.contentState().layout
             var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
             let data = try decode(activity.data)
             let changed: JSONValue
