@@ -583,13 +583,13 @@ actor Store {
         try db.query("SELECT COALESCE(MAX(seq), 0) AS seq FROM actions WHERE device_id = ?", device.id)[0].integer("seq")
     }
 
-    func recover() throws {
+    func recover(now: Int) throws {
         try db.execute("""
             UPDATE activities SET phase = 'live', delivery = 'unknown', error = 'The gateway restarted while starting this activity.'
               WHERE in_flight = 1 AND phase = 'starting' AND channel IS NOT NULL;
             UPDATE activities SET in_flight = 0;
-            UPDATE widget_phones SET in_flight = 0;
             """)
+        try db.run("UPDATE widget_phones SET in_flight = 0, pushed_at = ? WHERE in_flight = 1", now)
         try db.transaction {
             for row in try db.query("SELECT id, device_id, name FROM notifications WHERE state = 'sending'") {
                 let id = try row.text("id", as: UUID.init(uuidString:))
@@ -1279,7 +1279,10 @@ extension Store {
             let error: String?
             let result: String
             if !currentToken {
-                try db.run("UPDATE widget_phones SET in_flight = 0 WHERE device_id = ?", job.deviceID)
+                switch attempt.outcome {
+                case .accepted, .unknown: try db.run("UPDATE widget_phones SET in_flight = 0, pushed_at = ? WHERE device_id = ?", now, job.deviceID)
+                default: try db.run("UPDATE widget_phones SET in_flight = 0 WHERE device_id = ?", job.deviceID)
+                }
                 try record("push.widgets", device: job.deviceID, activity: nil,
                            attempt.detail.merging(["outcome": .string("superseded")]) { $1 })
                 return

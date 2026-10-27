@@ -287,6 +287,24 @@ struct WidgetTests {
         #expect(try await status().delivery == "accepted")
     }
 
+    @Test func aPushInterruptedByARestartOrAReplacedTokenStillWaitsTheInterval() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        _ = try #require(await store.claim(now: now, limit: 4).first)
+        try await store.recover(now: now)
+        try await deliver(now + 1)
+        #expect(push.sent.isEmpty)
+        let job = try #require(await store.claim(now: now + Store.widgetPushInterval, limit: 4).first)
+        let replaced: JSONValue = ["sequence": .number(Double(reports.next())), "pushToken": .string(String(repeating: "ab", count: 32)),
+                                   "layoutVersion": .string(Layout.version.description),
+                                   "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        #expect(await send("PUT", "/v1/device/widgets", replaced, token: token).status == 204)
+        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
+        try await store.finish(job, try await delivery.send(job, now: now + Store.widgetPushInterval), now: now + Store.widgetPushInterval)
+        try await deliver(now + Store.widgetPushInterval + 1)
+        #expect(push.sent == ["widgets"])
+    }
+
     @Test func aWaitingPutFinishesWhenTheExtensionFetchesTheRevision() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])

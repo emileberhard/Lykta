@@ -220,7 +220,7 @@ struct NotificationTests {
     @Test func aRestartWhileSendingLeavesTheNotificationUnknown() async throws {
         _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
         _ = try await store.claim(now: now, limit: 4)
-        try await store.recover()
+        try await store.recover(now: now)
         try await deliver(at: now + 600)
         #expect(push.sent.isEmpty)
         #expect(try await status("done") == Notified(state: "unknown", error: "The gateway restarted while sending this notification.", banners: "temporary"))

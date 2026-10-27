@@ -59,7 +59,7 @@ struct Delivery: Sendable {
     private static let concurrency = 4
 
     func run() async throws {
-        try await store.recover()
+        try await store.recover(now: Int(Date().timeIntervalSince1970))
         await removeOrphanedChannels()
         try await withThrowingDiscardingTaskGroup { group in
             for tick in 0... {

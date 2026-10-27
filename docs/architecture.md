@@ -342,7 +342,9 @@ the pushed one, at most once per `Store.widgetPushInterval`, 20 minutes. That
 interval is Lykta's own throttle: WidgetKit's reload budget is dynamic and
 Apple's to apply. A push with an unknown outcome counts against the interval
 like an accepted one, because Apple may have taken it, and is retried once the
-interval passes; it carries no content, so retrying it is safe. Placing a
+interval passes; it carries no content, so retrying it is safe. So does a push
+a restart interrupted, and one whose token a report replaced while it was in
+flight, because either may have reached Apple. Placing a
 widget pushes nothing, because WidgetKit loads a new place itself, and a widget
 changed while no place showed it has no generation, so its status stays
 `pending` without `nextPush` until that load. Status derives `delivery` from
