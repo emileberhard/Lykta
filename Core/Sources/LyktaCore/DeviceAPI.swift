@@ -192,7 +192,7 @@ public struct ActivityTimes: Codable, Equatable, Sendable {
     }
 }
 
-private extension KeyedDecodingContainer<Key> {
+extension KeyedDecodingContainer<Key> {
     func date(_ text: String, at key: String) throws -> Date {
         guard let date = try? Date(text, strategy: .iso8601) else { throw invalid("must be an ISO 8601 date", at: key) }
         return date

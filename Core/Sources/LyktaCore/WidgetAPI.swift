@@ -58,7 +58,7 @@ public struct WidgetSummary: Codable, Equatable, Sendable {
         let fields = try decoder.container(keyedBy: Key.self)
         id = try fields.required("id")
         title = try fields.required("title")
-        updatedAt = try fields.isoDate("updatedAt")
+        updatedAt = try fields.date(fields.required("updatedAt"), at: "updatedAt")
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -94,7 +94,7 @@ public struct WidgetSnapshot: Codable, Sendable {
         id = try fields.required("id")
         title = try fields.required("title")
         revision = try fields.required("revision")
-        staleAt = try fields.contains(Key(stringValue: "staleAt")) ? fields.isoDate("staleAt") : nil
+        staleAt = try fields.optional("staleAt").map { try fields.date($0, at: "staleAt") }
         if let layout: JSONValue = try fields.optional("layout") {
             content = .layout(layout)
         } else {
@@ -112,12 +112,5 @@ public struct WidgetSnapshot: Codable, Sendable {
         case let .layout(layout): try fields.encode(layout, forKey: Key(stringValue: "layout"))
         case let .requires(version): try fields.encode(version, forKey: Key(stringValue: "requires"))
         }
-    }
-}
-
-private extension KeyedDecodingContainer<Key> {
-    func isoDate(_ key: String) throws -> Date {
-        guard let date = try? Date(required(key) as String, strategy: .iso8601) else { throw invalid("must be an ISO 8601 date", at: key) }
-        return date
     }
 }
