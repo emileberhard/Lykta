@@ -42,6 +42,7 @@ call() {
 	shift 2
 	tries=1
 	while :; do
+		: >"$response"
 		status=$(curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -D "$head" -o "$response" -w '%{http_code}' "$@" "$url$target")
 		code=$?
 		[ "$code" -eq 7 ] && [ "$tries" -lt 5 ] || break
@@ -234,6 +235,9 @@ esac
 command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
 work=$(mktemp -d) || fail "could not create a temporary file" 2
 trap 'rm -rf "$work"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 head=$work/headers
 response=$work/response
 case $verb in
