@@ -81,6 +81,9 @@ just evals  # fresh agents against a simulated phone
 `Core` holds the layout language, `Gateway` serves the API and delivers
 pushes, and `iOS` holds the app, its widgets, its notification extension and
 the `Rendering` the app and widgets share.
+CI and releases use the Xcode version in `.xcode-version` and locked package
+resolutions. `python3 -m unittest discover -s scripts/tests -v` checks the
+release tools without credentials.
 See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
 

@@ -24,6 +24,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples and the home screen |
 | `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots and build, short of App Review |
+| `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
+| `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the activity and widget previews it drives, which show the layouts staged in `.local/render` |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
@@ -264,43 +266,56 @@ agents may lack but nothing existing breaks. A major removes or changes
 something existing layouts, agents, phones or self-hosted gateways rely on. A
 release that adds a layout feature is therefore at least a minor.
 
-Push a version tag, such as `0.2.0`, on a commit that was pushed to `main`;
-`.github/workflows/release.yml` does the rest, gateway first:
+Push an annotated version tag, such as `0.2.0`, with nonempty release notes on
+a commit that was pushed to `main`; `.github/workflows/release.yml` runs on
+every tag and rejects invalid ones before credentials become available. It
+does the rest, gateway first:
 
-1. `admit` checks that the tag is the newest version and on `main`, runs
+1. `admit` checks that the tag is annotated plain SemVer, has release notes,
+   is the newest version and is on `main`, runs
    `scripts/check-feature-table` (rows newer than the previous release must
    equal the tag, which must then be `X.Y.0`) and waits for `main`'s CI run on
-   the same commit, without running the tests again.
-2. Meanwhile `testflight` builds an archive with the tag as its version on a
-   hosted runner without certificates and signs its bundles ad hoc with their
-   entitlements files, because the export keeps only the capabilities the
-   archive's signatures request. A target that gains an entitlements file
-   joins `ENTITLED` in the workflow.
+   the same commit, without running the tests again. Missing CI fails after
+   two minutes; running CI has a 35-minute bound.
+2. After admission, the serialized `testflight` job selects a build number
+   higher than every App Store Connect build and pending upload, then builds
+   an archive with the tag as its version and that exact build number on a
+   hosted runner without certificates. `scripts/sign-bundles` signs every
+   bundle ad hoc with the entitlements in `iOS/Config/entitlements.json`,
+   because the export keeps only the capabilities the archive's signatures
+   request. The map must cover exactly the app and both extensions.
 3. The production gateway's host polls for admitted tags and deploys them
    itself, with a database backup and an automatic rollback.
 4. Once `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag, `testflight`
    exports the archive through Xcode's cloud signing with the `testflight`
-   environment's App Store Connect key, fails unless every bundle in `ENTITLED`
-   claims its entitlements file with the production push environment, and then
-   uploads it. App Store Connect picks the build number.
+   environment's App Store Connect key without renumbering, fails unless every
+   mapped bundle claims its entitlements file with the production push
+   environment, and then uploads it. Both following App Store Connect jobs
+   receive that build number and select only that upload, including on retries.
 5. The GitHub release is titled with the bare version, and its notes are the
    annotated tag's message verbatim: a Markdown list of user-visible changes
    since the previous version, one short sentence per item, with no heading or
-   intro line.
+   intro line. It is marked Latest only while its tag is the newest version.
 6. After the upload, `testflight-review` runs `scripts/app-store-connect
    testflight`. Once App Store Connect has processed the build, it sets the
    build's What to Test to the tag message, copies the newest App Store
    version's review notes to TestFlight's, adds the build to every external
    group, such as the public link's, and submits it for TestFlight review.
+   Without an external group it stops after setting What to Test.
    When App Store Connect rejects the upload, it fails with Apple's errors.
 7. Alongside it, `app-store` composes the screenshots and runs
    `scripts/app-store-connect app-store`. It renames the App Store version
    that is still editable to the tag or creates one, with manual release, sets
    What's New to the tag message from the second release on, replaces the
-   iPhone screenshots, deletes the screenshots in the app's asset library that
-   nothing places any more, except those App Review has seen, which Apple
-   keeps, and attaches the build. While a version waits for App Review or
-   release, this job stops with that version's state.
+   iPhone screenshots, deletes only the unplaced images this release displaced
+   or reserved, except those App Review has seen, which Apple keeps, and
+   attaches the build. While a version waits for App Review or release, this
+   job succeeds with a notice and leaves that version alone.
+
+CI and releases select the Xcode pinned in `.xcode-version`; builds use only
+committed package resolutions. CI also checks the release tools on Linux.
+Rerun a transiently failed job from the tag's own run only while it is still
+the newest version. A code fix ships as the next patch, never by moving a tag.
 
 Submitting to App Review stays manual, and App Store versions use manual
 release, so the maintainer decides when an approved version goes live.

@@ -1,0 +1,5 @@
+{
+  ".": "iOS/Config/Lykta.entitlements",
+  "PlugIns/LyktaNotifications.appex": "iOS/Config/Notifications.entitlements",
+  "PlugIns/LyktaWidgets.appex": "iOS/Config/Widgets.entitlements"
+}

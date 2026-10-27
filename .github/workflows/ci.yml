@@ -11,9 +11,12 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     container: swift:6.4.1-noble@sha256:19cbe56bdaec1918f7cf5fdeba42b9bd55bdd8a6149c9990d0e0e3a89a127d63
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libicu74 libsqlite3-dev zlib1g-dev
       - name: Dependencies come only from Apple
         run: "! grep '\"location\"' Gateway/Package.resolved | grep -v '\"https://github.com/apple/'"
@@ -29,10 +32,21 @@ jobs:
   app:
     runs-on: xcode-27
     timeout-minutes: 30
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: xcodebuild -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build
+      - run: scripts/select-xcode
+      - run: xcodebuild -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -configuration Debug -destination generic/platform=iOS -derivedDataPath "${{ runner.temp }}/build-${{ github.run_id }}-${{ github.run_attempt }}" -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build
+      - name: Remove build output
+        if: always()
+        run: rm -rf "${{ runner.temp }}/build-${{ github.run_id }}-${{ github.run_attempt }}"
+
+  release-tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts/tests -v

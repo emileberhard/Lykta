@@ -2,11 +2,10 @@ name: Release
 
 on:
   push:
-    tags: ['[0-9]+.[0-9]+.[0-9]+']
+    tags: ['**']
 
 permissions:
   contents: read
-
 
 jobs:
   admit:
@@ -27,7 +26,10 @@ jobs:
         run: |
           [[ $VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "::error::$VERSION is not MAJOR.MINOR.PATCH."; exit 1; }
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$VERSION is not on main."; exit 1; }
-          newest=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          [[ $(git cat-file -t "refs/tags/$VERSION") == tag ]] || { echo "::error::Release tags must be annotated."; exit 1; }
+          message=$(git for-each-ref --format='%(contents)' "refs/tags/$VERSION")
+          [[ $message =~ [^[:space:]] ]] || { echo "::error::The $VERSION tag has no release notes."; exit 1; }
+          newest=$(git tag --list | grep -E '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1)
           [[ $newest == "$VERSION" ]] || { echo "::error::$newest is newer than $VERSION."; exit 1; }
 
       - name: Check that new layout features ship in this minor release
@@ -38,6 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          started=$SECONDS
           while :; do
             state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$GITHUB_SHA" --json status,conclusion \
               --jq 'if any(.[]; .conclusion == "success") then "passed" elif any(.[]; .status != "completed") then "running" elif length > 0 then "failed" else "missing" end') \
@@ -45,26 +48,29 @@ jobs:
             case $state in
               passed) exit 0 ;;
               failed) echo "::error::CI failed on $GITHUB_SHA."; exit 1 ;;
-              *) sleep 10 ;;
+              missing) (( SECONDS - started < 120 )) || { echo "::error::No CI run exists for $GITHUB_SHA; tag the commit a push to main ended on."; exit 1; } ;;
             esac
+            sleep 10
           done
 
   testflight:
+    needs: admit
     runs-on: xcode-27
     environment: testflight
     concurrency: testflight
+    outputs:
+      build: ${{ steps.build.outputs.number }}
     timeout-minutes: 60
     permissions:
-      actions: read
       contents: read
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       VERSION: ${{ github.ref_name }}
-      ENTITLED: PlugIns/LyktaNotifications.appex=Notifications PlugIns/LyktaWidgets.appex=Widgets .=Lykta
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - run: scripts/select-xcode
 
       - name: Configure
         env:
@@ -73,41 +79,47 @@ jobs:
           LYKTA_GATEWAY_HOST: ${{ vars.LYKTA_GATEWAY_HOST }}
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
         run: |
+          : "${DEVELOPMENT_TEAM:?Set the DEVELOPMENT_TEAM environment variable.}"
+          : "${LYKTA_BUNDLE_ID:?Set the LYKTA_BUNDLE_ID environment variable.}"
+          : "${LYKTA_GATEWAY_HOST:?Set the LYKTA_GATEWAY_HOST environment variable.}"
           printf 'DEVELOPMENT_TEAM = %s\nLYKTA_BUNDLE_ID = %s\nLYKTA_GATEWAY_HOST = %s\n' \
             "$DEVELOPMENT_TEAM" "$LYKTA_BUNDLE_ID" "$LYKTA_GATEWAY_HOST" > iOS/Config/Local.xcconfig
           plutil -insert teamID -string "$DEVELOPMENT_TEAM" iOS/Config/ExportOptions.plist
+          umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Select the next global build number
+        id: build
+        env:
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: |
+          number=$(scripts/app-store-connect build-number)
+          echo "number=$number" >> "$GITHUB_OUTPUT"
 
       - name: Archive
         env:
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
           LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
         run: |
           xcodebuild archive -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Lykta.xcarchive" \
-            MARKETING_VERSION="$VERSION" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
           app="$RUNNER_TEMP/Lykta.xcarchive/Products/Applications/Lykta.app"
-          codesign --force --sign - "$app/PlugIns/LyktaWidgets.appex"
-          for bundle in $ENTITLED; do
-            sed "s/\$(LYKTA_BUNDLE_ID)/$LYKTA_BUNDLE_ID/g" "iOS/Config/${bundle#*=}.entitlements" > "$RUNNER_TEMP/${bundle#*=}.entitlements"
-            codesign --force --sign - --entitlements "$RUNNER_TEMP/${bundle#*=}.entitlements" "$app/${bundle%=*}"
-          done
+          scripts/sign-bundles sign "$app"
 
       - name: Wait for the production gateway to run this version
         timeout-minutes: 30
         env:
-          GH_TOKEN: ${{ github.token }}
           LYKTA_GATEWAY_HOST: ${{ vars.LYKTA_GATEWAY_HOST }}
         run: |
           while :; do
-            admit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "admit") | .conclusion // "pending"')
-            case $admit in
-              success)
-                running=$(curl -fsS --max-time 10 "https://$LYKTA_GATEWAY_HOST/v1/version" | plutil -extract version raw -o - -) || running=unknown
-                [[ $running =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $(printf '%s\n' "$VERSION" "$running" | sort -V | tail -1) == "$running" ]] && exit 0
-                echo "The gateway runs $running; waiting for $VERSION or newer." ;;
-              pending | "") echo "Waiting for release admission." ;;
-              *) echo "::error::Release admission ended with $admit."; exit 1 ;;
-            esac
+            running=$(curl -fsS --max-time 10 "https://$LYKTA_GATEWAY_HOST/v1/version" | plutil -extract version raw -o - -) || running=unknown
+            [[ $running =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $(printf '%s\n' "$VERSION" "$running" | sort -V | tail -1) == "$running" ]] && exit 0
+            echo "The gateway runs $running; waiting for $VERSION or newer."
             sleep 15
           done
 
@@ -115,9 +127,11 @@ jobs:
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
         run: |
           export_archive() {
             xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Lykta.xcarchive" -exportPath "$RUNNER_TEMP/$1" \
+              -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
               -exportOptionsPlist "$RUNNER_TEMP/$1.plist" -allowProvisioningUpdates \
               -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID"
           }
@@ -125,13 +139,7 @@ jobs:
           cp iOS/Config/ExportOptions.plist "$RUNNER_TEMP/upload.plist"
           export_archive check
           unzip -q "$RUNNER_TEMP/check/Lykta.ipa" -d "$RUNNER_TEMP/check"
-          for bundle in $ENTITLED; do
-            want=$(plutil -convert json -o - "$RUNNER_TEMP/${bundle#*=}.entitlements" |
-              jq 'if has("aps-environment") then ."aps-environment" = "production" else . end')
-            codesign -d --entitlements - --xml "$RUNNER_TEMP/check/Payload/Lykta.app/${bundle%=*}" | plutil -convert json -o - - |
-              jq -e --argjson want "$want" '. as $actual | all($want | to_entries[]; $actual[.key] == .value)' > /dev/null ||
-              { echo "::error::The exported ${bundle%=*} does not claim ${bundle#*=}.entitlements."; exit 1; }
-          done
+          scripts/sign-bundles check "$RUNNER_TEMP/check/Payload/Lykta.app"
           export_archive upload
 
   testflight-review:
@@ -141,6 +149,7 @@ jobs:
     timeout-minutes: 45
     env:
       VERSION: ${{ github.ref_name }}
+      BUILD_NUMBER: ${{ needs.testflight.outputs.build }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -155,10 +164,11 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
         run: |
+          umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
           tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
-          scripts/app-store-connect testflight "$VERSION" "$RUNNER_TEMP/notes.md"
+          scripts/app-store-connect testflight "$VERSION" "$BUILD_NUMBER" "$RUNNER_TEMP/notes.md"
 
   app-store:
     needs: testflight
@@ -167,12 +177,14 @@ jobs:
     concurrency: app-store
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       VERSION: ${{ github.ref_name }}
+      BUILD_NUMBER: ${{ needs.testflight.outputs.build }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - run: scripts/select-xcode
 
       - name: Compose the screenshots
         run: scripts/screenshots
@@ -186,14 +198,16 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
         run: |
+          umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
           tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
-          scripts/app-store-connect app-store "$VERSION" .local/screenshots "$RUNNER_TEMP/notes.md"
+          scripts/app-store-connect app-store "$VERSION" "$BUILD_NUMBER" .local/screenshots "$RUNNER_TEMP/notes.md"
 
   github-release:
     needs: [admit, testflight]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       contents: write
     env:
@@ -202,6 +216,13 @@ jobs:
       VERSION: ${{ github.ref_name }}
     steps:
       - name: Publish the tag message as the release notes
+        shell: bash
         run: |
           tag=$(gh api "repos/$GH_REPO/git/ref/tags/$VERSION" --jq .object.sha)
-          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message | gh release create "$VERSION" --verify-tag --title "$VERSION" --notes-file -
+          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
+          [[ -s $RUNNER_TEMP/notes.md ]] || { echo "::error::The $VERSION tag has no message to publish."; exit 1; }
+          newest=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags" --jq '.[].ref | ltrimstr("refs/tags/")' \
+            | grep -E '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1)
+          latest=()
+          [[ $VERSION == "$newest" ]] || latest=(--latest=false)
+          gh release create "$VERSION" --verify-tag --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${latest[@]}"

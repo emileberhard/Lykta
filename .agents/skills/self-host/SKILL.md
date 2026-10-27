@@ -75,7 +75,8 @@ Caddy site containing `reverse_proxy 127.0.0.1:8080`.
 
 ## App
 
-Create the ignored `iOS/Config/Local.xcconfig`, open `iOS/Lykta.xcodeproj` and
+Use the Xcode version in `.xcode-version`. Create the ignored
+`iOS/Config/Local.xcconfig`, open `iOS/Lykta.xcodeproj` and
 run the `Lykta` scheme on the user's iPhone:
 
 ```
