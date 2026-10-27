@@ -18,16 +18,21 @@ PROJECT = ROOT / "iOS" / "Lykta.xcodeproj"
 PREVIEW = "Widgets/RenderPreviews.swift"
 DEADLINE = 360
 PRESENTATIONS = {
-    "lock": ("activity", "View Style", "Content (Lock Screen)"),
-    "expanded": ("activity", "View Style", "Expanded"),
-    "compact": ("activity", "View Style", "Compact"),
-    "minimal": ("activity", "View Style", "Minimal"),
-    "standby": ("activity", "View Style", "Content (StandBy)"),
-    "smartstack": ("activity", "View Style", "Content (Smart Stack)"),
-    "small": ("widget", "Widget Family", "Small"),
+    "lock": (None, 0, {"View Style": "Content (Lock Screen)"}),
+    "expanded": (None, 0, {"View Style": "Expanded"}),
+    "compact": (None, 0, {"View Style": "Compact"}),
+    "minimal": (None, 0, {"View Style": "Minimal"}),
+    "standby": (None, 0, {"View Style": "Content (StandBy)"}),
+    "smartstack": (None, 0, {"View Style": "Content (Smart Stack)"}),
+    "small": ("systemSmall", 1, {}),
+    "medium": ("systemMedium", 2, {}),
+    "large": ("systemLarge", 3, {}),
+    "circular": ("accessoryCircular", 4, {}),
+    "rectangular": ("accessoryRectangular", 5, {}),
+    "inline": ("accessoryInline", 6, {}),
 }
-PREVIEWS = {"activity": 0, "widget": 1}
-FAMILIES = {"systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular", "accessoryInline"}
+DEFAULT = "lock,expanded,compact,minimal,small,medium,large,circular,rectangular,inline"
+FAMILIES = {family for family, _, _ in PRESENTATIONS.values() if family}
 
 
 class RenderError(Exception):
@@ -146,16 +151,24 @@ def workspace(xcode):
     return identifier
 
 
+def shows(presentation, kind, layout):
+    family = PRESENTATIONS[presentation][0]
+    return kind == "widget" and family in layout if family else kind == "activity"
+
+
 def render(xcode, identifier, index, presentation, dark, target):
-    kind, group, variant = PRESENTATIONS[presentation]
+    family, preview, variants = PRESENTATIONS[presentation]
+    lock_screen = family is not None and family.startswith("accessory")
     arguments = {
         "sourceFilePath": PREVIEW,
         "workspaceIdentifier": identifier,
-        "previewDefinitionIndexInFile": PREVIEWS[kind],
-        "previewVariantOverrides": {group: variant, "Color Scheme": "Dark Appearance" if dark else "Light Appearance"},
+        "previewDefinitionIndexInFile": preview,
+        "previewVariantOverrides": variants | {"Color Scheme": "Dark Appearance" if dark else "Light Appearance"},
         "previewCanvasControlOverrides": {"timelineIndex": index},
         "timeout": 300,
     }
+    if lock_screen:
+        arguments |= {"displayMode": "interactive", "snapshotDelay": 2}
     launches = 0
     for _ in range(90):
         try:
@@ -169,8 +182,17 @@ def render(xcode, identifier, index, presentation, dark, target):
                 continue
             raise
         shutil.move(result["snapshot"]["path"], target)
+        if lock_screen:
+            crop_to_clock(target)
         return
     raise RenderError("Xcode kept blocking previews; open the project in Xcode and check its package resolution")
+
+
+def crop_to_clock(image):
+    sizes = subprocess.run(["sips", "-g", "pixelHeight", "-g", "pixelWidth", str(image)], capture_output=True, text=True, check=True).stdout
+    height, width = (int(re.search(rf"{key}: (\d+)", sizes).group(1)) for key in ("pixelHeight", "pixelWidth"))
+    subprocess.run(["sips", "--cropToHeightWidth", str(height * 2 // 5), str(width), "--cropOffset", "1", "0", str(image)],
+                   check=True, stdout=subprocess.DEVNULL)
 
 
 def summary(message):
@@ -193,9 +215,9 @@ def main():
                     "so later renders take seconds.")
     parser.add_argument("inputs", nargs="+",
                         help="request bodies ({title, layout, data}) or bare layouts of activities or widgets: files, directories, inline JSON, or - for stdin")
-    parser.add_argument("--only", default="lock,expanded,compact,minimal,small",
-                        help=f"comma-separated presentations from {', '.join(PRESENTATIONS)}; each input renders those of its kind "
-                             "(default: lock,expanded,compact,minimal,small)")
+    parser.add_argument("--only", default=DEFAULT,
+                        help=f"comma-separated presentations from {', '.join(PRESENTATIONS)}; each input renders those it has "
+                             f"(default: {DEFAULT})")
     parser.add_argument("--dark", action="store_true", help="render in dark appearance")
     args = parser.parse_args()
     try:
@@ -221,7 +243,7 @@ def main():
                 identifier = workspace(xcode)
                 jobs = {(name, index, presentation): OUTPUT / f"{name}-{presentation}.png"
                         for presentation in presentations
-                        for (name, kind, _), (index, _) in zip(bodies, staged) if PRESENTATIONS[presentation][0] == kind}
+                        for (name, kind, body), (index, _) in zip(bodies, staged) if shows(presentation, kind, body["layout"])}
                 failures = {}
                 futures = {pool.submit(render, xcode, identifier, index, presentation, args.dark, target): target
                            for (_, index, presentation), target in jobs.items()}

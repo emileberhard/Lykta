@@ -52,6 +52,7 @@ extension View {
         case let .symbolRenderingMode(mode): symbolRenderingMode(mode.value)
         case let .imageScale(scale): imageScale(scale == .small ? .small : scale == .medium ? .medium : .large)
         case let .accessibilityLabel(label): accessibilityLabel(label)
+        case .privacySensitive: privacySensitive()
         }
     }
 }

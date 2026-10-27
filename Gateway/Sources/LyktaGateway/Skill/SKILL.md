@@ -56,7 +56,8 @@ Pick the form from what the user asked for:
   such as a countdown, progress, a delivery or a checklist. The rest of this
   file covers activities.
 - **Widget** for "always show me": a value with no end that changes over
-  hours, such as today's steps, a balance or a server's health. Read the
+  hours, such as today's steps, a balance or a server's health, on the Home
+  Screen or the Lock Screen. Read the
   [widgets reference](references/widgets.md), which builds on the layout
   reference.
 - **An activity's `alert`** when an activity about the subject is already

@@ -9,7 +9,7 @@ struct LyktaWidget: Widget {
         }
         .configurationDisplayName("Lykta")
         .description("Shows a widget an agent made for this iPhone.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline])
         .promptsForUserConfiguration()
         .pushHandler(WidgetPushes.self)
     }
@@ -45,22 +45,48 @@ private struct Notice: View {
     let title: String
     let detail: LocalizedStringKey
     let symbol: String
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Spacer(minLength: 0)
-            Text(title)
-                .font(.headline)
-                .lineLimit(2)
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        content.containerBackground(.background, for: .widget)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch family {
+        case .accessoryInline:
+            Label(title, systemImage: symbol)
+        case .accessoryCircular:
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: symbol)
+                    .font(.title3)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("\(title), \(Text(detail))"))
+        case .accessoryRectangular:
+            VStack(alignment: .leading) {
+                Label(title, systemImage: symbol)
+                    .font(.headline)
+                Text(detail)
+                    .font(.caption)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            VStack(alignment: .leading, spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .containerBackground(.background, for: .widget)
     }
 }

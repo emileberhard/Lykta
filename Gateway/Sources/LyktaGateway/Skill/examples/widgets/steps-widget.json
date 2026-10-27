@@ -1,20 +1,58 @@
 {
   "title": "Steps today",
   "layout": {
-    "systemSmall": {
+    "parts": {
+      "header": {"concat": [{"symbol": "figure.walk"}, " Steps"], "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+      "count": {"text": "{{steps}}", "modifiers": [{"font": "largeTitle"}, {"fontWeight": "bold"}, {"contentTransition": "numericText"}]},
+      "goal": {"text": "of {{goal}}", "modifiers": [{"font": "footnote"}, {"opacity": 0.8}]},
+      "today": {
+        "vstack": [{"use": "header"}, {"spacer": true}, {"use": "count"}, {"use": "goal"}, {"progress": "{{fraction}}"}],
+        "alignment": "leading",
+        "spacing": 2,
+        "modifiers": [{"frame": {"maxWidth": "infinity", "maxHeight": "infinity", "alignment": "leading"}}]
+      },
+      "week": {"chart": [{"bar": "{{week}}", "cornerRadius": 3}, {"rule": "{{goalSteps}}", "lineWidth": 1}]},
+      "small": {"use": "today"},
+      "medium": {"hstack": [{"use": "today"}, {"use": "week", "modifiers": [{"frame": {"maxWidth": 150}}]}], "spacing": 16},
+      "large": {
+        "vstack": [
+          {"hstack": [{"use": "header"}, {"spacer": true}, {"text": "{{distance}}", "modifiers": [{"font": "footnote"}, {"opacity": 0.8}]}]},
+          {"use": "count"},
+          {"use": "goal"},
+          {"progress": "{{fraction}}"},
+          {"text": "This week", "modifiers": [{"font": "footnote"}, {"fontWeight": "semibold"}, {"opacity": 0.8}, {"padding": {"top": 16}}]},
+          {"use": "week", "modifiers": [{"frame": {"maxHeight": "infinity"}}]}
+        ],
+        "alignment": "leading",
+        "spacing": 4,
+        "modifiers": [{"frame": {"maxWidth": "infinity", "maxHeight": "infinity", "alignment": "leading"}}]
+      }
+    },
+    "systemSmall": {"if": "showsBackground", "then": {"use": "small", "modifiers": [{"foreground": "white"}, {"tint": "white"}]}, "else": {"use": "small"}},
+    "systemMedium": {"if": "showsBackground", "then": {"use": "medium", "modifiers": [{"foreground": "white"}, {"tint": "white"}]}, "else": {"use": "medium"}},
+    "systemLarge": {"if": "showsBackground", "then": {"use": "large", "modifiers": [{"foreground": "white"}, {"tint": "white"}]}, "else": {"use": "large"}},
+    "accessoryCircular": {"gauge": "{{fraction}}", "style": "circularCapacity", "currentValueLabel": {"vstack": [{"symbol": "figure.walk", "modifiers": [{"font": "caption"}]}, {"text": "{{short}}", "modifiers": [{"font": "caption"}, {"fontWeight": "semibold"}]}], "spacing": 0}},
+    "accessoryRectangular": {
       "vstack": [
-        {"concat": [{"symbol": "figure.walk"}, " Steps"], "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
-        {"spacer": true},
-        {"text": "{{steps}}", "modifiers": [{"font": "largeTitle"}, {"fontWeight": "bold"}, {"contentTransition": "numericText"}]},
-        {"text": "of {{goal}}", "modifiers": [{"font": "footnote"}, {"opacity": 0.8}]},
-        {"progress": "{{fraction}}", "modifiers": [{"tint": "white"}]}
+        {"concat": [{"symbol": "figure.walk"}, " {{steps}}"], "modifiers": [{"font": "headline"}]},
+        {"text": "of {{goal}} · {{distance}}", "modifiers": [{"font": "caption"}]},
+        {"gauge": "{{fraction}}", "style": "linearCapacity"}
       ],
       "alignment": "leading",
       "spacing": 2,
-      "modifiers": [{"foreground": "white"}, {"frame": {"maxWidth": "infinity", "maxHeight": "infinity", "alignment": "leading"}}]
+      "modifiers": [{"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
     },
+    "accessoryInline": {"concat": [{"symbol": "figure.walk"}, " {{steps}} steps"]},
     "background": {"gradient": ["#34C759", "#0A7D3B"], "direction": "diagonal"}
   },
-  "data": {"steps": "6,400", "goal": "10,000", "fraction": 0.64},
+  "data": {
+    "steps": "6,400",
+    "short": "6.4k",
+    "goal": "10,000",
+    "goalSteps": 10000,
+    "fraction": 0.64,
+    "distance": "4.8 km",
+    "week": [8210, 10420, 6150, 9800, 12030, 7310, 6400]
+  },
   "staleAfter": 7200
 }

@@ -41,6 +41,7 @@ public enum Modifier: Decodable, Sendable {
     case symbolRenderingMode(SymbolRendering)
     case imageScale(ImageScale)
     case accessibilityLabel(String)
+    case privacySensitive
 
     public enum FixedSize: Sendable { case both, horizontal, vertical }
     public enum Weight: String, Choice { case ultraLight, thin, light, regular, medium, semibold, bold, heavy, black }
@@ -274,6 +275,10 @@ public enum Modifier: Decodable, Sendable {
         case "symbolRenderingMode": self = .symbolRenderingMode(try value())
         case "imageScale": self = .imageScale(try value())
         case "accessibilityLabel": self = .accessibilityLabel(try value())
+        case "privacySensitive":
+            guard try value() as Bool else { throw fields.invalid("expected true", at: name) }
+            if let refusal = Presentation(fields.codingPath).refusal(of: name) { throw fields.invalid(refusal, at: name) }
+            self = .privacySensitive
         default: throw fields.invalid("unknown modifier", at: name)
         }
     }

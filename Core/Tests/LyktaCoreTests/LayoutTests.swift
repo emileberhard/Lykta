@@ -17,6 +17,8 @@ struct LayoutTests {
         (#"{"shape": "circle", "cornerRadius": 4}"#, "lockScreen.cornerRadius: only roundedRectangle"),
         (#"{"timer": ["2026-10-21T18:00:00Z", 0]}"#, "lockScreen.timer: expected [start, end] with start before end"),
         (#"{"button": "Retry", "label": "Retry"}"#, "lockScreen.button: use 1 to 64 lowercase letters"),
+        (#"{"text": "a", "modifiers": [{"privacySensitive": true}]}"#, "lockScreen.modifiers[0].privacySensitive: privacySensitive works only in a widget's presentations"),
+        (#"{"zstack": [{"accessoryBackground": true}]}"#, "lockScreen.zstack[0].accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular"),
         (#"{"button": "retry", "label": {"link": "https://example.com", "label": "Open"}}"#, "lockScreen.label: a label cannot contain links, buttons or toggles"),
         (#"{"chart": [{"bar": [1, 2], "colors": ["red"]}]}"#, "lockScreen.chart[0].colors: give one color per value"),
         (#"{"chart": [{"sector": [1], "lineWidth": 2}]}"#, "lockScreen.chart[0].lineWidth: unknown key"),

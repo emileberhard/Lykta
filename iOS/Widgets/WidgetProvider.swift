@@ -32,7 +32,10 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
     }()
 
     func placeholder(in context: Context) -> WidgetEntry {
-        WidgetEntry(date: .now, state: Self.example.map { .content($0, .systemSmall, isStale: false) } ?? .choose)
+        guard let example = Self.example, let family = WidgetLayout.Family(context.family), example.presentations[family] != nil else {
+            return WidgetEntry(date: .now, state: .choose)
+        }
+        return WidgetEntry(date: .now, state: .content(example, family, isStale: false))
     }
 
     func snapshot(for configuration: WidgetSelection, in context: Context) async -> WidgetEntry {

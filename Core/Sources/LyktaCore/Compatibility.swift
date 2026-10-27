@@ -167,6 +167,11 @@ extension Layout {
             "Node.Content.Condition.Environment.accented", "Node.Content.Condition.Environment.fullColor",
             "Node.Content.Condition.Environment.showsBackground",
         ],
+        "0.13.0": [
+            "accessoryBackground", "modifiers.privacySensitive", "widget.accessoryCircular", "widget.accessoryInline",
+            "widget.accessoryRectangular", "widget.systemLarge", "widget.systemMedium",
+            "Node.Content.Condition.Environment.vibrant",
+        ],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

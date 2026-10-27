@@ -15,7 +15,7 @@ struct Gallery: View {
                     GalleryCard(example: example, transition: transition)
                 }
                 Heading("Widgets")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: WidgetPreview.side), spacing: GalleryCard.spacing, alignment: .leading)],
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: WidgetLayout.Family.systemSmall.size.width), spacing: GalleryCard.spacing, alignment: .leading)],
                           alignment: .leading, spacing: GalleryCard.spacing) {
                     ForEach(model.widgetExamples) { example in
                         WidgetCard(example: example, transition: transition)
@@ -73,7 +73,7 @@ private struct WidgetCard: View {
 
     var body: some View {
         NavigationLink(value: example.route) {
-            WidgetPreview(layout: example.layout)
+            WidgetPreview(layout: example.layout, family: example.families[0])
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
                 .contentShape(WidgetPreview.shape)

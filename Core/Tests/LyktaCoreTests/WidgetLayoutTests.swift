@@ -4,8 +4,15 @@ import Testing
 
 struct WidgetLayoutTests {
     @Test(arguments: [
-        (##"{"background": "#112233"}"##, "a widget needs at least one of systemSmall"),
-        (#"{"systemSmall": "a", "lockScreen": "b"}"#, "lockScreen: unknown key; expected background, link, systemSmall"),
+        (##"{"background": "#112233"}"##, "a widget needs at least one of systemSmall, systemMedium, systemLarge, accessoryCircular, accessoryRectangular, accessoryInline"),
+        (#"{"systemSmall": "a", "lockScreen": "b"}"#, "lockScreen: unknown key; expected accessoryCircular, accessoryInline, accessoryRectangular, background, link, systemLarge, systemMedium, systemSmall"),
+        (#"{"accessoryInline": {"vstack": ["a", "b"]}}"#, "accessoryInline: takes only text, concat, symbol, date and timer nodes with text modifiers, or an if choosing between them"),
+        (#"{"accessoryInline": {"if": "vibrant", "then": "a", "else": {"gauge": 0.5}}}"#, "accessoryInline: takes only text"),
+        (#"{"accessoryInline": {"text": "a", "modifiers": [{"padding": 4}]}}"#, "accessoryInline: takes only text"),
+        (#"{"systemSmall": {"zstack": [{"accessoryBackground": true}, "a"]}}"#, "systemSmall.zstack[0].accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular"),
+        (#"{"accessoryCircular": {"accessoryBackground": false}}"#, "accessoryCircular.accessoryBackground: expected true"),
+        (#"{"accessoryCircular": {"link": "https://example.com", "label": "a"}}"#, "accessoryCircular.link: links work only in systemSmall, systemMedium, systemLarge and accessoryRectangular"),
+        (#"{"systemSmall": "a", "background": {"text": "a", "modifiers": [{"privacySensitive": true}]}}"#, "background.modifiers[0].privacySensitive: privacySensitive works only in a widget's presentations"),
         (#"{"systemSmall": {"button": "go", "label": "Go"}}"#, "systemSmall.button: buttons and toggles work only in Live Activities"),
         (#"{"systemSmall": {"vstack": [{"toggle": "done", "isOn": true, "label": "Done"}]}}"#, "systemSmall.vstack[0].toggle: buttons and toggles work only in Live Activities"),
         (#"{"systemSmall": "a", "background": {"link": "https://example.com", "label": "Open"}}"#, "background.link: a widget's background takes no links, buttons or toggles"),
@@ -20,6 +27,18 @@ struct WidgetLayoutTests {
         let widget = try decode(#"{"systemSmall": {"link": "https://example.com/steps", "label": "Steps"}, "link": "shortcuts://run"}"#)
         #expect(widget.presentations.keys.sorted { $0.rawValue < $1.rawValue } == [.systemSmall])
         #expect(widget.link == URL(string: "shortcuts://run"))
+    }
+
+    @Test func drawsEveryFamilyWithItsOwnNode() throws {
+        let widget = try decode(#"""
+            {"systemSmall": "s", "systemMedium": "m", "systemLarge": "l",
+             "accessoryCircular": {"zstack": [{"accessoryBackground": true}, {"gauge": 0.5}]},
+             "accessoryRectangular": {"text": "6,400", "modifiers": [{"privacySensitive": true}]},
+             "accessoryInline": {"if": "vibrant", "then": {"concat": [{"symbol": "figure.walk"}, " 6,400"], "modifiers": [{"bold": true}]}, "else": "6,400 steps"}}
+            """#)
+        #expect(Set(widget.presentations.keys) == Set(WidgetLayout.Family.allCases))
+        #expect(widget.requirement?.version == Version(0, 13, 0))
+        #expect(Set(["accessoryBackground", "modifiers.privacySensitive", "Node.Content.Condition.Environment.vibrant"]).isSubset(of: widget.features))
     }
 
     @Test(arguments: [

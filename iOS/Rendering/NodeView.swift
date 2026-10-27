@@ -66,6 +66,8 @@ struct NodeView: View {
             }
         case let .chart(chart):
             ChartNodeView(chart: chart)
+        case .accessoryBackground:
+            AccessoryWidgetBackground()
         case let .concat(parts):
             HStack(alignment: .firstTextBaseline, spacing: 0) { Children(nodes: parts) }
         case .text, .timer, .date:
@@ -295,6 +297,7 @@ private struct ConditionalNodeView: View {
         case .limitedWidth: isLimitedInWidth
         case .fullColor: renderingMode == .fullColor
         case .accented: renderingMode == .accented
+        case .vibrant: renderingMode == .vibrant
         case .showsBackground: showsBackground
         }
         if holds {

@@ -14,15 +14,19 @@ enum Presentation {
         }
     }
 
-    func refusal(of kind: String) -> String? {
-        switch self {
-        case let .activity(root):
+    func refusal(of feature: String) -> String? {
+        switch (self, feature) {
+        case (.widget(.accessoryCircular), "accessoryBackground"), (.widget(.accessoryRectangular), "accessoryBackground"): nil
+        case (_, "accessoryBackground"): "accessoryBackground works only in accessoryCircular and accessoryRectangular"
+        case (.widget, "privacySensitive"): nil
+        case (_, "privacySensitive"): "privacySensitive works only in a widget's presentations"
+        case let (.activity(root), _):
             ["lockScreen", "expanded"].contains(root) ? nil : "links, buttons and toggles work only in lockScreen and expanded"
-        case .widgetBackground:
+        case (.widgetBackground, _):
             "a widget's background takes no links, buttons or toggles"
-        case let .widget(family) where kind == "link":
+        case let (.widget(family), "link"):
             family.takesLinks ? nil : "links work only in systemSmall, systemMedium, systemLarge and accessoryRectangular; use the widget's link"
-        case .widget:
+        case (.widget, _):
             "buttons and toggles work only in Live Activities"
         }
     }

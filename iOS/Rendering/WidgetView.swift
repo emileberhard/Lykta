@@ -11,7 +11,7 @@ struct WidgetView: View {
         Root(node: layout.presentations[family], activity: nil, isStale: isStale)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topTrailing) {
-                if isStale {
+                if isStale && !family.isAccessory {
                     Image(systemName: "clock.badge.exclamationmark")
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -166,6 +166,14 @@ public struct Node: Decodable, Sendable {
         }
     }
 
+    var fitsOneLine: Bool {
+        switch content {
+        case .concat: modifiers.allSatisfy(\.isTextModifier)
+        case let .conditional(_, then, otherwise): modifiers.isEmpty && then.fitsOneLine && otherwise?.fitsOneLine != false
+        default: isInline
+        }
+    }
+
     var children: [Node] {
         content.children + overlays
     }
@@ -214,6 +222,7 @@ extension Node {
         case toggle(String, isOn: Bool, label: Node, style: ToggleStyle)
         case grid([[Node]], alignment: Alignment, horizontalSpacing: Double?, verticalSpacing: Double?)
         case chart(Chart)
+        case accessoryBackground
 
         public enum DateStyle: String, Choice { case time, date, relative, offset, timer }
         public enum ProgressStyle: String, Choice { case linear, circular }
@@ -227,7 +236,9 @@ extension Node {
         }
 
         public enum Condition: Decodable, Sendable {
-            public enum Environment: String, Choice { case stale, dark, luminanceReduced, fullscreen, limitedWidth, fullColor, accented, showsBackground }
+            public enum Environment: String, Choice {
+                case stale, dark, luminanceReduced, fullscreen, limitedWidth, fullColor, accented, vibrant, showsBackground
+            }
 
             case environment(Environment)
             case value(Bool)
@@ -298,7 +309,7 @@ extension Node {
         }
 
         static let fields: [String: Set<String>] = [
-            "text": [], "concat": [], "spacer": [], "divider": [], "svg": [],
+            "text": [], "concat": [], "spacer": [], "divider": [], "svg": [], "accessoryBackground": [],
             "symbol": ["value"],
             "timer": ["countsDown", "pausedAt", "showsHours"],
             "date": ["style"],
@@ -373,6 +384,10 @@ extension Node {
             case "divider":
                 guard try fields.required(kind) as Bool else { throw fields.invalid("expected true", at: kind) }
                 self = .divider
+            case "accessoryBackground":
+                guard try fields.required(kind) as Bool else { throw fields.invalid("expected true", at: kind) }
+                if let refusal = Presentation(fields.codingPath).refusal(of: kind) { throw fields.invalid(refusal, at: kind) }
+                self = .accessoryBackground
             case "progress":
                 let style: ProgressStyle = try fields.optional("style") ?? .linear
                 if let value = try? fields.required(kind) as Double {
@@ -436,7 +451,7 @@ extension Node {
             case let .conditional(_, then, otherwise): [then] + [otherwise].compactMap(\.self)
             case let .link(_, label), let .button(_, label, _, _), let .toggle(_, _, label, _): [label]
             case let .grid(rows, _, _, _): rows.flatMap(\.self)
-            case .text, .symbol, .timer, .date, .shape, .svg, .spacer, .divider, .progress, .chart: []
+            case .text, .symbol, .timer, .date, .shape, .svg, .spacer, .divider, .progress, .chart, .accessoryBackground: []
             }
         }
     }

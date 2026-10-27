@@ -3,6 +3,13 @@ import Foundation
 public struct WidgetLayout: Decodable, Sendable {
     public enum Family: String, Choice, Encodable {
         case systemSmall, systemMedium, systemLarge, accessoryCircular, accessoryRectangular, accessoryInline
+
+        public var isAccessory: Bool {
+            switch self {
+            case .systemSmall, .systemMedium, .systemLarge: false
+            case .accessoryCircular, .accessoryRectangular, .accessoryInline: true
+            }
+        }
     }
 
     public enum Background: Sendable {
@@ -10,8 +17,7 @@ public struct WidgetLayout: Decodable, Sendable {
         case node(Node)
     }
 
-    static let drawn: [Family] = [.systemSmall]
-    static let nodeKeys = Set(drawn.map(\.rawValue)).union(["background"])
+    static let nodeKeys = Set(Family.allCases.map(\.rawValue)).union(["background"])
 
     public let presentations: [Family: Node]
     public let background: Background?
@@ -32,11 +38,15 @@ public struct WidgetLayout: Decodable, Sendable {
         try fields.allowOnly(Self.nodeKeys.union(["link"]))
         fields.recordKeys(in: "widget")
         var presentations: [Family: Node] = [:]
-        for family in Self.drawn {
+        for family in Family.allCases {
             presentations[family] = try fields.optional(family.rawValue)
         }
         guard !presentations.isEmpty else {
-            throw fields.invalid("a widget needs at least one of \(Self.drawn.map(\.rawValue).joined(separator: ", "))")
+            throw fields.invalid("a widget needs at least one of \(Family.allCases.map(\.rawValue).joined(separator: ", "))")
+        }
+        guard presentations[.accessoryInline]?.fitsOneLine != false else {
+            throw fields.invalid("takes only text, concat, symbol, date and timer nodes with text modifiers, or an if choosing between them",
+                                 at: Family.accessoryInline.rawValue)
         }
         self.presentations = presentations
         background = try Self.background(fields)

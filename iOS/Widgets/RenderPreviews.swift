@@ -21,21 +21,21 @@ private enum Staged {
                 return try LyktaActivity.ContentState(title: title, layout: layout)
             } catch {
                 let warning = #"{"symbol": "exclamationmark.triangle.fill", "modifiers": [{"foreground": "red"}]}"#
-                let layout = #"{"lockScreen": \#(report(error, for: url)), "compactLeading": \#(warning), "compactTrailing": "Error", "minimal": \#(warning)}"#
+                let layout = #"{"lockScreen": {"vstack": [\#(report(error, for: url))], "modifiers": [{"padding": 16}]}, "compactLeading": \#(warning), "compactTrailing": "Error", "minimal": \#(warning)}"#
                 return try! LyktaActivity.ContentState(title: "Error", layout: Array(layout.utf8))
             }
         }
     }
 
-    static var widgets: [WidgetEntry] {
+    static func widgets(_ family: WidgetLayout.Family) -> [WidgetEntry] {
         inputs("widget").map { url in
             let layout: WidgetLayout
             do {
                 layout = try WidgetLayout(json: load(url, for: .widget).layout)
             } catch {
-                layout = try! WidgetLayout(json: Array(#"{"systemSmall": \#(report(error, for: url))}"#.utf8))
+                layout = try! WidgetLayout(json: Array(#"{"\#(family.rawValue)": \#(report(error, for: url))}"#.utf8))
             }
-            return WidgetEntry(date: .now, state: .content(layout, .systemSmall, isStale: false))
+            return WidgetEntry(date: .now, state: .content(layout, family, isStale: false))
         }
     }
 
@@ -55,7 +55,7 @@ private enum Staged {
     private static func report(_ error: any Error, for url: URL) -> String {
         try? Data("\(error)".utf8).write(to: url.deletingPathExtension().appendingPathExtension("error"))
         let message = String(decoding: try! JSONEncoder().encode("\(error)"), as: UTF8.self)
-        return #"{"text": \#(message), "modifiers": [{"foreground": "red"}, {"padding": 16}]}"#
+        return #"{"text": \#(message), "modifiers": [{"foreground": "red"}]}"#
     }
 }
 
@@ -65,9 +65,39 @@ private enum Staged {
     for state in Staged.states { state }
 }
 
-#Preview("Staged widgets", as: .systemSmall) {
+#Preview("Small", as: .systemSmall) {
     LyktaWidget()
 } timeline: {
-    for entry in Staged.widgets { entry }
+    for entry in Staged.widgets(.systemSmall) { entry }
+}
+
+#Preview("Medium", as: .systemMedium) {
+    LyktaWidget()
+} timeline: {
+    for entry in Staged.widgets(.systemMedium) { entry }
+}
+
+#Preview("Large", as: .systemLarge) {
+    LyktaWidget()
+} timeline: {
+    for entry in Staged.widgets(.systemLarge) { entry }
+}
+
+#Preview("Circular", as: .accessoryCircular) {
+    LyktaWidget()
+} timeline: {
+    for entry in Staged.widgets(.accessoryCircular) { entry }
+}
+
+#Preview("Rectangular", as: .accessoryRectangular) {
+    LyktaWidget()
+} timeline: {
+    for entry in Staged.widgets(.accessoryRectangular) { entry }
+}
+
+#Preview("Inline", as: .accessoryInline) {
+    LyktaWidget()
+} timeline: {
+    for entry in Staged.widgets(.accessoryInline) { entry }
 }
 #endif

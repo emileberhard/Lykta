@@ -11,6 +11,7 @@ nonisolated struct WidgetExample: Identifiable, Sendable {
     let id: String
     let title: String
     let layout: WidgetLayout
+    let families: [WidgetLayout.Family]
     private let fields: [String: JSONValue]
 
     var route: Route { Route(id: id) }
@@ -37,7 +38,9 @@ nonisolated struct WidgetExample: Identifiable, Sendable {
         id = file.deletingPathExtension().lastPathComponent
         self.title = title
         self.fields = fields
-        self.layout = try WidgetLayout(json: layout.filled(with: Self.data(fields["data"], at: date), for: .widget).json)
+        let widget = try WidgetLayout(json: layout.filled(with: Self.data(fields["data"], at: date), for: .widget).json)
+        self.layout = widget
+        families = WidgetLayout.Family.allCases.filter { widget.presentations[$0] != nil }
     }
 
     func request(at date: Date) -> JSONValue {
