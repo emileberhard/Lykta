@@ -61,7 +61,8 @@ def capture(simulator_runtime, target):
     udid = simulator(simulator_runtime)
     print(f"Capturing the app on the {SIMULATOR} simulator", file=sys.stderr)
     run("xcodebuild", "-quiet", "-project", ROOT / "iOS" / "Lykta.xcodeproj", "-scheme", "Lykta", "-configuration", "Debug",
-        "-destination", f"id={udid}", "-derivedDataPath", BUILD, "CODE_SIGNING_ALLOWED=NO", "LYKTA_GATEWAY_HOST=", "build")
+        "-destination", f"id={udid}", "-derivedDataPath", BUILD,
+        "-disableAutomaticPackageResolution", "-onlyUsePackageVersionsFromResolvedFile", "-skipPackageUpdates", "CODE_SIGNING_ALLOWED=NO", "LYKTA_GATEWAY_HOST=", "build")
     app = BUILD / "Build" / "Products" / "Debug-iphonesimulator" / "Lykta.app"
     bundle = run("plutil", "-extract", "CFBundleIdentifier", "raw", app / "Info.plist").strip()
     staging = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=CACHE))

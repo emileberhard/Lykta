@@ -501,6 +501,39 @@ the only package the app links; `Gateway` adds SwiftNIO, swift-certificates
 for App Attest and, on Linux, swift-crypto. The app's project in `iOS` uses Xcode's JSON project format directly
 instead of a generator.
 
+**Release admission owns credential access.** The public tag workflow rejects
+invalid, lightweight, empty-note, older and off-main tags before a credentialed
+job starts, then reuses CI on that exact commit. Building inside the same job
+before its admission check would expose the later credentials to the earlier
+code. CI and releases use one `.xcode-version` pin and locked package inputs.
+
+**One exact upload per release job.** The serialized TestFlight job selects
+max+1 across processed builds and pending uploads, injects it into every bundle
+and disables export renumbering. Later jobs select that exact number. Each
+version belongs to one immutable tag, so retries reuse the build or processing
+upload Apple holds for that version and skip archiving, signing and uploading.
+GitHub's attempt history fences any earlier attempt that started the separate
+upload step: wait up to 15 minutes for Apple's list to show it, then fail rather
+than upload again. A lost upload acknowledgement must not create a duplicate;
+a failed entitlement check has not started the upload. The selector's command
+substitution propagates a failure before any build-number output is written.
+`entitlements.json` covers every app and extension, replacing the workflow's
+inline bundle list; the export must retain their claims. The gateway still
+deploys first and the phone upload waits for its reported version. A separate
+upload path would need to coordinate build-number selection with this owner.
+
+**Nested frameworks are signed before app bundles.** Sign embedded frameworks
+deepest first before sealing app bundles, including code inside extensions.
+Xcode's cloud export replaces those ad-hoc signatures; the export check requires
+an Apple Distribution authority on each framework as well as the bundles'
+entitlements. Checking only entitlements can miss an invalid framework signature.
+
+**App Store preparation owns only its screenshots.** Upload reservations are
+recorded before transfer, workers finish before cleanup, and cleanup touches
+only the release's unplaced reservations and displaced images. A whole-library
+sweep could delete another release's work. A version in review is left alone
+with a notice; it does not fail the TestFlight release or withdraw that review.
+
 **Credentials.** Each phone gets a device secret and an agent token, both 256
 random bits stored as SHA-256 hashes. Registration needs proof, so a script
 cannot use up the device limit. The app attests a new App Attest key over a
