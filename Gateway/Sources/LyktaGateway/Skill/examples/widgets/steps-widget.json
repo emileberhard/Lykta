@@ -1,0 +1,20 @@
+{
+  "title": "Steps today",
+  "layout": {
+    "systemSmall": {
+      "vstack": [
+        {"concat": [{"symbol": "figure.walk"}, " Steps"], "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}]},
+        {"spacer": true},
+        {"text": "{{steps}}", "modifiers": [{"font": "largeTitle"}, {"fontWeight": "bold"}, {"contentTransition": "numericText"}]},
+        {"text": "of {{goal}}", "modifiers": [{"font": "footnote"}, {"opacity": 0.8}]},
+        {"progress": "{{fraction}}", "modifiers": [{"tint": "white"}]}
+      ],
+      "alignment": "leading",
+      "spacing": 2,
+      "modifiers": [{"foreground": "white"}, {"frame": {"maxWidth": "infinity", "maxHeight": "infinity", "alignment": "leading"}}]
+    },
+    "background": {"gradient": ["#34C759", "#0A7D3B"], "direction": "diagonal"}
+  },
+  "data": {"steps": "6,400", "goal": "10,000", "fraction": 0.64},
+  "staleAfter": 7200
+}

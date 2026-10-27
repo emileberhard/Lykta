@@ -33,4 +33,18 @@ struct ExampleTests {
             #expect(decoded.layout != nil, "\(file.lastPathComponent)")
         }
     }
+
+    @Test func widgetExamplesFillIntoWidgets() throws {
+        struct Body: Decodable {
+            let layout: JSONValue
+            let data: JSONValue
+        }
+        let folder = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../../Gateway/Sources/LyktaGateway/Skill/examples/widgets")
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+        #expect(!files.isEmpty)
+        for file in files {
+            let body = try JSONDecoder().decode(Body.self, from: Data(contentsOf: file))
+            _ = try WidgetLayout(json: body.layout.filled(with: body.data.movingExampleTimes(to: .now), for: .widget).json)
+        }
+    }
 }
