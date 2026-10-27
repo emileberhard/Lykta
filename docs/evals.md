@@ -19,8 +19,10 @@ harbor view .local/evals
 ```
 
 `just evals` runs the agents in `evals/job.yaml` twice on every task: Codex
-with GPT-6.1 Sol at extra high effort and Claude Code with Claude Opus 5.5 at
-high effort, the settings most users run, 20 trials at once. Options after it override the job;
+with GPT-6.1 Terra at extra high effort and Claude Code with Claude Opus 5.5 at
+high effort, 20 trials at once. The checks are smoke tests of whether a fresh
+agent sets up and sends what was asked, not of how good the result looks, so
+Terra, a little less capable than GPT-6.1 Sol, is enough. Options after it override the job;
 `--model` takes effect only with `--agent`, which replaces the job's agents
 and their efforts.
 
