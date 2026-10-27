@@ -139,25 +139,11 @@ struct WidgetTests {
 
     @Test func ignoresAReportOlderThanTheLastOne() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
-        let stale = WidgetReport(at: reports.next(), pushToken: nil, layoutVersion: Layout.version, places: [])
+        let stale = WidgetReport(sequence: reports.next(), pushToken: nil, layoutVersion: Layout.version, places: [])
         try await report([created.id])
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(stale))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
         #expect(try await status().placed == [.systemSmall])
-    }
-
-    @Test func aReportFromAClockThatRanAheadFencesOtherReportsForAMinute() async throws {
-        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
-        let device = try #require(try await store.device(secret: credentials.deviceSecret))
-        func report(_ places: [WidgetPlace], madeAt made: Int, receivedAt received: Int) async throws {
-            let report = WidgetReport(at: Date(timeIntervalSince1970: Double(made)), pushToken: nil, layoutVersion: Layout.version, places: places)
-            try await store.reportWidgets(device, report: report, now: received)
-        }
-        try await report([WidgetPlace(widget: created.id, family: .systemSmall)], madeAt: now + 86400, receivedAt: now)
-        try await report([], madeAt: now + 86399, receivedAt: now + 59)
-        #expect(try await status().placed == [.systemSmall])
-        try await report([], madeAt: now + 60, receivedAt: now + 60)
-        #expect(try await status().placed.isEmpty)
     }
 
     @Test func onlyChangesToPlacedWidgetsPush() async throws {
@@ -190,7 +176,7 @@ struct WidgetTests {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         #expect(await send("PUT", "/v1/device", old, token: credentials.deviceSecret).status == 200)
         #expect(await send("PUT", "/v1/widgets/steps", ["title": "Downgraded"]).status == 409)
-        let placesOnly: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)), "layoutVersion": .string(Layout.version.description),
+        let placesOnly: JSONValue = ["sequence": .number(Double(reports.next())), "layoutVersion": .string(Layout.version.description),
                                      "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", placesOnly, token: token).status == 204)
         #expect(await send("PUT", "/v1/widgets/steps", ["data": ["steps": "12"]]).status == 200)
@@ -289,7 +275,7 @@ struct WidgetTests {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])
         let job = try #require(await store.claim(now: now, limit: 4).first)
-        let report: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)),
+        let report: JSONValue = ["sequence": .number(Double(reports.next())),
                                  "pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": .string(Layout.version.description),
                                  "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", report, token: token).status == 204)
@@ -333,7 +319,7 @@ struct WidgetTests {
     private func status() async throws -> Status { try await send("GET", "/v1/widgets/steps").decoded() }
 
     private func report(_ ids: [UUID]) async throws {
-        let report = WidgetReport(at: reports.next(), pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Layout.version,
+        let report = WidgetReport(sequence: reports.next(), pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Layout.version,
                                   places: ids.map { WidgetPlace(widget: $0, family: .systemSmall) })
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(report))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
@@ -346,9 +332,9 @@ struct WidgetTests {
 }
 
 private final class Reports: Sendable {
-    private let count = Mutex(0)
+    private let count = Mutex<Int64>(0)
 
-    func next() -> Date {
-        Date(timeIntervalSince1970: Double(count.withLock { $0 += 1; return $0 }))
+    func next() -> Int64 {
+        count.withLock { $0 += 1; return $0 }
     }
 }

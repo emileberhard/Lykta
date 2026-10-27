@@ -1019,7 +1019,6 @@ actor Store {
 extension Store {
     static let maximumWidgets = 32
     static let widgetPushInterval = 20 * 60
-    static let reportOrderingWindow = 60
 
     private func widgetPhone(_ device: Device) throws -> Row {
         try db.query("SELECT * FROM widget_phones WHERE device_id = ?", device.id)[0]
@@ -1189,15 +1188,13 @@ extension Store {
     func reportWidgets(_ device: Device, report: WidgetReport, now: Int) throws {
         try db.transaction {
             try addWidgetPhone(device)
-            let phone = try widgetPhone(device)
-            let latest = try phone.integer("report_sequence")
-            let reportedAt = Int(try phone.integer("reported_at"))
-            guard report.sequence > latest || now >= reportedAt + Self.reportOrderingWindow else {
+            let latest = try widgetPhone(device).integer("report_sequence")
+            guard report.sequence > latest else {
                 try record("widget.reportIgnored", device: device.id, activity: nil,
                            ["sequence": .number(Double(report.sequence)), "latest": .number(Double(latest))])
                 return
             }
-            try db.run("UPDATE widget_phones SET report_sequence = ?, reported_at = ? WHERE device_id = ?", report.sequence, now, device.id)
+            try db.run("UPDATE widget_phones SET report_sequence = ? WHERE device_id = ?", report.sequence, device.id)
             try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", report.layoutVersion.description, device.id)
             if let token = report.pushToken {
                 try db.run("UPDATE widget_phones SET push_token = ?, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ? AND push_token IS NOT ?", token, device.id, token)

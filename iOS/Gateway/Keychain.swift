@@ -63,4 +63,14 @@ nonisolated enum AppGroup {
         }
         return container
     }
+
+    static func lockingWidgets<Result>(_ body: (URL) throws -> Result) throws -> Result {
+        let directory = container.appending(path: "Library/Application Support/Widgets", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let lock = open(directory.appending(path: "widgets.lock").path, O_CREAT | O_RDWR, 0o600)
+        guard lock >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { close(lock) }
+        guard flock(lock, LOCK_EX) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        return try body(directory)
+    }
 }

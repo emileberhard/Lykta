@@ -387,11 +387,13 @@ cache keeps the 64 widgets used most recently.
 sends the push token and the places WidgetKit reports; the app sends the same
 report from `WidgetCenter.currentPushInfo` and `currentConfigurations()` each
 time it becomes active, one at a time, which recovers a report the extension
-could not send. Each report carries the time it was made, in milliseconds, as
-its `sequence`, and the gateway ignores a report no newer than the last it
-applied within the last `Store.reportOrderingWindow`, a minute of the
-gateway's clock, so a delayed one cannot restore an old token or old places,
-and a phone whose clock ran ahead is fenced out for at most that minute.
+could not send. Each report carries a `sequence` that the app and the
+extension take from one counter in the app group, under the cache's file lock:
+the larger of the last one plus one and the time in milliseconds, so it keeps
+rising after a reinstall erases the counter. The gateway ignores a report no
+newer than the last it applied, so a delayed one cannot restore an old token or
+old places. The fence never expires, because only the phone orders its reports;
+a clock that ran ahead only makes later sequences start higher.
 
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for

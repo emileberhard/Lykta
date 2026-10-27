@@ -30,8 +30,7 @@ final class SimulatedPhone: PushService {
         self.store = store
         self.device = device
         _ = try await store.widgetCredential(device)
-        try await store.reportWidgets(device, report: WidgetReport(at: Date(), pushToken: PushToken(Data(repeating: 9, count: 32)),
-                                                                   layoutVersion: Layout.version, places: []), now: now)
+        try await store.reportWidgets(device, report: Self.widgetReport([]), now: now)
         widgetTask = Task {
             var known = Set<UUID>()
             while !Task.isCancelled {
@@ -95,6 +94,13 @@ final class SimulatedPhone: PushService {
         return id.uuidString.lowercased()
     }
 
+    private static let reportSequence = Mutex<Int64>(0)
+
+    private static func widgetReport(_ places: [WidgetPlace]) -> WidgetReport {
+        WidgetReport(sequence: reportSequence.withLock { $0 += 1; return $0 }, pushToken: PushToken(Data(repeating: 9, count: 32)),
+                     layoutVersion: Layout.version, places: places)
+    }
+
     private static func refreshWidgets(in store: Store, device: Device) async throws {
         let now = Int(Date().timeIntervalSince1970)
         let widgets = try await store.widgetList(device, now: now)
@@ -104,8 +110,7 @@ final class SimulatedPhone: PushService {
             let layout = try WidgetLayout(json: detail.layout.filled(with: detail.data, for: .widget).json)
             places += layout.presentations.keys.map { WidgetPlace(widget: widget.id, family: $0) }
         }
-        try await store.reportWidgets(device, report: WidgetReport(at: Date(), pushToken: PushToken(Data(repeating: 9, count: 32)),
-                                                                   layoutVersion: Layout.version, places: places), now: now)
+        try await store.reportWidgets(device, report: Self.widgetReport(places), now: now)
         for place in places {
             _ = try await store.fetchWidget(device, id: place.widget, family: place.family, have: nil, layout: Layout.version, now: now)
         }

@@ -26,8 +26,8 @@ public struct WidgetReport: Codable, Sendable {
     public let layoutVersion: Version
     public let places: [WidgetPlace]
 
-    public init(at date: Date, pushToken: PushToken?, layoutVersion: Version, places: [WidgetPlace]) {
-        sequence = Int64((date.timeIntervalSince1970 * 1000).rounded(.down))
+    public init(sequence: Int64, pushToken: PushToken?, layoutVersion: Version, places: [WidgetPlace]) {
+        self.sequence = sequence
         self.pushToken = pushToken
         self.layoutVersion = layoutVersion
         self.places = places
