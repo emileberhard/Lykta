@@ -33,7 +33,8 @@ nonisolated struct WidgetEntity: AppEntity {
 
 nonisolated struct WidgetQuery: EntityQuery {
     func entities(for identifiers: [UUID]) async throws -> [WidgetEntity] {
-        let titles = Dictionary((try? WidgetCache.titles())?.map { ($0.id, $0.title) } ?? []) { first, _ in first }
+        let cached = (try? KeychainItem.widget.load()).flatMap { try? WidgetCache.titles(for: $0) } ?? []
+        let titles = Dictionary(cached.map { ($0.id, $0.title) }) { first, _ in first }
         return identifiers.map { WidgetEntity(id: $0, title: titles[$0] ?? String(localized: "Widget")) }
     }
 
@@ -47,14 +48,15 @@ nonisolated struct WidgetQuery: EntityQuery {
         }
         do {
             let widgets = try await gateway.widgets(widgetToken: credential.widgetToken)
-            guard (try? WidgetCache.remember(widgets, listedWith: credential, at: .now)) != false else {
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else {
                 throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
             }
+            try? WidgetCache.remember(widgets, listedWith: credential, at: .now)
             return widgets.map { WidgetEntity(id: $0.id, title: $0.title) }
         } catch let error as AppError where error.status == 401 {
             throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
         } catch {
-            let cached = try WidgetCache.titles()
+            let cached = try WidgetCache.titles(for: credential)
             guard !cached.isEmpty else { throw error }
             return cached.map { WidgetEntity(id: $0.id, title: $0.title) }
         }

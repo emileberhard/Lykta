@@ -39,7 +39,8 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
         guard context.isPreview else { return await timeline(for: configuration, in: context).entries[0] }
         guard let widget = configuration.widget else { return placeholder(in: context) }
         let now = Date.now
-        guard let family = WidgetLayout.Family(context.family), let snapshot = try? WidgetCache.snapshot(of: widget.id) else {
+        guard let family = WidgetLayout.Family(context.family), let credential = try? KeychainItem.widget.load(),
+              let snapshot = try? WidgetCache.snapshot(of: widget.id, for: credential) else {
             return WidgetEntry(date: now, state: .notLoaded(title: widget.title))
         }
         return Self.timeline(snapshot, family: family, isCurrent: true, at: now, reload: now).entries[0]
@@ -58,7 +59,7 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
             }
             outcome = await Self.fetch(widget.id, family: family, from: gateway, with: credential, at: now)
         } catch {
-            outcome = .unreachable(try? WidgetCache.snapshot(of: widget.id), failures: 1)
+            outcome = .unreachable(nil, failures: 1)
         }
         switch outcome {
         case let .current(snapshot):
@@ -91,7 +92,7 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
 
     private static func fetch(_ id: UUID, family: WidgetLayout.Family, from gateway: GatewayClient, with credential: WidgetCredential,
                               at now: Date) async -> WidgetCache.Outcome {
-        let have = (try? WidgetCache.snapshot(of: id)).flatMap(drawableRevision)
+        let have = (try? WidgetCache.snapshot(of: id, for: credential)).flatMap(drawableRevision)
         let answer: Result<WidgetAnswer, any Error>
         do {
             answer = .success(try await gateway.widget(id, family: family, have: have, widgetToken: credential.widgetToken))

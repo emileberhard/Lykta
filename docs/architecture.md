@@ -374,11 +374,13 @@ transient failure or a gateway older than widgets draws the cached content as
 stale and retries in 15 minutes, then hourly. A timeline asks for its reload
 at the stale time or after three hours, whichever comes first, and iOS decides
 when it happens. A fetch names the cached revision only when that content
-decodes, so an updated app replaces a cached `requires` answer. An answer is
-recorded only while the credential that fetched it is still the keychain's,
-and Reset deletes the credential and then the cache, so nothing from before a
-Reset shows after it. A cache file that no longer decodes, such as after a
-downgrade, counts as empty, and a failed write loses only what the next fetch
+decodes, so an updated app replaces a cached `requires` answer. The cache belongs to
+one widget credential, kept as its hash: an answer is recorded only while the
+credential that fetched it is still the keychain's, a 401 marks the cache
+revoked so later answers for that credential are dropped, and a cache written
+for another credential counts as empty. Reset deletes the credential and then
+the cache, so nothing from before a Reset shows after it. A cache file that no
+longer decodes, such as after a downgrade, counts as empty, and a failed write loses only what the next fetch
 restores, because the gateway can rebuild the cache. When the cache cannot be
 locked or read, the provider still draws the gateway's answer, uncached, if
 the credential that fetched it is still current. Gallery previews
