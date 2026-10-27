@@ -41,7 +41,8 @@ Harbor keeps each trial's transcript, token counts, cost and timings, and each
 task's collect hook saves the gateway's events as `artifacts/events.json`.
 `scripts/eval-metrics` reads those from one or more job directories, and
 `just evals` runs it on the job it just finished. It prints a table for each
-agent, version and model, with a median row:
+agent, version and model, with a median row. Like the checks, it skips the
+activity `hello`, which setup starts by itself:
 
 - `accepted`: seconds from the start of Harbor's agent phase to the first
   activity or notification the gateway accepted, or `none` when it accepted
