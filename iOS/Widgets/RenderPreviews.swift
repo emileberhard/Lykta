@@ -31,7 +31,11 @@ private enum Staged {
         inputs("widget").map { url in
             let layout: WidgetLayout
             do {
-                layout = try WidgetLayout(json: load(url, for: .widget).layout)
+                let input = try load(url, for: .widget)
+                layout = try WidgetLayout(json: input.layout)
+                guard layout.presentations[family] != nil else {
+                    return WidgetEntry(date: .now, state: .unsupported(title: input.title))
+                }
             } catch {
                 layout = try! WidgetLayout(json: Array(#"{"\#(family.rawValue)": \#(report(error, for: url))}"#.utf8))
             }
