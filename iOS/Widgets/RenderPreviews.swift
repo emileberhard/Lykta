@@ -24,7 +24,7 @@ private enum Staged {
         do {
             let input = try JSONDecoder().decode(Input.self, from: Data(contentsOf: url))
             let data = input.data.movingExampleTimes(to: .now)
-            let state = try LyktaActivity.ContentState(title: input.title, layout: input.layout.filled(with: data).json)
+            let state = try LyktaActivity.ContentState(title: input.title, layout: input.layout.filled(with: data, for: .activity).json)
             try? FileManager.default.removeItem(at: report)
             return state
         } catch {

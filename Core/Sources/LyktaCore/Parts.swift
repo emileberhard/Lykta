@@ -1,7 +1,7 @@
 extension JSONValue {
-    public func expandingParts() throws(LayoutError) -> JSONValue {
+    public func expandingParts(for surface: Surface) throws(LayoutError) -> JSONValue {
         var parts = try Parts(self)
-        return try parts.expand(self)
+        return try parts.expand(self, for: surface)
     }
 }
 
@@ -20,7 +20,7 @@ struct Parts {
         self.definitions = definitions
     }
 
-    mutating func expand(_ value: JSONValue) throws(LayoutError) -> JSONValue {
+    mutating func expand(_ value: JSONValue, for surface: Surface) throws(LayoutError) -> JSONValue {
         guard case var .object(fields) = value, fields.removeValue(forKey: "parts") != nil else { return value }
         for key in fields.keys.sorted() {
             if key == "expanded", case var .object(regions) = fields[key] {
@@ -28,7 +28,7 @@ struct Parts {
                     regions[region] = try node(regions[region]!, at: "expanded.\(region)", source: "expanded.\(region)", stack: [])
                 }
                 fields[key] = .object(regions)
-            } else if ["lockScreen", "compactLeading", "compactTrailing", "minimal", "small"].contains(key) {
+            } else if surface.nodeKeys.contains(key) {
                 fields[key] = try node(fields[key]!, at: key, source: key, stack: [])
             }
         }

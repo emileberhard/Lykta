@@ -10,7 +10,7 @@ struct PartsTests {
          "compactLeading":{"use":"name","modifiers":[{"italic":true}]},"compactTrailing":"","minimal":""}
         """#)
         let data = try json(#"{"item":{"name":"Outside"},"items":[{"name":"Milk","done":false},{"name":"Eggs","done":true}]}"#)
-        let filled = try template.filled(with: data)
+        let filled = try template.filled(with: data, for: .activity)
         #expect(try filled == json(#"""
         {"lockScreen":{"vstack":[{"hstack":[{"text":"Milk","modifiers":[{"bold":true}]},{"toggle":"items.0.done","isOn":false,"label":"Done"}]},
         {"hstack":[{"text":"Eggs","modifiers":[{"bold":true}]},{"toggle":"items.1.done","isOn":true,"label":"Done"}]}]},
@@ -25,14 +25,14 @@ struct PartsTests {
         "compactLeading":{"use":"word","modifiers":[{"bold":true}]},"compactTrailing":{"gauge":0.5,"currentValueLabel":{"use":"word"}},
         "minimal":{"use":"word"},"expanded":{"center":{"use":"word"}}}
         """#)
-        #expect(try template.expandingParts() == json(#"""
+        #expect(try template.expandingParts(for: .activity) == json(#"""
         {"lockScreen":{"grid":[[{"if":true,"then":"Hi","else":"Hi"}],
         [{"button":"go","label":"Hi","set":{"target":{"use":"literal"}},"modifiers":[{"overlay":"Hi"}]}]]},
         "compactLeading":{"text":"Hi","modifiers":[{"bold":true}]},"compactTrailing":{"gauge":0.5,"currentValueLabel":"Hi"},
         "minimal":"Hi","expanded":{"center":"Hi"}}
         """#))
         let plain = try json(#"{"lockScreen":"Hi"}"#)
-        #expect(try plain.expandingParts() == plain)
+        #expect(try plain.expandingParts(for: .activity) == plain)
     }
 
     @Test func expandsPartsInsideEachGeneratedRowsAndModifiers() throws {
@@ -40,7 +40,7 @@ struct PartsTests {
         {"parts":{"cell":"{{row}}"},"lockScreen":{"grid":[{"each":"rows","as":"row","do":[{"use":"cell"}]}]},
          "compactLeading":{"text":"a","modifiers":[{"each":"rows","as":"row","do":{"overlay":{"use":"cell"}}}]},"compactTrailing":"","minimal":""}
         """#)
-        #expect(try template.expandingParts() == json(#"""
+        #expect(try template.expandingParts(for: .activity) == json(#"""
         {"lockScreen":{"grid":[{"each":"rows","as":"row","do":["{{row}}"]}]},
          "compactLeading":{"text":"a","modifiers":[{"each":"rows","as":"row","do":{"overlay":"{{row}}"}}]},"compactTrailing":"","minimal":""}
         """#))
@@ -50,7 +50,7 @@ struct PartsTests {
         let template = try json(#"""
         {"parts":{"row":{"text":"{{item}}"},"rows":{"each":"items","as":"item","do":{"use":"row"}}},"lockScreen":{"vstack":[{"use":"rows"}]}}
         """#)
-        #expect(try template.expandingParts() == json(#"""
+        #expect(try template.expandingParts(for: .activity) == json(#"""
         {"lockScreen":{"vstack":[{"each":"items","as":"item","do":{"text":"{{item}}"}}]}}
         """#))
     }
@@ -59,7 +59,7 @@ struct PartsTests {
         let template = try json(#"""
         {"parts":{"base":"Hi","cell":"{{row}}"},"lockScreen":{"use":"base","modifiers":[{"each":"rows","as":"row","do":{"overlay":{"use":"cell"}}}]}}
         """#)
-        #expect(try template.expandingParts() == json(#"""
+        #expect(try template.expandingParts(for: .activity) == json(#"""
         {"lockScreen":{"text":"Hi","modifiers":[{"each":"rows","as":"row","do":{"overlay":"{{row}}"}}]}}
         """#))
     }
@@ -73,7 +73,7 @@ struct PartsTests {
         (#"{"parts":{"a":"A"},"minimal":{"use":"a","modifiers":4}}"#, "minimal.modifiers: expected an array"),
     ])
     func rejectsInvalidDefinitionsAndUses(input: String, message: String) throws {
-        #expect(throws: LayoutError(message)) { try json(input).expandingParts() }
+        #expect(throws: LayoutError(message)) { try json(input).expandingParts(for: .activity) }
     }
 
     @Test func stopsAnExponentialGraphAtTheNodeBudget() throws {
@@ -83,7 +83,7 @@ struct PartsTests {
             parts["p\(index)"] = .object(["hstack": .array([use, use])])
         }
         let template = JSONValue.object(["parts": .object(parts), "lockScreen": .object(["use": .string("p30")])])
-        #expect(throws: LayoutError("parts expand to more than 256 nodes")) { try template.expandingParts() }
+        #expect(throws: LayoutError("parts expand to more than 256 nodes")) { try template.expandingParts(for: .activity) }
     }
 
     @Test func acceptsTheNodeBudgetAndCountsAppendedOverlays() throws {
@@ -93,9 +93,9 @@ struct PartsTests {
             "lockScreen": .object(["vstack": .array(Array(repeating: use, count: Layout.maximumNodes - 4))]),
             "compactLeading": use, "compactTrailing": use, "minimal": use, "small": .null,
         ]
-        _ = try Layout(json: JSONValue.object(fields).filled(with: .object([:])).json)
+        _ = try Layout(json: JSONValue.object(fields).filled(with: .object([:]), for: .activity).json)
         fields["minimal"] = .object(["use": .string("leaf"), "modifiers": .array([.object(["overlay": use])])])
-        #expect(throws: LayoutError("parts expand to more than 256 nodes")) { try JSONValue.object(fields).expandingParts() }
+        #expect(throws: LayoutError("parts expand to more than 256 nodes")) { try JSONValue.object(fields).expandingParts(for: .activity) }
     }
 
     @Test func appendedModifiersKeepTheirAuthoredPathsThroughAliases() throws {
@@ -104,7 +104,7 @@ struct PartsTests {
         "lockScreen":{"use":"alias","modifiers":[{"frame":{"width":-1}}]},"compactLeading":"","compactTrailing":"","minimal":""}
         """#)
         #expect(throws: LayoutError("lockScreen.modifiers[0].frame.width: must not be negative (used at lockScreen.modifiers[2])")) {
-            try template.filled(with: .object([:]))
+            try template.filled(with: .object([:]), for: .activity)
         }
     }
 
@@ -112,7 +112,7 @@ struct PartsTests {
         var parts: [String: JSONValue] = ["p0": .string("leaf")]
         for index in 1...2_000 { parts["p\(index)"] = .object(["use": .string("p\(index - 1)")]) }
         let template = JSONValue.object(["parts": .object(parts), "minimal": .object(["use": .string("p2000")])])
-        #expect(try template.expandingParts() == .object(["minimal": .string("leaf")]))
+        #expect(try template.expandingParts(for: .activity) == .object(["minimal": .string("leaf")]))
     }
 
     @Test(arguments: [false, true])
@@ -121,14 +121,14 @@ struct PartsTests {
         let template = try json(#"{"parts":{"bad":{"symbol":"wifi","value":2}},"lockScreen":\#(node),"compactLeading":"","compactTrailing":"","minimal":""}"#)
         let site = repeated ? "lockScreen.vstack[0].do" : "lockScreen"
         #expect(throws: LayoutError("parts.bad.value: expected a value within 0...1 (used at \(site))")) {
-            try template.filled(with: json(#"{"items":[1,2]}"#))
+            try template.filled(with: json(#"{"items":[1,2]}"#), for: .activity)
         }
     }
 
     @Test func missingDataNamesTheAuthoredPart() throws {
         let template = try json(#"{"parts":{"bad":{"text":"{{missing}}"}},"lockScreen":{"use":"bad"},"compactLeading":"","compactTrailing":"","minimal":""}"#)
         #expect(throws: LayoutError(#"parts.bad.text: data has no value at "missing" (used at lockScreen)"#)) {
-            try template.filled(with: .object([:]))
+            try template.filled(with: .object([:]), for: .activity)
         }
     }
 

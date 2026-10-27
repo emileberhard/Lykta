@@ -38,6 +38,23 @@ struct DeviceAPITests {
         #expect(result.activities.isEmpty)
     }
 
+    @Test func widgetReportsNameKnownFamiliesAndBoundTheirPlaces() throws {
+        let place = #"{"widget": "\#(UUID())", "family": "systemSmall"}"#
+        let report = try JSONDecoder().decode(WidgetReport.self, from: Data(#"{"layoutVersion": "0.12.0", "places": [\#(place)]}"#.utf8))
+        #expect(report.pushToken == nil && report.places.map(\.family) == [.systemSmall])
+        let unknown = #"{"layoutVersion": "0.12.0", "places": [{"widget": "\#(UUID())", "family": "systemHuge"}]}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(WidgetReport.self, from: Data(unknown.utf8)) }
+        let many = #"{"layoutVersion": "0.12.0", "places": [\#(Array(repeating: place, count: WidgetReport.maximumPlaces + 1).joined(separator: ","))]}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(WidgetReport.self, from: Data(many.utf8)) }
+    }
+
+    @Test(arguments: [WidgetSnapshot.Content.layout(.object(["systemSmall": .string("6,400")])), .requires(Version(0, 13, 0))])
+    func widgetSnapshotsRoundTripWithAPlainDecoder(content: WidgetSnapshot.Content) throws {
+        let snapshot = WidgetSnapshot(id: UUID(), title: "Steps", revision: 3, staleAt: Date(timeIntervalSince1970: 1793000000), content: content)
+        let decoded = try JSONDecoder().decode(WidgetSnapshot.self, from: JSONEncoder().encode(snapshot))
+        #expect(decoded.content == content && decoded.staleAt == snapshot.staleAt && decoded.revision == 3)
+    }
+
     private func decode(_ fields: [String: JSONValue]) throws(LayoutError) -> DeviceReport {
         do {
             return try JSONDecoder().decode(DeviceReport.self, from: Data(JSONValue.object(fields).json))

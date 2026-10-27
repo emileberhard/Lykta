@@ -31,7 +31,7 @@ nonisolated struct Example: Identifiable, Sendable {
         id = file.deletingPathExtension().lastPathComponent
         self.title = title
         self.fields = fields
-        preview = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: Self.data(fields["data"], at: date)).json)
+        preview = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: Self.data(fields["data"], at: date), for: .activity).json)
     }
 
     func request(at date: Date) -> JSONValue {

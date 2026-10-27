@@ -101,34 +101,34 @@ struct TemplateTests {
     ])
 
     @Test func wholePlaceholdersKeepTheirType() throws {
-        #expect(try JSONValue.string("{{fraction}}").filled(with: data) == .number(0.6))
+        #expect(try JSONValue.string("{{fraction}}").filled(with: data, for: .activity) == .number(0.6))
     }
 
     @Test func embeddedPlaceholdersBecomeText() throws {
-        #expect(try JSONValue.string("{{done}} of {{ total }}: {{steps.0.name}}").filled(with: data) == .string("3 of 5: Build"))
+        #expect(try JSONValue.string("{{done}} of {{ total }}: {{steps.0.name}}").filled(with: data, for: .activity) == .string("3 of 5: Build"))
     }
 
     @Test func valuesInsertedIntoSVGMarkupAreEscaped() throws {
         let data = try json(#"{"team": "R&D <'x'>", "icon": "<svg/>"}"#)
-        #expect(try json(#"{"svg": "<text>{{team}}</text>", "text": "Team {{team}}"}"#).filled(with: data)
+        #expect(try json(#"{"svg": "<text>{{team}}</text>", "text": "Team {{team}}"}"#).filled(with: data, for: .activity)
             == json(#"{"svg": "<text>R&amp;D &lt;&apos;x&apos;&gt;</text>", "text": "Team R&D <'x'>"}"#))
-        #expect(try json(#"{"svg": "{{icon}}"}"#).filled(with: data) == json(#"{"svg": "<svg/>"}"#))
+        #expect(try json(#"{"svg": "{{icon}}"}"#).filled(with: data, for: .activity) == json(#"{"svg": "<svg/>"}"#))
     }
 
     @Test func missingAndCompoundValuesAreErrors() {
         #expect(throws: LayoutError(#"lockScreen: data has no value at "steps.1.name""#)) {
-            try JSONValue.object(["lockScreen": .string("{{steps.1.name}}")]).filled(with: data)
+            try JSONValue.object(["lockScreen": .string("{{steps.1.name}}")]).filled(with: data, for: .activity)
         }
         #expect(throws: LayoutError(#"minimal[0]: data "steps" is not a single value and cannot be inserted into text"#)) {
-            try JSONValue.object(["minimal": .array([.string("Steps: {{steps}}")])]).filled(with: data)
+            try JSONValue.object(["minimal": .array([.string("Steps: {{steps}}")])]).filled(with: data, for: .activity)
         }
     }
 
     @Test func eachRepeatsItsItemForEveryEntry() throws {
         let template = try json(#"["Steps", {"each": "steps", "as": "step", "do": {"text": "{{step.name}}"}}]"#)
-        #expect(try template.filled(with: data) == json(#"["Steps", {"text": "Build"}]"#))
+        #expect(try template.filled(with: data, for: .activity) == json(#"["Steps", {"text": "Build"}]"#))
         #expect(throws: LayoutError(#"[1].each: data "done" is not a list"#)) {
-            try json(#"["Steps", {"each": "done", "as": "step", "do": "x"}]"#).filled(with: data)
+            try json(#"["Steps", {"each": "done", "as": "step", "do": "x"}]"#).filled(with: data, for: .activity)
         }
     }
 
@@ -136,30 +136,30 @@ struct TemplateTests {
         let data = JSONValue.object(["text": .string(String(repeating: "x", count: 900_000)), "list": .array(Array(repeating: .number(1), count: 900))])
         let overflow = LayoutError("the filled layout is over \(Layout.maximumBytes) bytes")
         #expect(throws: overflow) {
-            try JSONValue.string(String(repeating: "{{text}}", count: 10_000)).filled(with: data)
+            try JSONValue.string(String(repeating: "{{text}}", count: 10_000)).filled(with: data, for: .activity)
         }
         #expect(throws: overflow) {
-            try JSONValue.array(Array(repeating: .string("{{list}}"), count: 10_000)).filled(with: data)
+            try JSONValue.array(Array(repeating: .string("{{list}}"), count: 10_000)).filled(with: data, for: .activity)
         }
         let fits = JSONValue.object(["text": .string(String(repeating: "x", count: Layout.maximumBytes))])
-        #expect(try JSONValue.string("{{text}}").filled(with: fits) != .null)
+        #expect(try JSONValue.string("{{text}}").filled(with: fits, for: .activity) != .null)
     }
 
     @Test func togglesReadTheirStateFromTheirDataPath() throws {
         let data = try json(#"{"items": [{"name": "Milk", "done": true}]}"#)
         let template = try json(#"[{"each": "items", "as": "item", "do": {"toggle": "item.done", "label": "{{item.name}}"}}]"#)
-        #expect(try template.filled(with: data) == json(#"[{"toggle": "items.0.done", "isOn": true, "label": "Milk"}]"#))
+        #expect(try template.filled(with: data, for: .activity) == json(#"[{"toggle": "items.0.done", "isOn": true, "label": "Milk"}]"#))
         #expect(throws: LayoutError("isOn: a toggle reads isOn from the data at its path")) {
-            try json(#"{"toggle": "items.0.done", "isOn": false, "label": "Milk"}"#).filled(with: data)
+            try json(#"{"toggle": "items.0.done", "isOn": false, "label": "Milk"}"#).filled(with: data, for: .activity)
         }
     }
 
     @Test func bracketsLookUpAPathFromTheData() throws {
         let data = try json(#"{"step": 2, "steps": {"2": {"text": "Stir"}}, "names": ["a", "b"], "pick": 1, "item": {"key": "2"}}"#)
-        #expect(try json(#"["{{steps[step].text}}", "{{names[pick]}}", "{{steps[item.key].text}}"]"#).filled(with: data)
+        #expect(try json(#"["{{steps[step].text}}", "{{names[pick]}}", "{{steps[item.key].text}}"]"#).filled(with: data, for: .activity)
             == json(#"["Stir", "b", "Stir"]"#))
         #expect(throws: LayoutError(#"text: data "steps" must be an index or a key to look up "names[steps]""#)) {
-            try json(#"{"text": "{{names[steps]}}"}"#).filled(with: data)
+            try json(#"{"text": "{{names[steps]}}"}"#).filled(with: data, for: .activity)
         }
     }
 
@@ -168,12 +168,12 @@ struct TemplateTests {
         let template = try json(#"""
             [{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1, "items[item.count].count": {"since": "paused"}}}}]
             """#)
-        #expect(throws: LayoutError(#"[0].do.add.items[item.count].count: data has no value at "items.4.count""#)) { try template.filled(with: data) }
+        #expect(throws: LayoutError(#"[0].do.add.items[item.count].count: data has no value at "items.4.count""#)) { try template.filled(with: data, for: .activity) }
         #expect(throws: LayoutError(#"set.items[pick].count: "items.0.count" is already changed by this button; change each value once"#)) {
-            try json(#"{"button": "go", "label": "Go", "set": {"items[pick].count": 10, "items.0.count": 20}}"#).filled(with: data)
+            try json(#"{"button": "go", "label": "Go", "set": {"items[pick].count": 10, "items.0.count": 20}}"#).filled(with: data, for: .activity)
         }
         let each = try json(#"[{"each": "items", "as": "item", "do": {"button": "more", "label": "+", "add": {"item.count": 1}, "set": {"paused": "{{item.count}}"}}}]"#)
-        #expect(try each.filled(with: data) == json(#"""
+        #expect(try each.filled(with: data, for: .activity) == json(#"""
             [{"button": "more", "label": "+", "add": {"items.0.count": 1}, "set": {"paused": 1}},
              {"button": "more", "label": "+", "add": {"items.1.count": 1}, "set": {"paused": 4}}]
             """#))

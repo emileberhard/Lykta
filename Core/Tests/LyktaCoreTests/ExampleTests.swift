@@ -27,7 +27,7 @@ struct ExampleTests {
         #expect(!files.isEmpty)
         for file in files {
             let body = try JSONDecoder().decode(Body.self, from: Data(contentsOf: file))
-            let state = try LyktaActivity.ContentState(title: body.title, layout: body.layout.filled(with: body.data.movingExampleTimes(to: .now)).json)
+            let state = try LyktaActivity.ContentState(title: body.title, layout: body.layout.filled(with: body.data.movingExampleTimes(to: .now), for: .activity).json)
             let decoded = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: JSONEncoder().encode(state))
             #expect(decoded == state, "\(file.lastPathComponent)")
             #expect(decoded.layout != nil, "\(file.lastPathComponent)")

@@ -162,6 +162,11 @@ extension Layout {
         "0.8.0": [
             "paint.mesh",
         ],
+        "0.12.0": [
+            "widget.background", "widget.link", "widget.systemSmall",
+            "Node.Content.Condition.Environment.accented", "Node.Content.Condition.Environment.fullColor",
+            "Node.Content.Condition.Environment.showsBackground",
+        ],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

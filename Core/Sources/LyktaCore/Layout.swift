@@ -35,37 +35,22 @@ public struct Layout: Decodable, Sendable {
     public private(set) var requirement: Requirement?
     private(set) var features: [String] = []
 
+    static let nodeKeys: Set<String> = ["lockScreen", "compactLeading", "compactTrailing", "minimal", "small"]
+
     public init(json: [UInt8]) throws(LayoutError) {
-        guard json.count <= Self.maximumBytes else {
-            throw LayoutError("layout is \(json.count) bytes; the limit is \(Self.maximumBytes)")
-        }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom(Self.date)
-        let log = FeatureLog()
-        do {
-            self = try FeatureLog.$current.withValue(log) { try decoder.decode(Layout.self, from: Data(json)) }
-        } catch let error as DecodingError {
-            throw LayoutError(error)
-        } catch {
-            throw LayoutError("\(error)")
-        }
-        var budget = (nodes: 0, modifiers: 0)
-        for root in roots { try Self.admit(root, depth: 1, budget: &budget) }
-        var effects: [String: Effects] = [:]
-        for case let .button(name, _, _, change) in roots.flatMap(\.descendants).map(\.content) {
-            guard effects[name, default: change] == change else { throw LayoutError("buttons named \(name) change the data differently") }
-            effects[name] = change
-        }
-        requirement = log.requirement
-        features = log.features
+        let decoded = try decodeLayout(Layout.self, json: json)
+        self = decoded.value
+        try roots.admit()
+        requirement = decoded.log.requirement
+        features = decoded.log.features
     }
 
     public var buttons: [String: Effects] {
-        Dictionary(roots.flatMap(\.shown).compactMap { if case let .button(name, _, _, effects) = $0.content { (name, effects) } else { nil } }) { $1 }
+        roots.buttons
     }
 
     public var toggles: [String: Bool] {
-        Dictionary(roots.flatMap(\.shown).compactMap { if case let .toggle(path, isOn, _, _) = $0.content { (path, isOn) } else { nil } }) { $1 }
+        roots.toggles
     }
 
     private var roots: [Node] {
@@ -90,16 +75,7 @@ public struct Layout: Decodable, Sendable {
         if let link, link.scheme?.lowercased() != "https" { fields.record("layout.link.appURL", at: "link") }
     }
 
-    private static func admit(_ node: Node, depth: Int, budget: inout (nodes: Int, modifiers: Int)) throws(LayoutError) {
-        budget.nodes += 1
-        budget.modifiers += node.modifiers.count
-        guard depth <= maximumDepth else { throw LayoutError("nodes nest deeper than \(maximumDepth) levels") }
-        guard budget.nodes <= maximumNodes else { throw LayoutError("layout has more than \(maximumNodes) nodes") }
-        guard budget.modifiers <= maximumModifiers else { throw LayoutError("layout has more than \(maximumModifiers) modifiers") }
-        for child in node.children { try admit(child, depth: depth + 1, budget: &budget) }
-    }
-
-    private static func date(_ decoder: any Decoder) throws -> Date {
+    static func date(_ decoder: any Decoder) throws -> Date {
         let container = try decoder.singleValueContainer()
         if let seconds = try? container.decode(Double.self) { return Date(timeIntervalSince1970: seconds) }
         guard let date = date(try container.decode(String.self)) else {
@@ -110,6 +86,51 @@ public struct Layout: Decodable, Sendable {
 
     static func date(_ text: String) -> Date? {
         (try? Date(text, strategy: .iso8601)) ?? (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text))
+    }
+}
+
+func decodeLayout<T: Decodable>(_ type: T.Type, json: [UInt8]) throws(LayoutError) -> (value: T, log: FeatureLog) {
+    guard json.count <= Layout.maximumBytes else {
+        throw LayoutError("layout is \(json.count) bytes; the limit is \(Layout.maximumBytes)")
+    }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .custom(Layout.date)
+    let log = FeatureLog()
+    do {
+        return (try FeatureLog.$current.withValue(log) { try decoder.decode(T.self, from: Data(json)) }, log)
+    } catch let error as DecodingError {
+        throw LayoutError(error)
+    } catch {
+        throw LayoutError("\(error)")
+    }
+}
+
+extension [Node] {
+    func admit() throws(LayoutError) {
+        var budget = (nodes: 0, modifiers: 0)
+        for root in self { try Self.admit(root, depth: 1, budget: &budget) }
+        var effects: [String: Effects] = [:]
+        for case let .button(name, _, _, change) in flatMap(\.descendants).map(\.content) {
+            guard effects[name, default: change] == change else { throw LayoutError("buttons named \(name) change the data differently") }
+            effects[name] = change
+        }
+    }
+
+    var buttons: [String: Effects] {
+        Dictionary(flatMap(\.shown).compactMap { if case let .button(name, _, _, effects) = $0.content { (name, effects) } else { nil } }) { $1 }
+    }
+
+    var toggles: [String: Bool] {
+        Dictionary(flatMap(\.shown).compactMap { if case let .toggle(path, isOn, _, _) = $0.content { (path, isOn) } else { nil } }) { $1 }
+    }
+
+    private static func admit(_ node: Node, depth: Int, budget: inout (nodes: Int, modifiers: Int)) throws(LayoutError) {
+        budget.nodes += 1
+        budget.modifiers += node.modifiers.count
+        guard depth <= Layout.maximumDepth else { throw LayoutError("nodes nest deeper than \(Layout.maximumDepth) levels") }
+        guard budget.nodes <= Layout.maximumNodes else { throw LayoutError("layout has more than \(Layout.maximumNodes) nodes") }
+        guard budget.modifiers <= Layout.maximumModifiers else { throw LayoutError("layout has more than \(Layout.maximumModifiers) modifiers") }
+        for child in node.children { try admit(child, depth: depth + 1, budget: &budget) }
     }
 }
 
@@ -206,7 +227,7 @@ extension Node {
         }
 
         public enum Condition: Decodable, Sendable {
-            public enum Environment: String, Choice { case stale, dark, luminanceReduced, fullscreen, limitedWidth }
+            public enum Environment: String, Choice { case stale, dark, luminanceReduced, fullscreen, limitedWidth, fullColor, accented, showsBackground }
 
             case environment(Environment)
             case value(Bool)
@@ -465,9 +486,7 @@ extension KeyedDecodingContainer<Key> {
     }
 
     func control(_ kind: String) throws -> Node {
-        guard codingPath.first.map({ ["lockScreen", "expanded"].contains($0.stringValue) }) == true else {
-            throw invalid("links, buttons and toggles work only in lockScreen and expanded", at: kind)
-        }
+        if let refusal = Presentation(codingPath).refusal(of: kind) { throw invalid(refusal, at: kind) }
         let label: Node = try required("label")
         guard !label.descendants.contains(where: \.isControl) else {
             throw invalid("a label cannot contain links, buttons or toggles", at: "label")

@@ -220,7 +220,7 @@ actor Store {
             }
             let state = try Self.content(title: title, layout: layout, data: data)
             let expandedLayout: JSONValue
-            do { expandedLayout = try layout.expandingParts() }
+            do { expandedLayout = try layout.expandingParts(for: .activity) }
             catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
             try Self.admit(state, on: device)
             let content = try Self.encoded(state)
@@ -548,7 +548,7 @@ actor Store {
             if changed != data {
                 let template = try decode(activity.layout)
                 let state = try Self.pressing { () throws(LayoutError) in
-                    try LyktaActivity.ContentState(title: activity.title, layout: template.filled(with: changed).json)
+                    try LyktaActivity.ContentState(title: activity.title, layout: template.filled(with: changed, for: .activity).json)
                 }
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
@@ -855,7 +855,7 @@ actor Store {
 
     private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> LyktaActivity.ContentState {
         do {
-            return try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data).json)
+            return try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data, for: .activity).json)
         } catch let error as LayoutError {
             throw APIError(.invalidLayout, error.description)
         }
@@ -901,7 +901,7 @@ actor Store {
         guard let exceeded else { return size }
         let layout = try JSONDecoder().decode(JSONValue.self, from: Data(activity.layout.utf8))
         let data = try JSONDecoder().decode(JSONValue.self, from: Data(activity.data.utf8))
-        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data), for: device.layoutVersion)))
+        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data, for: .activity), for: device.layoutVersion)))
     }
 
     private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {

@@ -1,15 +1,15 @@
 import Foundation
 
 extension JSONValue {
-    public func filled(with data: JSONValue) throws(LayoutError) -> JSONValue {
+    public func filled(with data: JSONValue, for surface: Surface) throws(LayoutError) -> JSONValue {
         var template = Template(data: data)
         var parts = try Parts(self)
-        let expanded = try parts.expand(self)
+        let expanded = try parts.expand(self, for: surface)
         let filled: JSONValue
         do { filled = try template.fill(expanded, at: "", output: "", in: [:]) }
         catch { throw parts.locating(error) }
         if case let .object(fields) = self, fields["parts"] != nil {
-            do { _ = try Layout(json: filled.json) }
+            do { try surface.validate(filled.json) }
             catch { throw parts.locating(template.locating(error)) }
         }
         return filled
