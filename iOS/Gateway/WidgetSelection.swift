@@ -33,7 +33,7 @@ nonisolated struct WidgetEntity: AppEntity {
 
 nonisolated struct WidgetQuery: EntityQuery {
     func entities(for identifiers: [UUID]) async throws -> [WidgetEntity] {
-        let titles = Dictionary(try WidgetCache.titles().map { ($0.id, $0.title) }) { first, _ in first }
+        let titles = Dictionary((try? WidgetCache.titles())?.map { ($0.id, $0.title) } ?? []) { first, _ in first }
         return identifiers.map { WidgetEntity(id: $0, title: titles[$0] ?? String(localized: "Widget")) }
     }
 
@@ -47,7 +47,9 @@ nonisolated struct WidgetQuery: EntityQuery {
         }
         do {
             let widgets = try await gateway.widgets(widgetToken: credential.widgetToken)
-            try WidgetCache.remember(widgets, listedWith: credential, at: .now)
+            guard (try? WidgetCache.remember(widgets, listedWith: credential, at: .now)) != false else {
+                throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
+            }
             return widgets.map { WidgetEntity(id: $0.id, title: $0.title) }
         } catch let error as AppError where error.status == 401 {
             throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))

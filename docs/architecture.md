@@ -375,8 +375,11 @@ when it happens. A fetch names the cached revision only when that content
 decodes, so an updated app replaces a cached `requires` answer. An answer is
 recorded only while the credential that fetched it is still the keychain's,
 and Reset deletes the credential and then the cache, so nothing from before a
-Reset shows after it. A cache that cannot be locked, read or written stops
-nothing: the provider draws the gateway's answer uncached. Gallery previews
+Reset shows after it. A cache file that no longer decodes, such as after a
+downgrade, counts as empty, and a failed write loses only what the next fetch
+restores, because the gateway can rebuild the cache. When the cache cannot be
+locked or read, the provider still draws the gateway's answer, uncached, if
+the credential that fetched it is still current. Gallery previews
 draw cached content and never fetch, because a preview is not a place. The
 cache keeps the 64 widgets used most recently.
 

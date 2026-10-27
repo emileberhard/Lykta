@@ -101,6 +101,7 @@ nonisolated struct WidgetProvider: AppIntentTimelineProvider {
         do {
             return try WidgetCache.record(answer, for: id, fetchedWith: credential, at: now)
         } catch {
+            guard (try? KeychainItem.widget.load())?.widgetToken == credential.widgetToken else { return .signedOut }
             return WidgetCache.Outcome(answer)
         }
     }

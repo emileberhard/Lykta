@@ -245,7 +245,7 @@ final class Model {
     private func syncWidgets() {
         let previous = widgetSync
         widgetSync = Task {
-            await previous?.value
+            await withTaskCancellationHandler { await previous?.value } onCancel: { previous?.cancel() }
             await reportWidgets()
         }
     }

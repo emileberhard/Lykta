@@ -71,14 +71,15 @@ nonisolated enum WidgetCache {
         }
     }
 
-    static func remember(_ widgets: [WidgetSummary], listedWith credential: WidgetCredential, at now: Date) throws {
+    static func remember(_ widgets: [WidgetSummary], listedWith credential: WidgetCredential, at now: Date) throws -> Bool {
         try update { entries in
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return }
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return false }
             for widget in widgets where entries[widget.id.uuidString]?.isDeleted != true {
                 var entry = entries[widget.id.uuidString] ?? Entry(title: widget.title, usedAt: now)
                 entry.title = widget.title
                 entries[widget.id.uuidString] = entry
             }
+            return true
         }
     }
 
@@ -111,17 +112,19 @@ nonisolated enum WidgetCache {
                     entries[key] = nil
                 }
             }
-            try JSONEncoder().encode(entries).write(to: file, options: .atomic)
+            try? JSONEncoder().encode(entries).write(to: file, options: .atomic)
             return result
         }
     }
 
     private static func entries(in file: URL) throws -> [String: Entry] {
+        let data: Data
         do {
-            return try JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: file))
+            data = try Data(contentsOf: file)
         } catch CocoaError.fileReadNoSuchFile {
             return [:]
         }
+        return (try? JSONDecoder().decode([String: Entry].self, from: data)) ?? [:]
     }
 
     private static func locked<Result>(_ body: (URL) throws -> Result) throws -> Result {
