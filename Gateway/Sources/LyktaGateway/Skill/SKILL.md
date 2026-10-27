@@ -14,12 +14,14 @@ Lykta app does not need to be open.
 
 ## The lykta command
 
-Send everything with `lykta`, a small command in this skill's `scripts`
-folder: `lykta` for sh with curl, `lykta.ps1` for PowerShell. The setup the
+Send everything with `lykta`, a small command the gateway serves with this
+skill: `lykta` for sh with curl, `lykta.ps1` for PowerShell. The setup the
 user copied from the Lykta app installs it, saves the gateway and token, and
-says how to run it. Otherwise run `scripts/lykta` from this folder, which uses
-`LYKTA_URL` and `LYKTA_TOKEN` when they are set, or first
-`scripts/lykta setup URL TOKEN` with the user's gateway and token.
+says how to run it. `lykta` keeps itself and every copy of this skill that
+`lykta install` made in step with the gateway. Without that setup, run
+`scripts/lykta` from this skill's folder, which uses `LYKTA_URL` and
+`LYKTA_TOKEN` when they are set, or first `scripts/lykta setup URL TOKEN` with
+the user's gateway and token.
 
 | Command | Does |
 | --- | --- |
@@ -28,6 +30,7 @@ says how to run it. Otherwise run `scripts/lykta` from this folder, which uses
 | `lykta delete PATH` | `DELETE /v1/PATH` |
 | `lykta media FILE` | Uploads an image or sound and prints its id |
 | `lykta docs FILE...` | Prints files of this skill |
+| `lykta install DIR` | Installs this skill as `DIR/lykta`, for the folder an agent reads personal skills from |
 
 It prints the gateway's JSON. When the gateway refuses a request, `lykta`
 exits with 1 and prints the error, whose message names what to fix; 2 means a

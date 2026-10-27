@@ -4,7 +4,8 @@ $ErrorActionPreference = 'Stop'
 $usage = @'
 Usage: lykta COMMAND
 
-  setup URL TOKEN   Save the gateway URL and agent token, check them and print the skill
+  setup URL TOKEN   Save the gateway URL and agent token, check them, install lykta and print the skill
+  install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or piped in, to /v1/PATH and wait for Apple's answer
   get PATH          GET /v1/PATH, such as activities/deploy or actions?wait=25
@@ -24,8 +25,10 @@ function Fail([string]$Message, [int]$Code) {
 $onWindows = [Environment]::OSVersion.Platform -eq 'Win32NT'
 $configHome = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { Join-Path $HOME '.config' }
 $config = Join-Path $configHome 'lykta'
+$cli = [IO.Path]::Combine($HOME, '.local', 'share', 'lykta', 'lykta.ps1')
 $url = $null
 $token = $null
+$served = $null
 
 function Read-Setting([string]$Variable, [string]$File) {
     $value = [Environment]::GetEnvironmentVariable($Variable)
@@ -49,6 +52,75 @@ $handler = [System.Net.Http.HttpClientHandler]::new()
 $handler.AllowAutoRedirect = $false
 $client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(90)
+
+function Get-Served($Response) {
+    $values = $null
+    if ($Response.Headers.TryGetValues('lykta-skill', [ref]$values)) {
+        $value = @($values)[0]
+        if ($value -match '^[0-9a-f]{64}$') { return $value }
+    }
+    $null
+}
+
+function Test-Link([string]$Path) {
+    [bool]((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)
+}
+
+function Get-Stamp([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Test-Link $Path)) { return $null }
+    $last = Get-Content -LiteralPath $Path -Tail 1
+    if ($last -match 'lykta-skill ([0-9a-f]{64})') { return $Matches[1] }
+    $null
+}
+
+function Set-SkillFile([string]$Name, [string]$Path, [string]$Format) {
+    $temp = Join-Path (Split-Path -Parent $Path) ".$(Split-Path -Leaf $Path).$PID"
+    $cancel = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(10))
+    try {
+        $response = $client.GetAsync("$url/skill/$Name", $cancel.Token).GetAwaiter().GetResult()
+        $digest = Get-Served $response
+        if (-not $response.IsSuccessStatusCode -or -not $digest) { return $false }
+        $script:served = $digest
+        $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+        [IO.File]::WriteAllBytes($temp, [byte[]]($bytes + [Text.Encoding]::UTF8.GetBytes("`n$($Format -f $digest)`n")))
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temp, $Path, [NullString]::Value) } else { [IO.File]::Move($temp, $Path) }
+        $true
+    } catch {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+        $false
+    } finally {
+        $cancel.Dispose()
+    }
+}
+
+function Test-Saved {
+    $path = Join-Path $config 'url'
+    (Test-Path -LiteralPath $path) -and $url -ceq ([string](Get-Content -LiteralPath $path -Raw)).Trim()
+}
+
+function Update-File([string]$Name, [string]$Path, [string]$Format) {
+    if (Set-SkillFile $Name $Path $Format) {
+        [Console]::Error.WriteLine("lykta: updated $Path to the gateway's version")
+        return $true
+    }
+    [Console]::Error.WriteLine("lykta: could not update $Path from $url; the next lykta command tries again")
+    $false
+}
+
+function Update-Installs {
+    $want = $served
+    if (-not $want -or -not (Test-Saved)) { return }
+    $stamp = Get-Stamp $cli
+    if ($stamp -and $stamp -ne $want -and -not (Update-File 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) { return }
+    $registry = Join-Path $config 'skills'
+    if (-not (Test-Path -LiteralPath $registry)) { return }
+    foreach ($dir in @(Get-Content -LiteralPath $registry)) {
+        if (-not $dir -or -not (Test-Path -LiteralPath $dir -PathType Container) -or (Test-Link $dir)) { continue }
+        $skill = Join-Path $dir 'SKILL.md'
+        $stamp = Get-Stamp $skill
+        if ($stamp -and $stamp -ne $want -and -not (Update-File 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) { return }
+    }
+}
 
 function Test-Refused($Exception) {
     for ($cause = $Exception; $cause; $cause = $cause.InnerException) {
@@ -78,6 +150,7 @@ function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content)
             Fail "$Method $Target got no answer from ${url}: $($cause.GetBaseException().Message); $again" 3
         }
     }
+    $script:served = Get-Served $response
     $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
     $status = [int]$response.StatusCode
     if ($status -ge 200 -and $status -lt 300) { return $text }
@@ -121,13 +194,14 @@ function Invoke-Setup([string[]]$Arguments) {
     } catch {
         Fail "could not save the setup in ${config}: $($_.Exception.Message)" 2
     }
-    $run = $PSCommandPath
+    $share = Split-Path -Parent $cli
+    try { $null = New-Item -ItemType Directory -Force -Path $share } catch { Fail "could not create ${share}: $($_.Exception.Message)" 2 }
+    if (-not (Set-SkillFile 'scripts/lykta.ps1' $cli '# lykta-skill {0}')) { Fail "could not install lykta in $share from $url" 3 }
+    $run = $cli
     if ($onWindows) {
         try {
-            $share = Join-Path $HOME '.local\share\lykta'
             $bin = Join-Path $HOME '.local\bin'
-            $null = New-Item -ItemType Directory -Force -Path $share, $bin
-            if ($PSCommandPath -ne (Join-Path $share 'lykta.ps1')) { Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $share 'lykta.ps1') -Force }
+            $null = New-Item -ItemType Directory -Force -Path $bin
             $launcher = '@powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\share\lykta\lykta.ps1" %*'
             [IO.File]::WriteAllText((Join-Path $bin 'lykta.cmd'), "$launcher`r`n", [Text.Encoding]::ASCII)
             $run = Join-Path $bin 'lykta.cmd'
@@ -139,7 +213,31 @@ function Invoke-Setup([string[]]$Arguments) {
     if ($found -and $found.Source -eq $run) { $run = 'lykta' }
     elseif ($run.StartsWith($HOME)) { $run = '~' + $run.Substring($HOME.Length) }
     Write-Output "Lykta is set up for $url. Run it as $run.`n"
+    Write-Output "Install this skill so later sessions have it: run $run install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.`n"
     Write-Output (Invoke-Gateway 'GET' '/skill/SKILL.md')
+}
+
+function Invoke-Install([string[]]$Arguments) {
+    if ($Arguments.Count -ne 1) { Fail 'usage: lykta install DIR, with the folder your agent reads personal skills from, such as ~/.claude/skills' 2 }
+    if (-not (Test-Saved)) { Fail 'install keeps the skill in step with the gateway saved by lykta setup URL TOKEN, so run that first' 2 }
+    try { $parent = (New-Item -ItemType Directory -Force -Path $Arguments[0]).FullName } catch { Fail "could not create $($Arguments[0])" 2 }
+    $dir = Join-Path $parent 'lykta'
+    $skill = Join-Path $dir 'SKILL.md'
+    if ((Test-Path -LiteralPath $dir) -and ((Test-Link $dir) -or -not (Get-Stamp $skill))) {
+        Fail "$dir exists and lykta did not install it, so it was left alone; remove it or choose another folder" 2
+    }
+    try { $null = New-Item -ItemType Directory -Force -Path $dir } catch { Fail "could not create $dir" 2 }
+    if (-not (Set-SkillFile 'SKILL.md' $skill '<!-- lykta-skill {0} -->')) {
+        if (-not (Get-ChildItem -LiteralPath $dir -Force)) { Remove-Item -LiteralPath $dir -Force }
+        Fail "could not download the skill from $url, or the gateway is older than 0.15.0 and cannot keep installed copies current" 3
+    }
+    $registry = Join-Path $config 'skills'
+    try {
+        if (-not ((Test-Path -LiteralPath $registry) -and @(Get-Content -LiteralPath $registry) -ccontains $dir)) {
+            [IO.File]::AppendAllText($registry, "$dir`n", [Text.UTF8Encoding]::new($false))
+        }
+    } catch { Fail "could not record $dir in ${registry}: $($_.Exception.Message)" 2 }
+    Write-Output "Installed the Lykta skill in $dir; lykta keeps it in step with the gateway."
 }
 
 function Invoke-Docs([string[]]$Names) {
@@ -183,6 +281,7 @@ $verb = if ($args.Count -gt 0) { [string]$args[0] } else { '' }
 $rest = [string[]]@($args | Select-Object -Skip 1)
 switch ($verb) {
     'setup' { Invoke-Setup $rest }
+    'install' { Import-Setup; Invoke-Install $rest }
     'docs' { Import-Setup; Invoke-Docs $rest }
     'put' { Import-Setup; Invoke-Put $rest $piped }
     'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
@@ -192,3 +291,4 @@ switch ($verb) {
     '' { [Console]::Error.WriteLine($usage); exit 2 }
     default { [Console]::Error.WriteLine($usage); Fail "unknown command $verb" 2 }
 }
+Update-Installs

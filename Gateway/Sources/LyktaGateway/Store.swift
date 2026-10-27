@@ -1023,7 +1023,7 @@ actor Store {
         String(format: "%.1f", Double(bytes) / Double(1 << 20))
     }
 
-    private static func hex(_ bytes: [UInt8]) -> String {
+    static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String($0 >> 4, radix: 16) + String($0 & 0xF, radix: 16) }.joined()
     }
 }

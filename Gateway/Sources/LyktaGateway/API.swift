@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 import LyktaCore
 
 struct API: Sendable {
@@ -11,6 +16,12 @@ struct API: Sendable {
     let shutdown: Shutdown
 
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
+        var response = await respond(to: request)
+        response.headers["lykta-skill"] = Self.skillDigest
+        return response
+    }
+
+    private func respond(to request: HTTPRequest) async -> HTTPResponse {
         let failure: APIError
         do {
             return try await route(request, now: Self.now())
@@ -34,7 +45,7 @@ struct API: Sendable {
         method == "POST" && HTTPRequest(method: method, target: target, headers: [:], body: []).path == ["v1", "media"] ? Medium.maximumBytes : 1 << 20
     }
 
-    private static let skill: [String: HTTPResponse] = Dictionary(uniqueKeysWithValues: [
+    private static let skillFiles: [String: [UInt8]] = [
         "SKILL.md": PackageResources.SKILL_md,
         "references/layout.md": PackageResources.layout_md,
         "references/notifications.md": PackageResources.notifications_md,
@@ -65,7 +76,9 @@ struct API: Sendable {
         "examples/notifications/tests-passed.json": PackageResources.tests_passed_json,
         "scripts/lykta": PackageResources.lykta,
         "scripts/lykta.ps1": PackageResources.lykta_ps1,
-    ].map { path, body in
+    ]
+
+    private static let skill: [String: HTTPResponse] = Dictionary(uniqueKeysWithValues: skillFiles.map { path, body in
         let type = switch path.split(separator: ".").last {
         case "md": "text/markdown; charset=utf-8"
         case "scripts/lykta", "ps1": "text/plain; charset=utf-8"
@@ -76,6 +89,9 @@ struct API: Sendable {
         }
         return ("skill/\(path)", HTTPResponse(status: 200, contentType: type, body: body))
     })
+
+    private static let skillDigest = Store.hex(Array(SHA256.hash(data: Data(skillFiles.sorted { $0.key < $1.key }
+        .map { path, body in "\(Store.hex(Array(SHA256.hash(data: Data(body)))))  \(path)\n" }.joined().utf8))))
 
     private func route(_ request: HTTPRequest, now: Int) async throws -> HTTPResponse {
         let path = request.path
