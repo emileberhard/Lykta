@@ -2,9 +2,12 @@
 
 A layout is JSON that the phone renders as native SwiftUI. Nodes nest like
 SwiftUI views, and modifiers apply in order like SwiftUI modifiers. Every
-example below is valid.
+example below is valid. Live Activities and widgets share every node, modifier
+and part; only the root keys, the presentations, differ.
 
 ## Presentations
+
+A Live Activity's layout:
 
 | Key | Required | Shown |
 | --- | --- | --- |
@@ -16,6 +19,14 @@ example below is valid.
 | `background` | no | Lock Screen background color. |
 | `keyline` | no | Dynamic Island outline color. |
 | `link` | no | A URL that opens when the user taps the activity: `https`, or an app URL such as `shortcuts://run-shortcut?name=Lights`. |
+
+A widget's layout (see the [widgets reference](widgets.md)):
+
+| Key | Required | Shown |
+| --- | --- | --- |
+| `systemSmall` | yes | The small square widget on the Home Screen, in the Today view and in StandBy. The system adds margins around it. |
+| `background` | no | A paint, such as a color or `{"gradient": [...]}`, or a node such as an `svg`, behind the content. The system removes it or replaces it with glass or a tint in some places, so the content must read without it. It takes no links. |
+| `link` | no | As for activities, for a tap anywhere outside a link. |
 
 ## Parts
 
@@ -80,7 +91,7 @@ below, its optional fields and an optional `modifiers` array.
 | `{"progress": [start, end]}` | `style`, `countsDown` (false), `pausedAt`. Fills on the phone between the two dates. |
 | `{"gauge": value}` | `min` (0), `max` (1), `style`: `circular` (default), `circularCapacity`, `linear`, `linearCapacity`. Label nodes: `label`, `currentValueLabel`, `minimumValueLabel`, `maximumValueLabel`. |
 | `{"viewThatFits": [nodes]}` | `in`: `horizontal`, `vertical`. Shows the first node that fits, so put the largest first. |
-| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`, or `true`/`false` from data: `{"if": "{{failed}}", ...}`. |
+| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`, `fullColor` (drawn in its own colors), `accented` (the system tints it, as on a tinted Home Screen), `showsBackground` (false where the system removes the background, such as StandBy), or `true`/`false` from data: `{"if": "{{failed}}", ...}`. |
 | `{"grid": [[nodes], [nodes]]}` | Rows of cells whose columns line up. `alignment`, `horizontalSpacing`, `verticalSpacing`. |
 | `{"chart": [marks]}` | `min` and `max` for the value axis, `axes` (false). See [charts](#charts). |
 | `{"link": url, "label": node}` | Opens the URL. See [links, buttons and toggles](#links-buttons-and-toggles). |
@@ -221,8 +232,9 @@ limit; repeating a path costs little because pushes are compressed.
 ## Links, buttons and toggles
 
 The system accepts taps only in `lockScreen` and `expanded`, so controls are
-rejected elsewhere, and a label cannot contain another control. Buttons and
-toggles work once the phone is unlocked.
+rejected elsewhere, and a label cannot contain another control. A widget takes
+links in `systemSmall` but no buttons or toggles yet. Buttons and toggles work
+once the phone is unlocked.
 
 - A `link` opens its URL, like the presentation-wide `link`.
 - A `button` press is delivered to agents through `GET /v1/actions` with the
