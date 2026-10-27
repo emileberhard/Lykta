@@ -114,4 +114,4 @@ App Store app reaches its gateway over HTTPS through Cloudflare's network.
 
 ## Questions
 
-Open an issue at <https://github.com/emileberhard/lykta/issues>.
+Open an issue at <https://github.com/emileberhard/Lykta/issues>.
