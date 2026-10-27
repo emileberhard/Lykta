@@ -13,7 +13,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
 | `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, notification permission and token, device reports and telemetry, the in-app Lock Screen cards and the example gallery |
+| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, notification permission and token, device reports and telemetry, the in-app Lock Screen cards with their headers and details sheet, and the example gallery |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
 | `iOS/Avatars` | The initials avatar for a sender without a picture, drawn by both the extension and the app's gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
@@ -65,7 +65,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `just render`.
 - The gateway is the only content writer. The app never calls
   `Activity.request`, updates content or schedules local notifications; it
-  ends an activity only when the gateway reports it ended, or on Reset.
+  ends an activity only when the gateway reports it ended, or on Reset. Its
+  End Activity asks the gateway to end it, as an agent would.
 - A tap changes data only through the gateway, in the transaction that logs
   it: a toggle sets its boolean and a button applies its `set`, `add` and
   `now`, all read from the data before the tap. A tap counts only for a

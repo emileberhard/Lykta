@@ -242,6 +242,9 @@ that outlasts that, such as a dashboard, send `endAfter`, `title` and `layout`
 with every update: the gateway then removes the activity before the limit, and
 your next PUT starts a fresh one.
 
+The user can also end an activity in the Lykta app. It then ends as with
+`dismissAfter=0`, and the phone records `app.endActivity` in the events.
+
 ## Status
 
 `lykta get activities/{name}` returns the newest activity with that name,

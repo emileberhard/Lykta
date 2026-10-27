@@ -4,6 +4,7 @@ import SwiftUI
 struct HomeView: View {
     let model: Model
     @State private var isConfirmingReset = false
+    @State private var details: LiveActivity?
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
 
@@ -32,6 +33,9 @@ struct HomeView: View {
                 }
             } message: {
                 Text("Ends every activity, deletes this phone from the gateway and replaces the agent token.")
+            }
+            .sheet(item: $details) { activity in
+                ActivityDetails(model: model, id: activity.id)
             }
         }
         .onOpenURL { openURL($0) }
@@ -68,14 +72,8 @@ struct HomeView: View {
                 Section { Problem(error) }
             }
             ForEach(model.activities) { activity in
-                Section {
-                    LockScreenCard(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
-                        .lockScreenRow(activity.content)
-                } footer: {
-                    if let status = activity.status {
-                        Text(status)
-                    }
-                }
+                ActivitySection(activity: activity, isEnding: model.ending.contains(activity.id),
+                                showDetails: { details = activity }, end: { Task { await model.end(activity) } })
             }
         }
     }
@@ -98,18 +96,6 @@ private struct Header: View {
         .padding(.vertical, 20)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-    }
-}
-
-private extension LiveActivity {
-    var status: LocalizedStringResource? {
-        switch state {
-        case .active, .stale: nil
-        case .pending: "Starting"
-        case .ended: "Ended"
-        case .dismissed: "Removed from the Lock Screen"
-        case .unknown: "Unknown"
-        }
     }
 }
 
@@ -140,8 +126,17 @@ private struct Actions: View {
 
 #if DEBUG
 #Preview("Live") {
-    HomeView(model: .preview(.ready, activities: [
-        LiveActivity(id: "1", attributes: LyktaActivity(id: UUID(), name: "deploy"), content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
+    HomeView(model: .preview(.ready, activities: [.deploy, .deploy(id: "release", state: .stale), .deploy(id: "rollback", state: .active)],
+                             ending: ["rollback"]))
+}
+
+extension LiveActivity {
+    static let deploy = deploy(id: "deploy", state: .active)
+
+    static func deploy(id: String, state: ObservedState) -> LiveActivity {
+        let attributes = LyktaActivity(id: UUID(), name: id)
+        let started = Date.now.addingTimeInterval(-40 * 60)
+        return LiveActivity(id: id, attributes: attributes, content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
             {
               "lockScreen": {
                 "hstack": [
@@ -164,8 +159,9 @@ private struct Actions: View {
               "minimal": {"symbol": "shippingbox.fill"},
               "background": "indigo"
             }
-            """#.utf8)), state: .stale),
-    ]))
+            """#.utf8)), state: state,
+            times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-120), endsAt: started.addingTimeInterval(8 * 3600)))
+    }
 }
 
 #Preview("Empty") {

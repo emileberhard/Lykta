@@ -28,6 +28,7 @@ For each Live Activity:
 - the name, title, layout, data and alert text your agents send
 - its delivery state and what the phone reports about it, such as active,
   ended or dismissed
+- when it started, last changed and ends, which the app shows
 - each button press and toggle change, with its time, so your agents can act
   on it; these are kept for one day
 
@@ -56,7 +57,8 @@ gateway a log of what it observes:
 - app launches and foreground changes
 - whether Live Activities and notifications are allowed, and the banner style
 - the phone model and iOS version
-- which activities appeared and their state
+- which activities appeared and their state, and which ones you ended in the
+  app
 - fingerprints of the content and push tokens it received
 - errors, and Apple's MetricKit crash, hang and performance reports
 

@@ -113,6 +113,25 @@ is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
 
+**The app shows each activity's times and ends it through the gateway.**
+Each card on the home screen has a header with the activity's title, status
+and last change, and a menu with Details, a sheet with its times and name, and
+End Activity. The gateway returns the times in its answer to the device report
+the app already sends, for the activities that report lists, so they cost no
+request of their own and reach only the phone that shows them: `startedAt`,
+`updatedAt`, which a start, an accepted change or a tap sets, and `endsAt`,
+when the activity ended or will end: at the earlier of its `endAfter` and the
+gateway's limit before iOS's, or after iOS's eight hours without one. Gateways
+before 0.11.0 do not set `updatedAt`, so an activity one of them last changed
+shows no change time, or after a rollback an earlier one, until it changes
+again. An agent reading
+`GET /v1/activities` keeps the fields it had; no agent needs these yet. End
+Activity sends the agent API's `DELETE` with `dismissAfter=0`, as the gallery
+does for its example, so the phone still ends an activity only when the
+gateway's push or its next report says so, and the header shows Ending until
+then. Ending by name reaches the live activity with that name, which is the one
+the phone shows, because a sync ends any older one the gateway already ended.
+
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it
 creates per activity, so the app never has to run to forward update tokens.

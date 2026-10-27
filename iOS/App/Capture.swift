@@ -62,7 +62,10 @@ struct CaptureView: View {
         try render(Lights().frame(height: 400), named: "lights")
         model = .preview(.ready, activities: try Self.homeActivities.map { id in
             guard let example = examples.first(where: { $0.id == id }) else { throw CaptureError("no bundled example is called \(id)") }
-            return LiveActivity(id: id, attributes: LyktaActivity(id: UUID(), name: id), content: example.preview, state: .active)
+            let attributes = LyktaActivity(id: UUID(), name: id)
+            let started = Date.now.addingTimeInterval(-25 * 60)
+            return LiveActivity(id: id, attributes: attributes, content: example.preview, state: .active,
+                                times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-60), endsAt: started.addingTimeInterval(8 * 3600)))
         })
         try await Task.sleep(for: .seconds(1))
         try snapshot(await keyWindow(), named: "home")

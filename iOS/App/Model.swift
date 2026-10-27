@@ -17,6 +17,7 @@ final class Model {
 
     private(set) var phase: Phase
     private(set) var activities: [LiveActivity] = []
+    private(set) var ending: Set<LiveActivity.ID> = []
     private(set) var examples: [Example] = []
     private(set) var notificationExamples: [NotificationExample] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
@@ -27,6 +28,7 @@ final class Model {
     private let environment: PushEnvironment
     private let telemetry = Telemetry()
     private var credentials: Credentials?
+    private var times: [UUID: ActivityTimes] = [:]
     private var pushToken: PushToken?
     private var syncFailures = 0
     private var runTask: Task<Void, Never>?
@@ -137,6 +139,18 @@ final class Model {
                 return ids
             }
             try await gateway.putNotification("example-\(UUID().uuidString.lowercased())", try example.request(with: ids), agentToken: credentials.agentToken)
+        }
+    }
+
+    func end(_ activity: LiveActivity) async {
+        guard let gateway, let credentials, activity.isEndable, !ending.contains(activity.id) else { return }
+        telemetry.record("app.endActivity", activity: activity.attributes.id)
+        ending.insert(activity.id)
+        let requested = await showingErrors("endActivity") {
+            try await gateway.endActivity(activity.attributes.name, agentToken: credentials.agentToken)
+        }
+        if !requested {
+            ending.remove(activity.id)
         }
     }
 
@@ -269,7 +283,8 @@ final class Model {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await content in activity.contentUpdates {
             telemetry.record("activity.content", activity: activity.attributes.id, Self.describe(content))
-            activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)
+            refreshActivities()
+            await sync()
         }
     }
 
@@ -311,7 +326,7 @@ final class Model {
     private func sync() async {
         guard let gateway, let credentials, let notifications else { return }
         let observed = Activity<LyktaActivity>.activities
-        activities = observed.map(LiveActivity.init)
+        refreshActivities()
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, layoutVersion: Layout.version,
                                         bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) },
@@ -321,6 +336,7 @@ final class Model {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
             syncFailures = 0
             error = nil
+            times = Dictionary(result.activities.map { ($0.id, $0) }) { $1 }
             for activity in Activity<LyktaActivity>.activities where result.end.contains(activity.attributes.id) {
                 telemetry.record("activity.endedByGateway", activity: activity.attributes.id)
                 await activity.end(nil, dismissalPolicy: .immediate)
@@ -342,7 +358,12 @@ final class Model {
                 await sync()
             }
         }
-        activities = Activity<LyktaActivity>.activities.map(LiveActivity.init)
+        refreshActivities()
+    }
+
+    private func refreshActivities() {
+        activities = Activity<LyktaActivity>.activities.map { LiveActivity($0, times: times[$0.attributes.id]) }
+        ending.formIntersection(activities.filter(\.isEndable).map(\.id))
     }
 
     @discardableResult
@@ -426,21 +447,27 @@ struct LiveActivity: Identifiable, Equatable {
     let attributes: LyktaActivity
     let content: LyktaActivity.ContentState
     let state: ObservedState
+    let times: ActivityTimes?
+
+    var isEndable: Bool {
+        [.pending, .active, .stale].contains(state)
+    }
 }
 
 private extension LiveActivity {
-    init(_ activity: Activity<LyktaActivity>) {
-        self.init(id: activity.id, attributes: activity.attributes, content: activity.content.state, state: ObservedState(activity.activityState))
+    init(_ activity: Activity<LyktaActivity>, times: ActivityTimes?) {
+        self.init(id: activity.id, attributes: activity.attributes, content: activity.content.state, state: ObservedState(activity.activityState), times: times)
     }
 }
 
 #if DEBUG
 extension Model {
-    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true,
+    static func preview(_ phase: Phase, activities: [LiveActivity] = [], ending: Set<LiveActivity.ID> = [], areActivitiesEnabled: Bool = true,
                         notifications: NotificationSettings = NotificationSettings(authorization: .authorized, alertStyle: .alert, registration: .pending)) -> Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
+        model.ending = ending
         model.areActivitiesEnabled = areActivitiesEnabled
         model.notifications = notifications
         return model
