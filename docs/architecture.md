@@ -422,8 +422,9 @@ see as `fetched`. A phone's layout version is the one its latest report or fetch
 states, so admission and status follow a downgrade: an agent's next change is
 refused with `app_update_required`, and status shows `failed` while the phone
 cannot draw the current revision. Only the provider, the entity query and the
-push handler call the gateway, each with a 10-second timeout; views never
-fetch.
+push handler call the gateway, each within a 10-second deadline; views never
+fetch. The client races each request against its deadline, because a URL
+request's timeout restarts whenever data arrives.
 
 **One owner caches widget answers.** `WidgetCache` keeps the last answer per
 widget in the app group, under a file lock, so concurrent reloads cannot

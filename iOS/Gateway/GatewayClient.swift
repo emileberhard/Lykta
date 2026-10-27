@@ -120,7 +120,15 @@ nonisolated struct GatewayClient: Sendable {
             request.setValue(type, forHTTPHeaderField: "Content-Type")
             request.httpBody = body
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await withThrowingTaskGroup(of: (Data, URLResponse).self) { group in
+            group.addTask { [request] in try await URLSession.shared.data(for: request) }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                throw URLError(.timedOut)
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
 

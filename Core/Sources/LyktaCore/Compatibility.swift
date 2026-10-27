@@ -179,24 +179,28 @@ extension Layout {
 final class FeatureLog: Sendable {
     @TaskLocal static var current: FeatureLog?
 
-    private let entries = Mutex<[(feature: String, path: String)]>([])
+    private struct Entries {
+        var features: [String] = []
+        var requirement: Layout.Requirement?
+    }
+
+    private let entries = Mutex(Entries())
 
     static func record(_ feature: String, at path: [any CodingKey]) {
-        current?.entries.withLock { $0.append((feature, LayoutError.path(path))) }
+        current?.entries.withLock { entries in
+            entries.features.append(feature)
+            guard let version = Layout.introduced[feature],
+                  version > (entries.requirement?.version ?? Layout.baseline) else { return }
+            entries.requirement = Layout.Requirement(version: version, feature: feature, path: LayoutError.path(path))
+        }
     }
 
     var features: [String] {
-        entries.withLock { $0.map(\.feature) }
+        entries.withLock { $0.features }
     }
 
     var requirement: Layout.Requirement? {
-        entries.withLock { entries in
-            entries.reduce(nil) { (newest: Layout.Requirement?, entry) in
-                guard let version = Layout.introduced[entry.feature],
-                      version > (newest?.version ?? Layout.baseline) else { return newest }
-                return Layout.Requirement(version: version, feature: entry.feature, path: entry.path)
-            }
-        }
+        entries.withLock { $0.requirement }
     }
 }
 
