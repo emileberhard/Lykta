@@ -36,7 +36,7 @@ struct ExampleView: View {
         .navigationTitle(example.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaBar(edge: .bottom) {
-            ActionButton(title: "Start Live Activity", systemImage: "platter.filled.bottom.and.arrow.down.iphone", done: "Started") {
+            ActionButton(title: "Start Live Activity", systemImage: "platter.filled.bottom.and.arrow.down.iphone", done: "Sent") {
                 await model.show(example)
             }
             .buttonStyle(.glassProminent)
