@@ -292,6 +292,19 @@ struct GatewayTests {
         #expect(result.end == [started.id])
     }
 
+    @Test func thePhoneEndsTheActivityItShowsAndNotOneThatReusedItsName() async throws {
+        let shown: Identified = try await put("build", Self.start)
+        try await deliver(at: now)
+        _ = try await send("DELETE", "/v1/activities/build")
+        let successor: Identified = try await put("build", Self.start)
+        try await deliver(at: now + 1)
+        #expect(await endOnPhone(shown.id).status == 204)
+        #expect(try await status("build").state == "live")
+        #expect(await endOnPhone(successor.id).status == 204)
+        #expect(try await status("build").state == "ending")
+        #expect(await endOnPhone(UUID()).status == 404)
+    }
+
     @Test func tellsThePhoneWhenItsActivitiesStartedLastChangedAndEnd() async throws {
         guard case var .object(timer) = Self.start else { return }
         timer["endAfter"] = .number(60)
@@ -690,6 +703,11 @@ struct GatewayTests {
     private func send(_ method: String, _ target: String, body: JSONValue? = nil) async throws -> HTTPResponse {
         await api.handle(HTTPRequest(method: method, target: target, headers: ["authorization": "Bearer \(credentials.agentToken)"],
                                      body: body?.json ?? []))
+    }
+
+    private func endOnPhone(_ id: UUID) async -> HTTPResponse {
+        await api.handle(HTTPRequest(method: "DELETE", target: "/v1/device/activities/\(id)",
+                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
     }
 
     private func act(_ action: Action) async -> HTTPResponse {

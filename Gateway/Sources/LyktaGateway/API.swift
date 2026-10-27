@@ -108,6 +108,9 @@ struct API: Sendable {
         case ("DELETE", "v1/device"):
             try await store.deleteDevice(try await phone(request))
             return .noContent
+        case ("DELETE", "v1/device/activities/{id}"):
+            try await store.end(try await phone(request), id: try Self.activity(path[3]), now: now)
+            return .noContent
         case ("POST", "v1/device/actions"):
             let device = try await phone(request)
             try await store.act(device, try Self.decode(request.body), now: now)
@@ -185,6 +188,7 @@ struct API: Sendable {
     private static func route(_ path: [String]) -> String {
         switch path.count {
         case 3 where path[0] == "v1" && ["activities", "notifications"].contains(path[1]): "v1/\(path[1])/{name}"
+        case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "activities": "v1/device/activities/{id}"
         case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"
         case 6 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "media": "v1/device/notifications/{id}/media/{media}"
         default: path.joined(separator: "/")
@@ -229,6 +233,11 @@ struct API: Sendable {
     private static func bearer(_ request: HTTPRequest) throws -> String {
         guard let value = request.headers["authorization"], value.hasPrefix("Bearer ") else { throw unauthorized }
         return String(value.dropFirst(7))
+    }
+
+    private static func activity(_ text: String) throws -> UUID {
+        guard let id = UUID(uuidString: text) else { throw APIError(.notFound, "No activity has the id \(text).") }
+        return id
     }
 
     private static func notification(_ text: String) throws -> UUID {

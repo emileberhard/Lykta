@@ -280,6 +280,17 @@ actor Store {
         }
     }
 
+    func end(_ device: Device, id: UUID, now: Int) throws {
+        try db.transaction {
+            guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ?", id, device.id).first else {
+                throw APIError(.notFound, "No activity has the id \(id).")
+            }
+            let activity = try Activity(row)
+            guard [.starting, .live].contains(activity.phase) else { return }
+            _ = try end(activity, dismissAt: now, now: now, ["dismissAfter": .number(0)])
+        }
+    }
+
     func detail(_ device: Device, name: Name) throws -> ActivityDetail {
         guard let row = try db.query("SELECT * FROM activities WHERE device_id = ? AND name = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
                                      device.id, name).first else {
