@@ -17,7 +17,7 @@ struct WidgetTests {
         store = try Store(path: ":memory:")
         api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
                   enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(0, 12, 0), shutdown: Shutdown())
-        let registration = Registration(environment: .development, appVersion: "0.12.0", proof: .invite(try await store.invite(now: now)))
+        let registration = Registration(environment: .development, appVersion: Layout.version.description, proof: .invite(try await store.invite(now: now)))
         credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:], body: Array(try JSONEncoder().encode(registration)))).decoded()
         let response = await api.handle(HTTPRequest(method: "POST", target: "/v1/device/widgets/credential", headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
         token = (try response.decoded() as WidgetCredential).widgetToken
@@ -136,7 +136,7 @@ struct WidgetTests {
 
     @Test func ignoresAReportOlderThanTheLastOne() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
-        let stale = WidgetReport(at: reports.next(), pushToken: nil, layoutVersion: Version(0, 12, 0), places: [])
+        let stale = WidgetReport(at: reports.next(), pushToken: nil, layoutVersion: Layout.version, places: [])
         try await report([created.id])
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(stale))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
@@ -173,7 +173,7 @@ struct WidgetTests {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         #expect(await send("PUT", "/v1/device", old, token: credentials.deviceSecret).status == 200)
         #expect(await send("PUT", "/v1/widgets/steps", ["title": "Downgraded"]).status == 409)
-        let placesOnly: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)), "layoutVersion": "0.12.0",
+        let placesOnly: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)), "layoutVersion": .string(Layout.version.description),
                                      "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", placesOnly, token: token).status == 204)
         #expect(await send("PUT", "/v1/widgets/steps", ["data": ["steps": "12"]]).status == 200)
@@ -183,14 +183,14 @@ struct WidgetTests {
 
     @Test func widgetCredentialsReadOnlyTheirOwnPhone() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
-        let registration = Registration(environment: .development, appVersion: "0.12.0", proof: .invite(try await store.invite(now: now)))
+        let registration = Registration(environment: .development, appVersion: Layout.version.description, proof: .invite(try await store.invite(now: now)))
         let other: Credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
                                                                  body: Array(try JSONEncoder().encode(registration)))).decoded()
         let otherCredential: WidgetCredential = try await send("POST", "/v1/device/widgets/credential", token: other.deviceSecret).decoded()
         let response = await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall&layout=0.12.0", token: otherCredential.widgetToken)
         #expect(response.status == 410)
         #expect((try response.decoded() as Failure).error == "widget_deleted")
-        let report: JSONValue = ["sequence": .number(1), "layoutVersion": "0.12.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        let report: JSONValue = ["sequence": .number(1), "layoutVersion": .string(Layout.version.description), "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", report, token: otherCredential.widgetToken).status == 204)
         #expect(try await status().placed.isEmpty)
     }
@@ -273,7 +273,7 @@ struct WidgetTests {
         try await report([created.id])
         let job = try #require(await store.claim(now: now, limit: 4).first)
         let report: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)),
-                                 "pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": "0.12.0",
+                                 "pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": .string(Layout.version.description),
                                  "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", report, token: token).status == 204)
         let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
@@ -309,14 +309,14 @@ struct WidgetTests {
         await api.handle(HTTPRequest(method: method, target: target, headers: ["authorization": "Bearer \(token ?? credentials.agentToken)"], body: body?.json ?? []))
     }
 
-    private func fetch(_ id: UUID, have: Int? = nil, layout: String = "0.12.0") async -> HTTPResponse {
+    private func fetch(_ id: UUID, have: Int? = nil, layout: String = Layout.version.description) async -> HTTPResponse {
         await send("GET", "/v1/device/widgets/\(id)?family=systemSmall&layout=\(layout)" + (have.map { "&have=\($0)" } ?? ""), token: token)
     }
 
     private func status() async throws -> Status { try await send("GET", "/v1/widgets/steps").decoded() }
 
     private func report(_ ids: [UUID]) async throws {
-        let report = WidgetReport(at: reports.next(), pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Version(0, 12, 0),
+        let report = WidgetReport(at: reports.next(), pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Layout.version,
                                   places: ids.map { WidgetPlace(widget: $0, family: .systemSmall) })
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(report))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
