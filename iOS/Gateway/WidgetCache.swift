@@ -21,7 +21,6 @@ nonisolated enum WidgetCache {
 
     private struct Contents: Codable {
         var credential: String
-        var isRevoked = false
         var entries: [String: Entry] = [:]
     }
 
@@ -44,9 +43,8 @@ nonisolated enum WidgetCache {
 
     static func record(_ answer: Result<WidgetAnswer, any Error>, for id: UUID, fetchedWith credential: WidgetCredential, at now: Date) throws -> Outcome {
         try update(for: credential) { contents in
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken, !contents.isRevoked else { return .signedOut }
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return .signedOut }
             if case .success(.signedOut) = answer {
-                contents.isRevoked = true
                 contents.entries = [:]
                 return .signedOut
             }
@@ -85,7 +83,7 @@ nonisolated enum WidgetCache {
 
     static func remember(_ widgets: [WidgetSummary], listedWith credential: WidgetCredential, at now: Date) throws {
         try update(for: credential) { contents in
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken, !contents.isRevoked else { return }
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return }
             for widget in widgets where contents.entries[widget.id.uuidString]?.isDeleted != true {
                 var entry = contents.entries[widget.id.uuidString] ?? Entry(title: widget.title, usedAt: now)
                 entry.title = widget.title
@@ -113,7 +111,7 @@ nonisolated enum WidgetCache {
     private static func read<Result>(for credential: WidgetCredential, _ body: ([String: Entry]) throws -> Result) throws -> Result {
         try AppGroup.lockingWidgets { directory in
             let contents = try contents(of: file(in: directory), for: credential)
-            return try body(contents.isRevoked ? [:] : contents.entries)
+            return try body(contents.entries)
         }
     }
 

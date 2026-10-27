@@ -46,20 +46,22 @@ nonisolated struct WidgetQuery: EntityQuery {
         guard let gateway = GatewayClient.configured(timeout: 10), let credential = try KeychainItem.widget.load() else {
             throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
         }
+        let entities: [WidgetEntity]
         do {
             let widgets = try await gateway.widgets(widgetToken: credential.widgetToken)
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else {
-                throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
-            }
             try? WidgetCache.remember(widgets, listedWith: credential, at: .now)
-            return widgets.map { WidgetEntity(id: $0.id, title: $0.title) }
+            entities = widgets.map { WidgetEntity(id: $0.id, title: $0.title) }
         } catch let error as AppError where error.status == 401 {
             throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
         } catch {
             let cached = try WidgetCache.titles(for: credential)
             guard !cached.isEmpty else { throw error }
-            return cached.map { WidgetEntity(id: $0.id, title: $0.title) }
+            entities = cached.map { WidgetEntity(id: $0.id, title: $0.title) }
         }
+        guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else {
+            throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
+        }
+        return entities
     }
 }
 

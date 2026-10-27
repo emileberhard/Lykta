@@ -369,19 +369,20 @@ fetch.
 **One owner caches widget answers.** `WidgetCache` keeps the last answer per
 widget in the app group, under a file lock, so concurrent reloads cannot
 overwrite a newer revision with an older one. A 410 leaves a fence no later
-answer can lift, and it is the only answer that removes cached content; a
-transient failure or a gateway older than widgets draws the cached content as
+answer can lift, and a 401 empties the cache; a transient failure or a gateway older than widgets draws the cached content as
 stale and retries in 15 minutes, then hourly. A timeline asks for its reload
 at the stale time or after three hours, whichever comes first, and iOS decides
 when it happens. A fetch names the cached revision only when that content
-decodes, so an updated app replaces a cached `requires` answer. The cache belongs to
-one widget credential, kept as its hash: an answer is recorded only while the
-credential that fetched it is still the keychain's, a 401 marks the cache
-revoked so later answers for that credential are dropped, and a cache written
-for another credential counts as empty. Reset deletes the credential and then
-the cache, so nothing from before a Reset shows after it. A cache file that no
-longer decodes, such as after a downgrade, counts as empty, and a failed write loses only what the next fetch
-restores, because the gateway can rebuild the cache. When the cache cannot be
+decodes, so an updated app replaces a cached `requires` answer. The cache
+belongs to one widget credential, kept as its hash: an answer is recorded only
+while the credential that fetched it is still the keychain's, and a cache
+written for another credential counts as empty. A 401 does not fence the
+credential, because a proxy in front of a self-hosted gateway can answer one
+too; the next reload asks again. Reset deletes the credential and then the
+cache, so nothing from before a Reset shows after it. A cache file that no
+longer decodes, such as after a downgrade, counts as empty, and a failed write
+loses only what the next fetch restores, because the gateway can rebuild the
+cache. When the cache cannot be
 locked or read, the provider still draws the gateway's answer, uncached, if
 the credential that fetched it is still current. Gallery previews
 draw cached content and never fetch, because a preview is not a place. The
