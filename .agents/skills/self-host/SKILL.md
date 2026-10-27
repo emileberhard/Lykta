@@ -20,9 +20,10 @@ database. Ask the user before creating Apple keys, App IDs or public hosts.
    Communication Notifications, which lets notifications show their sender's
    avatar.
 3. Under Identifiers > App Groups, register `group.<bundle ID>`, then enable
-   App Groups on the app's and the notification extension's App IDs with that
-   group. The extension keeps downloaded sounds there, the only place iOS
-   plays them from.
+   App Groups on all three App IDs with that group. The notification
+   extension keeps downloaded sounds there, the only place iOS plays them
+   from, and the widget extension shares the app's widget credential and its
+   cache there.
 4. Under Keys, create an Apple Push Notifications service key per environment
    the user needs: Sandbox for builds run from Xcode, Production for TestFlight
    and App Store builds. With both, one phone can switch between those builds.
@@ -102,8 +103,13 @@ gateway needs the matching key.
 5. In the app's examples, send Printer. It arrives with the printer's picture,
    its chime and a photo, and its status reports
    `{"avatar": "image", "sound": "custom"}`. If it reports `"sound": "default"`,
-   check that both App IDs have the app group, then the gateway's
+   check that the App IDs have the app group, then the gateway's
    `notification.media` events to see whether the phone fetched the sound.
+6. In the app's examples, send the Steps widget, then add the Lykta widget to
+   the Home Screen and choose Steps. It shows the step count, and
+   `lykta get widgets/example` reports `"delivery": "fetched"`. If it never
+   shows the count, check that the widget extension's App ID has the app group
+   and Push Notifications, then the gateway's `widget.fetch` events.
 
 ## Upgrade
 
