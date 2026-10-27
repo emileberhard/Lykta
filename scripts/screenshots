@@ -76,8 +76,8 @@ def capture(simulator_runtime, target):
             console = f"simctl launch exited with {launch.returncode}:\n{launch.stdout}{launch.stderr}"
         except subprocess.TimeoutExpired:
             console = "The app was still running after 10 minutes."
-        if not (staging / "home.png").exists():
-            sys.exit(f"The app did not capture the home screen.\n\n{diagnosis(udid, app.stem, staging, started, console)}")
+        if not all((staging / name).exists() for name in ("home.png", "connect.png")):
+            sys.exit(f"The app did not capture the home screen and the Connect step.\n\n{diagnosis(udid, app.stem, staging, started, console)}")
         staging.rename(target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
