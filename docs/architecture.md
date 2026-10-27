@@ -478,7 +478,12 @@ before they run and come from the same commit as the gateway that serves them.
 Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
 set), the token readable only by the user through mode 600, or on Windows an
 access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
-take precedence. The references and examples are not cached: an agent reads
+take precedence. Setup then starts `scripts/hello.json`, a Live Activity
+named `hello` that ends after five minutes, which proves the token, the
+gateway, APNs and the phone together, and which the app's introduction waits
+for. A hello that fails only adds the gateway's answer to setup's output,
+because Live Activities may be off on a phone that still takes notifications
+and widgets. The references and examples are not cached: an agent reads
 them once per task with `lykta docs`, and a cache would only save input. curl takes the token as an argument, so other
 users of the same computer could see it while a request runs, as with the
 curl commands the skill showed before; PowerShell keeps it in the process.

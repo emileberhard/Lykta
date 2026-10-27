@@ -1,0 +1,38 @@
+{
+  "title": "Hello from your agent",
+  "layout": {
+    "parts": {
+      "logo": {
+        "svg": "<svg viewBox='220 244 584 524'><title>Lykta</title><polygon points='415,420 581,708 248,708' fill='#2F7BFF' stroke='#2F7BFF' stroke-width='56' stroke-linejoin='round'/><rect x='494' y='457' width='310' height='310' rx='96' fill='#FFB020' fill-opacity='.9'/><circle cx='532' cy='410' r='165' fill='#FF4F8B' fill-opacity='.9'/></svg>"
+      },
+      "wave": {"symbol": "hand.wave.fill", "modifiers": [{"foreground": "#FFB020"}]},
+      "hello": {
+        "vstack": [
+          {"text": "Hello from your agent", "modifiers": [{"font": "headline"}]},
+          {"text": "Ask me to keep you posted here.", "modifiers": [{"font": "subheadline"}, {"foreground": "secondary"}]}
+        ],
+        "alignment": "leading",
+        "spacing": 2
+      }
+    },
+    "lockScreen": {
+      "hstack": [
+        {"use": "logo", "modifiers": [{"frame": {"width": 44, "height": 40}}]},
+        {"use": "hello"},
+        {"spacer": true}
+      ],
+      "spacing": 14,
+      "modifiers": [{"padding": 16}]
+    },
+    "compactLeading": {"use": "logo", "modifiers": [{"frame": {"width": 22, "height": 20}}]},
+    "compactTrailing": {"use": "wave"},
+    "minimal": {"use": "wave"},
+    "expanded": {
+      "leading": {"use": "logo", "modifiers": [{"frame": {"width": 36, "height": 33}}]},
+      "trailing": {"use": "wave", "modifiers": [{"font": "title2"}]},
+      "bottom": {"use": "hello", "modifiers": [{"frame": {"maxWidth": "infinity", "alignment": "leading"}}]}
+    }
+  },
+  "alert": {"body": "Your agent is connected."},
+  "endAfter": 300
+}

@@ -91,12 +91,14 @@ gateway needs the matching key.
 ## Verify
 
 1. `curl -fsS https://<host>/skill/SKILL.md` returns the agent skill.
-2. In the app, open an example and tap Start Live Activity; it appears on the
-   Lock Screen and in the Dynamic Island.
-3. Run the command Copy Agent Setup copies; it installs `lykta` and prints the
-   agent skill. `lykta get activities/example` then reports
-   `"delivery": "accepted"`. Gateway logs go to stderr (`docker logs lykta`).
-4. Allow notifications when Copy Agent Setup asks, then send
+2. Open the app, allow notifications in its introduction and run the command
+   Copy Setup copies; it installs `lykta`, says hello on the phone and prints
+   the agent skill. The introduction shows the hello, and
+   `lykta get activities/hello` reports `"delivery": "accepted"`. Gateway logs
+   go to stderr (`docker logs lykta`).
+3. In the app's examples, open one and tap Start Live Activity; it appears on
+   the Lock Screen and in the Dynamic Island.
+4. Send
    `{"sender": {"id": "setup", "name": "Setup"}, "body": "Hello"}` with
    `lykta put notifications/hello`. It arrives with the initials S on a
    colored circle, and `lykta get notifications/hello` reports
