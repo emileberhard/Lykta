@@ -90,7 +90,7 @@ gateway needs the matching key.
 ## Verify
 
 1. `curl -fsS https://<host>/skill/SKILL.md` returns the agent skill.
-2. In the app, open an example and tap Show on Lock Screen; it appears on the
+2. In the app, open an example and tap Start Live Activity; it appears on the
    Lock Screen and in the Dynamic Island.
 3. Run the command Copy Agent Setup copies; it installs `lykta` and prints the
    agent skill. `lykta get activities/example` then reports
