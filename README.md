@@ -93,6 +93,15 @@ release tools without credentials.
 See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
 
+## Dependency updates
+
+Dependabot updates Docker images and GitHub Actions. Maintainers review Apple's
+Swift package releases, update the exact versions in `Gateway/Package.swift`,
+resolve with the project's Swift toolchain and commit `Gateway/Package.resolved`
+after `just test` passes. Dependabot's Swift updater currently runs Swift 6.3.1
+and cannot parse this project's Swift 6.4 manifests. Re-enable `/Gateway` when
+Dependabot supports Swift 6.4; keep the project's tools requirement unchanged.
+
 ## License and security
 
 [PolyForm Shield 1.0.0](LICENSE): read, run, change, self-host and share
