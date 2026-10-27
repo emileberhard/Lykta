@@ -45,7 +45,7 @@ public struct WidgetLayout: Decodable, Sendable {
             throw fields.invalid("a widget needs at least one of \(Family.allCases.map(\.rawValue).joined(separator: ", "))")
         }
         guard presentations[.accessoryInline]?.fitsOneLine != false else {
-            throw fields.invalid("takes only text, concat, symbol, date and timer nodes with text modifiers, or an if choosing between them",
+            throw fields.invalid("takes only text, concat, symbol, date and timer nodes with text modifiers and privacySensitive, or an if choosing between them",
                                  at: Family.accessoryInline.rawValue)
         }
         self.presentations = presentations

@@ -167,10 +167,16 @@ public struct Node: Decodable, Sendable {
     }
 
     var fitsOneLine: Bool {
+        let lineModifiers = modifiers.filter {
+            switch $0 {
+            case .privacySensitive: false
+            default: true
+            }
+        }
         switch content {
-        case .concat: modifiers.allSatisfy(\.isTextModifier)
-        case let .conditional(_, then, otherwise): modifiers.isEmpty && then.fitsOneLine && otherwise?.fitsOneLine != false
-        default: isInline
+        case .text, .symbol, .date, .timer, .concat: return lineModifiers.allSatisfy(\.isTextModifier)
+        case let .conditional(_, then, otherwise): return lineModifiers.isEmpty && then.fitsOneLine && otherwise?.fitsOneLine != false
+        default: return false
         }
     }
 

@@ -29,12 +29,12 @@ A widget's layout (see the [widgets reference](widgets.md)):
 | `systemLarge` | one family | The large widget, two medium ones stacked. |
 | `accessoryCircular` | one family | A small circle on the Lock Screen, below the clock. |
 | `accessoryRectangular` | one family | A wider Lock Screen slot below the clock, about three lines of text. |
-| `accessoryInline` | one family | One line above the clock on the Lock Screen. Takes only `text`, `concat`, `symbol`, `date` and `timer` nodes with text modifiers, or an `if` choosing between them. |
+| `accessoryInline` | one family | One line above the clock on the Lock Screen. Takes only `text`, `concat`, `symbol`, `date` and `timer` nodes with text modifiers and `privacySensitive`, or an `if` choosing between them. |
 | `background` | no | A paint, such as a color or `{"gradient": [...]}`, or a node such as an `svg`, behind the content. The system removes it or replaces it with glass or a tint in some places, so the content must read without it. It takes no links. |
 | `link` | no | As for activities, for a tap anywhere outside a link. |
 
-A widget needs at least one family; the user can place it only in the families
-it has. The system adds margins around the Home Screen families, so their roots
+A widget needs at least one family. The user can choose any widget in any
+size, and one placed in a size it lacks says it is not made for that size. The system adds margins around the Home Screen families, so their roots
 need no padding; the Lock Screen families have none.
 
 ## Parts

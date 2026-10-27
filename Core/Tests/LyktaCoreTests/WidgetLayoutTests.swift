@@ -6,7 +6,7 @@ struct WidgetLayoutTests {
     @Test(arguments: [
         (##"{"background": "#112233"}"##, "a widget needs at least one of systemSmall, systemMedium, systemLarge, accessoryCircular, accessoryRectangular, accessoryInline"),
         (#"{"systemSmall": "a", "lockScreen": "b"}"#, "lockScreen: unknown key; expected accessoryCircular, accessoryInline, accessoryRectangular, background, link, systemLarge, systemMedium, systemSmall"),
-        (#"{"accessoryInline": {"vstack": ["a", "b"]}}"#, "accessoryInline: takes only text, concat, symbol, date and timer nodes with text modifiers, or an if choosing between them"),
+        (#"{"accessoryInline": {"vstack": ["a", "b"]}}"#, "accessoryInline: takes only text, concat, symbol, date and timer nodes with text modifiers and privacySensitive, or an if choosing between them"),
         (#"{"accessoryInline": {"if": "vibrant", "then": "a", "else": {"gauge": 0.5}}}"#, "accessoryInline: takes only text"),
         (#"{"accessoryInline": {"text": "a", "modifiers": [{"padding": 4}]}}"#, "accessoryInline: takes only text"),
         (#"{"systemSmall": {"zstack": [{"accessoryBackground": true}, "a"]}}"#, "systemSmall.zstack[0].accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular"),
@@ -34,7 +34,7 @@ struct WidgetLayoutTests {
             {"systemSmall": "s", "systemMedium": "m", "systemLarge": "l",
              "accessoryCircular": {"zstack": [{"accessoryBackground": true}, {"gauge": 0.5}]},
              "accessoryRectangular": {"text": "6,400", "modifiers": [{"privacySensitive": true}]},
-             "accessoryInline": {"if": "vibrant", "then": {"concat": [{"symbol": "figure.walk"}, " 6,400"], "modifiers": [{"bold": true}]}, "else": "6,400 steps"}}
+             "accessoryInline": {"if": "vibrant", "then": {"concat": [{"symbol": "figure.walk"}, " 6,400"], "modifiers": [{"bold": true}, {"privacySensitive": true}]}, "else": "6,400 steps", "modifiers": [{"privacySensitive": true}]}}
             """#)
         #expect(Set(widget.presentations.keys) == Set(WidgetLayout.Family.allCases))
         #expect(widget.requirement?.version == Version(0, 13, 0))
