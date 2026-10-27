@@ -46,13 +46,6 @@ function Import-Setup {
     $script:url = $script:url.TrimEnd('/')
 }
 
-Add-Type -AssemblyName System.Net.Http
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-$handler = [System.Net.Http.HttpClientHandler]::new()
-$handler.AllowAutoRedirect = $false
-$client = [System.Net.Http.HttpClient]::new($handler)
-$client.Timeout = [TimeSpan]::FromSeconds(90)
-
 function Get-Served($Response) {
     $values = $null
     if ($Response.Headers.TryGetValues('lykta-skill', [ref]$values)) {
@@ -76,21 +69,25 @@ function Get-Stamp([string]$Path) {
 function Set-SkillFile([string]$Name, [string]$Path, [string]$Format) {
     $temp = Join-Path (Split-Path -Parent (Split-Path -Parent $Path)) ".lykta.$([IO.Path]::GetRandomFileName())"
     $cancel = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(10))
+    $response = $null
     try {
         $response = $client.GetAsync("$url/skill/$Name", $cancel.Token).GetAwaiter().GetResult()
         $digest = Get-Served $response
         if (-not $response.IsSuccessStatusCode -or -not $digest) { return $false }
         $script:served = $digest
-        $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
-        $stamped = [byte[]]($bytes + [Text.Encoding]::UTF8.GetBytes("`n$($Format -f $digest)`n"))
+        $stamp = [Text.Encoding]::UTF8.GetBytes("`n$($Format -f $digest)`n")
         $file = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
-        try { $file.Write($stamped, 0, $stamped.Length) } finally { $file.Dispose() }
+        try {
+            $response.Content.CopyToAsync($file).GetAwaiter().GetResult()
+            $file.Write($stamp, 0, $stamp.Length)
+        } finally { $file.Dispose() }
         if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temp, $Path, [NullString]::Value) } else { [IO.File]::Move($temp, $Path) }
         $true
     } catch {
         if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
         $false
     } finally {
+        if ($response) { $response.Dispose() }
         $cancel.Dispose()
     }
 }
@@ -154,14 +151,18 @@ function Send-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
             }
             if (Test-Refused $cause) { return @{ Code = 3; Text = "lykta: could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" } }
             return @{ Code = 3; Text = "lykta: $Method $Target got no answer from ${url}: $($cause.GetBaseException().Message); $again" }
+        } finally {
+            $request.Dispose()
         }
     }
-    $script:served = Get-Served $response
-    $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-    $status = [int]$response.StatusCode
-    if ($status -ge 200 -and $status -lt 300) { return @{ Code = 0; Text = $text } }
-    if ($status -ge 400 -and $status -lt 500) { return @{ Code = 1; Text = "lykta: $Method $Target was refused with HTTP ${status}:`n$text" } }
-    @{ Code = 3; Text = "lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text" }
+    try {
+        $script:served = Get-Served $response
+        $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $status = [int]$response.StatusCode
+        if ($status -ge 200 -and $status -lt 300) { return @{ Code = 0; Text = $text } }
+        if ($status -ge 400 -and $status -lt 500) { return @{ Code = 1; Text = "lykta: $Method $Target was refused with HTTP ${status}:`n$text" } }
+        @{ Code = 3; Text = "lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text" }
+    } finally { $response.Dispose() }
 }
 
 function Invoke-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
@@ -294,9 +295,13 @@ function Invoke-Put([string[]]$Arguments, $Piped) {
 
 function Invoke-Media([string[]]$Arguments) {
     if ($Arguments.Count -ne 1) { Fail 'usage: lykta media FILE' 2 }
-    try { $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Arguments[0]).ProviderPath) }
+    try { $path = (Resolve-Path -LiteralPath $Arguments[0]).ProviderPath }
     catch { Fail "could not read $($Arguments[0])" 2 }
-    $answer = Invoke-Gateway 'POST' '/v1/media' { [System.Net.Http.ByteArrayContent]::new($bytes) }
+    $answer = Invoke-Gateway 'POST' '/v1/media' {
+        try { $stream = [IO.File]::OpenRead($path) }
+        catch { Fail "could not read $($Arguments[0])" 2 }
+        [System.Net.Http.StreamContent]::new($stream)
+    }
     $id = ($answer | ConvertFrom-Json).id
     if (-not $id) { Fail "the gateway answered without a media id: $answer" 3 }
     Write-Output $id
@@ -304,17 +309,30 @@ function Invoke-Media([string[]]$Arguments) {
 
 $piped = @($input)
 $verb = if ($args.Count -gt 0) { [string]$args[0] } else { '' }
-$rest = [string[]]@($args | Select-Object -Skip 1)
+$rest = [string[]]@(
+    if ($args.Count -gt 1) { $args[1..($args.Count - 1)] }
+)
 switch ($verb) {
-    'setup' { Invoke-Setup $rest }
-    'install' { Import-Setup; Invoke-Install $rest }
-    'docs' { Import-Setup; Invoke-Docs $rest }
-    'put' { Import-Setup; Invoke-Put $rest $piped }
-    'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
-    'delete' { if ($rest.Count -ne 1) { Fail 'usage: lykta delete PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'DELETE' (Get-ApiPath $rest[0])) }
-    'media' { Import-Setup; Invoke-Media $rest }
-    { $_ -in 'help', '-h', '--help' } { Write-Output $usage }
+    { $_ -in 'help', '-h', '--help' } { Write-Output $usage; exit 0 }
     '' { [Console]::Error.WriteLine($usage); exit 2 }
+    { $_ -in 'setup', 'install', 'docs', 'put', 'get', 'delete', 'media' } {}
     default { [Console]::Error.WriteLine($usage); Fail "unknown command $verb" 2 }
 }
-Update-Installs
+Add-Type -AssemblyName System.Net.Http
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+$handler = [System.Net.Http.HttpClientHandler]::new()
+$handler.AllowAutoRedirect = $false
+$client = [System.Net.Http.HttpClient]::new($handler)
+$client.Timeout = [TimeSpan]::FromSeconds(90)
+try {
+    switch ($verb) {
+        'setup' { Invoke-Setup $rest }
+        'install' { Import-Setup; Invoke-Install $rest }
+        'docs' { Import-Setup; Invoke-Docs $rest }
+        'put' { Import-Setup; Invoke-Put $rest $piped }
+        'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
+        'delete' { if ($rest.Count -ne 1) { Fail 'usage: lykta delete PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'DELETE' (Get-ApiPath $rest[0])) }
+        'media' { Import-Setup; Invoke-Media $rest }
+    }
+    Update-Installs
+} finally { $client.Dispose() }
