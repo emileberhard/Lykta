@@ -174,15 +174,23 @@ final class Model {
         guard let gateway, let credentials = try credentials ?? KeychainItem.credentials.load() else {
             throw AppError(status: nil, errorDescription: "Lykta is not connected to a gateway.")
         }
-        let detail: [String: JSONValue] = switch action.input {
+        var detail: [String: JSONValue] = switch action.input {
         case let .button(name): ["button": .string(name)]
         case let .toggle(path, isOn): ["toggle": .string(path), "isOn": .bool(isOn)]
         }
-        telemetry.record("activity.action", activity: action.activity, detail)
+        let activity: UUID?
+        switch action.target {
+        case let .activity(id):
+            activity = id
+        case let .widget(id):
+            activity = nil
+            detail["widget"] = .string(id.uuidString)
+        }
+        telemetry.record(activity == nil ? "widget.action" : "activity.action", activity: activity, detail)
         do {
             try await gateway.act(action, secret: credentials.deviceSecret)
         } catch {
-            telemetry.record("app.error", activity: action.activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
+            telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
     }

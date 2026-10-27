@@ -216,21 +216,30 @@ public struct Action: Codable, Equatable, Sendable {
         }
     }
 
+    public enum Target: Hashable, Sendable {
+        case activity(UUID)
+        case widget(UUID)
+    }
+
     public let id: UUID
-    public let activity: UUID
+    public let target: Target
     public let input: Input
 
-    public init(id: UUID, activity: UUID, input: Input) {
+    public init(id: UUID, target: Target, input: Input) {
         self.id = id
-        self.activity = activity
+        self.target = target
         self.input = input
     }
 
     public init(from decoder: any Decoder) throws {
         let fields = try decoder.container(keyedBy: Key.self)
-        try fields.allowOnly(["id", "activity", "button", "toggle", "isOn"])
+        try fields.allowOnly(["id", "activity", "widget", "button", "toggle", "isOn"])
         id = try fields.required("id")
-        activity = try fields.required("activity")
+        switch (try fields.optional("activity") as UUID?, try fields.optional("widget") as UUID?) {
+        case let (activity?, nil): target = .activity(activity)
+        case let (nil, widget?): target = .widget(widget)
+        default: throw fields.invalid("an action names either an activity or a widget")
+        }
         if let button: String = try fields.optional("button") {
             guard Node.Content.isName(button) else { throw fields.invalid("not a button name", at: "button") }
             guard !fields.contains(Key(stringValue: "toggle")), !fields.contains(Key(stringValue: "isOn")) else {
@@ -245,7 +254,10 @@ public struct Action: Codable, Equatable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var fields = encoder.container(keyedBy: Key.self)
         try fields.encode(id, forKey: Key(stringValue: "id"))
-        try fields.encode(activity, forKey: Key(stringValue: "activity"))
+        switch target {
+        case let .activity(activity): try fields.encode(activity, forKey: Key(stringValue: "activity"))
+        case let .widget(widget): try fields.encode(widget, forKey: Key(stringValue: "widget"))
+        }
         try input.encode(to: encoder)
     }
 }

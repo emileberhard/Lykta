@@ -44,7 +44,7 @@ struct PartsStorageTests {
         }
         #expect(await send("PUT", ["data": ["name": "Updated", "done": .bool(false), "count": .number(3)]]).status == 200)
         for input: Action.Input in [.toggle("done", isOn: true), .button("increment")] {
-            let action = Action(id: UUID(), activity: activity.id, input: input)
+            let action = Action(id: UUID(), target: .activity(activity.id), input: input)
             #expect(await api.handle(HTTPRequest(method: "POST", target: "/v1/device/actions", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
                                                  body: Array(try JSONEncoder().encode(action)))).status == 204)
         }

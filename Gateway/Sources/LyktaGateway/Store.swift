@@ -533,8 +533,9 @@ actor Store {
     func act(_ device: Device, _ action: Action, now: Int) throws {
         try db.transaction {
             guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return }
+            guard case let .activity(activityID) = action.target else { throw APIError(.notFound, "The widget has been deleted.") }
             guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ? AND phase IN ('starting', 'live')",
-                                         action.activity, device.id).first else {
+                                         activityID, device.id).first else {
                 throw APIError(.notFound, "The activity has ended.")
             }
             let activity = try Activity(row)

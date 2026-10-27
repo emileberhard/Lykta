@@ -21,7 +21,7 @@ struct ButtonIntent: LiveActivityIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        try await sender.send(Action(id: UUID(), activity: activityID(activity), input: .button(button)))
+        try await sender.send(Action(id: UUID(), target: .activity(activityID(activity)), input: .button(button)))
         return .result()
     }
 }
@@ -44,7 +44,7 @@ struct ToggleIntent: LiveActivityIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        try await sender.send(Action(id: UUID(), activity: activityID(activity), input: .toggle(toggle, isOn: isOn)))
+        try await sender.send(Action(id: UUID(), target: .activity(activityID(activity)), input: .toggle(toggle, isOn: isOn)))
         return .result()
     }
 }

@@ -24,11 +24,14 @@ struct DeviceAPITests {
         }
     }
 
-    @Test func actionsAreAButtonOrAToggle() throws {
-        let toggle = Action(id: UUID(), activity: UUID(), input: .toggle("items.0.done", isOn: true))
+    @Test(arguments: [Action.Target.activity(UUID()), .widget(UUID())])
+    func actionsAreAButtonOrAToggleOnAnActivityOrAWidget(target: Action.Target) throws {
+        let toggle = Action(id: UUID(), target: target, input: .toggle("items.0.done", isOn: true))
         #expect(try JSONDecoder().decode(Action.self, from: JSONEncoder().encode(toggle)) == toggle)
         let mixed = #"{"id": "\#(UUID())", "activity": "\#(UUID())", "button": "retry", "isOn": true}"#
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(Action.self, from: Data(mixed.utf8)) }
+        let both = #"{"id": "\#(UUID())", "activity": "\#(UUID())", "widget": "\#(UUID())", "button": "retry"}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(Action.self, from: Data(both.utf8)) }
     }
 
     @Test func readsTheSyncAnswerOfAGatewayThatSendsNoTimes() throws {
