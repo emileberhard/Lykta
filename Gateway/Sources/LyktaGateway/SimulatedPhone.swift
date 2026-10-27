@@ -38,6 +38,10 @@ final class SimulatedPhone: PushService {
                     let ids = Set(try await store.widgetSummaries(device).map(\.id))
                     if ids != known {
                         try await Self.refreshWidgets(in: store, device: device)
+                        for id in ids.subtracting(known).sorted(by: { $0.uuidString < $1.uuidString }) {
+                            try await Self.pressWidget(id, in: store, device: device)
+                        }
+                        try await Self.refreshWidgets(in: store, device: device)
                         known = ids
                     }
                     try await Task.sleep(for: .milliseconds(250))
@@ -113,6 +117,28 @@ final class SimulatedPhone: PushService {
         try await store.reportWidgets(device, report: Self.widgetReport(places), now: now)
         for place in places {
             _ = try await store.fetchWidget(device, id: place.widget, family: place.family, have: nil, layout: Layout.version, now: now)
+        }
+    }
+
+    private static func pressWidget(_ id: UUID, in store: Store, device: Device) async throws {
+        let now = Int(Date().timeIntervalSince1970)
+        guard let summary = try await store.widgetList(device, now: now).first(where: { $0.id == id }) else { return }
+        func layout() async throws -> WidgetLayout {
+            let detail = try await store.widgetDetail(device, name: summary.name, now: now)
+            return try WidgetLayout(json: detail.layout.filled(with: detail.data, for: .widget).json)
+        }
+        func press(_ input: Action.Input) async throws {
+            do { try await store.act(device, Action(id: UUID(), target: .widget(id), input: input), now: now) }
+            catch let error as APIError { log("The simulated widget tap was refused: \(error.code.rawValue): \(error.message)") }
+        }
+        let initial = try await layout()
+        for name in initial.buttons.keys.sorted() where try await layout().buttons[name] != nil {
+            try await press(.button(name))
+        }
+        for path in initial.toggles.keys.sorted() {
+            if let isOn = try await layout().toggles[path] {
+                try await press(.toggle(path, isOn: !isOn))
+            }
         }
     }
 

@@ -1,0 +1,1 @@
+Put a small water counter widget on my Home Screen. Start at zero glasses, give me a Drink button that adds one glass and a Daily goal toggle that starts off. Both should change the widget without waiting for you.

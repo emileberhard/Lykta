@@ -90,4 +90,28 @@ struct SimulatedPhoneTests {
         #expect(updated.delivery == "fetched")
     }
 
+    @Test func pressesEachNewWidgetsControlsOnceAndFetchesTheChangedData() async throws {
+        let store = try Store(path: ":memory:")
+        let now = Int(Date().timeIntervalSince1970)
+        let phone = try await SimulatedPhone(store: store, now: now)
+        let device = try #require(await store.device(secret: SimulatedPhone.credentials.deviceSecret))
+        let body: JSONValue = ["title": "Water", "layout": ["systemSmall": ["vstack": .array([
+            ["button": "drink", "label": "Drink", "add": ["count": .number(1)]],
+            ["toggle": "done", "label": "Done"]
+        ])]], "data": ["count": .number(0), "done": .bool(false)]]
+        let request = try JSONDecoder().decode(WidgetRequest.self, from: Data(body.json))
+        _ = try await store.putWidget(device, name: Name(rawValue: "water")!, request: request, now: now)
+        let deadline = ContinuousClock.now + .seconds(5)
+        var detail: WidgetDetail
+        repeat {
+            try await Task.sleep(for: .milliseconds(100))
+            detail = try await store.widgetDetail(device, name: Name(rawValue: "water")!, now: now)
+        } while detail.status.delivery != .fetched && ContinuousClock.now < deadline
+        #expect(detail.data == ["count": .number(1), "done": .bool(true)])
+        #expect(detail.status.revision == 3)
+        #expect(try await store.actions(device, after: 0, limit: 10).count == 2)
+        _ = try await phone.reloadWidgets(deviceToken: PushToken(Data(repeating: 9, count: 32)), environment: .development, id: UUID())
+        #expect(try await store.actions(device, after: 0, limit: 10).count == 2)
+    }
+
 }
