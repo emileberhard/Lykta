@@ -619,7 +619,8 @@ limit bounds.
   `notification.unknown` and `notification.expired`; `device.sync` records the
   phone's notification authorization, banner style and token fingerprint.
 - Events hold IDs, states, fingerprints and errors, never tokens, activity
-  or notification content, or media. They are kept 14 days, at most 8 MB per phone.
+  or notification content, or media. They are kept at most 14 days, with an
+  8 MiB JSON-detail budget per phone; row metadata and indexes take additional space.
 
 ## Expensive to change
 
