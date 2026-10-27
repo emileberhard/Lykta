@@ -28,7 +28,7 @@ private struct MarkContent: ChartContent {
 
     var body: some ChartContent {
         ForEach(mark.values.indices, id: \.self) { index in
-            let x = PlottableValue.value("Index", index)
+            let x = PlottableValue.value("Index", Double(index))
             let y = PlottableValue.value("Value", mark.values[index])
             switch mark.kind {
             case .line:
@@ -41,7 +41,8 @@ private struct MarkContent: ChartContent {
                     .interpolationMethod(mark.interpolation.value)
                     .foregroundStyle(style(at: index))
             case .bar:
-                BarMark(x: x, y: y, width: .ratio(0.7))
+                RectangleMark(xStart: .value("Index", Double(index) - 0.35), xEnd: .value("Index", Double(index) + 0.35),
+                              yStart: .value("Value", 0.0), yEnd: y)
                     .cornerRadius(mark.cornerRadius)
                     .foregroundStyle(style(at: index))
             case .point:
