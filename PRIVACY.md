@@ -54,7 +54,8 @@ or use:
   upload
 
 Your agents supply all activity, widget and notification content, including sounds and
-images, apart from the fixed examples you send from the app's gallery. Do not send content that you do not
+images, apart from the fixed examples you send from the app's gallery and the fixed
+hello that `lykta setup` sends. Do not send content that you do not
 want stored on the gateway.
 
 ## Diagnostics
@@ -99,8 +100,8 @@ the last content it loaded for at most 64 widgets, so it can still show them
 while the gateway is unreachable; Reset deletes it. The app remembers whether
 you left it while it asked you to lock the phone after starting an example, so
 it asks only until then; Reset keeps this. It remembers whether you finished
-its introduction, and whether an agent has started an activity on the phone,
-which Reset forgets. iOS keeps a
+its introduction, which Reset keeps, and whether an agent has started an
+activity on the phone, which Reset forgets. iOS keeps a
 notification's image with the notification until you clear it. Deleting the
 app deletes them.
 

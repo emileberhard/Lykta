@@ -15,13 +15,13 @@ struct Onboarding: View {
         ZStack {
             switch step {
             case .welcome:
-                Welcome { show(asksForNotifications ? .notifications : .connect) }
+                Welcome { advance(from: .welcome, to: asksForNotifications ? .notifications : .connect) }
                     .transition(pageTransition)
             case .notifications:
-                Notifications(model: model) { show(.connect) }
+                Notifications(model: model) { advance(from: .notifications, to: .connect) }
                     .transition(pageTransition)
             case .connect:
-                Connect(model: model, next: { show(.prompts) }, later: finish)
+                Connect(model: model, next: { advance(from: .connect, to: .prompts) }, later: finish)
                     .transition(pageTransition)
             case .prompts:
                 Prompts(done: finish)
@@ -39,7 +39,8 @@ struct Onboarding: View {
         reduceMotion ? .opacity : .push(from: .trailing)
     }
 
-    private func show(_ next: Step) {
+    private func advance(from current: Step, to next: Step) {
+        guard step == current else { return }
         withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.5)) { step = next }
     }
 
@@ -259,14 +260,14 @@ private struct Connect: View {
                 VStack(spacing: 12) {
                     Title(isConnected ? "Your Agent Is Connected" : "Connect Your Agent")
                         .id(isConnected)
-                        .transition(.blurReplace)
+                        .transition(.replace(reduceMotion: reduceMotion))
                     Text(isConnected ? "It just said hello on this iPhone." : "Paste the setup into Claude Code, Codex or any agent that runs commands.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .id(isConnected)
-                        .transition(.blurReplace)
+                        .transition(.replace(reduceMotion: reduceMotion))
                 }
-                Arrival(model: model, isWaiting: progress != .ready)
+                Arrival(model: model)
             }
             .animation(reduceMotion ? .easeInOut(duration: 0.3) : .smooth(duration: 0.6), value: isConnected)
             .animation(.smooth(duration: 0.4), value: progress)
@@ -290,7 +291,7 @@ private struct Connect: View {
                             }
                         }
                     }
-                    .transition(.blurReplace)
+                    .transition(.replace(reduceMotion: reduceMotion))
                 }
                 .fontWeight(.semibold)
             }
@@ -354,7 +355,8 @@ private struct Connection: View {
                 Capsule()
                     .fill(.green)
                     .frame(height: 3)
-                    .scaleEffect(x: state == .connected ? 1 : 0, anchor: .leading)
+                    .scaleEffect(x: state == .connected || reduceMotion ? 1 : 0, anchor: .leading)
+                    .opacity(state == .connected ? 1 : 0)
             }
             .frame(width: 84, height: 4)
             Image(systemName: "iphone")
@@ -369,7 +371,7 @@ private struct Connection: View {
                             .foregroundStyle(.white, .green)
                             .background(Circle().fill(Color(.systemBackground)).padding(2))
                             .offset(x: 10, y: 6)
-                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
                     }
                 }
         }
@@ -409,7 +411,6 @@ private struct Dots: View {
 
 private struct Arrival: View {
     let model: Model
-    let isWaiting: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -428,11 +429,21 @@ private struct Arrival: View {
                 switch model.phase {
                 case .unconfigured:
                     Problem("Set LYKTA_GATEWAY_HOST in iOS/Config/Local.xcconfig to build Lykta for a gateway.")
+                        .card()
                 case let .failed(message):
                     Notice(Problem(message), action: "Try Again") { model.start() }
+                        .card()
                 case .connecting, .ready:
-                    Slot(isWaiting: isWaiting)
-                        .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                    if !model.areActivitiesEnabled {
+                        ActivitiesOffNotice()
+                            .card()
+                    } else if let error = model.error {
+                        Problem(error)
+                            .card()
+                    } else {
+                        Slot()
+                            .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                    }
                 }
             }
         }
@@ -441,25 +452,10 @@ private struct Arrival: View {
 }
 
 private struct Slot: View {
-    let isWaiting: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         RoundedRectangle(cornerRadius: 24)
             .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 6]))
             .foregroundStyle(.tertiary)
-            .background {
-                if isWaiting && !reduceMotion {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color.accentColor.gradient)
-                        .phaseAnimator([0.03, 0.11]) { glow, opacity in
-                            glow.opacity(opacity)
-                        } animation: { _ in
-                            .easeInOut(duration: 1.4)
-                        }
-                        .transition(.opacity)
-                }
-            }
             .frame(height: 96)
             .overlay {
                 Label("Your agent’s hello appears here", systemImage: "platter.filled.bottom.iphone")
@@ -467,7 +463,6 @@ private struct Slot: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
             }
-            .animation(.smooth(duration: 0.6), value: isWaiting)
     }
 }
 
@@ -532,6 +527,20 @@ private struct Prompts: View {
             copied = nil
         }
         .animation(.snappy(duration: 0.25), value: copied)
+    }
+}
+
+extension AnyTransition {
+    static func replace(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : AnyTransition(.blurReplace)
+    }
+}
+
+private extension View {
+    func card() -> some View {
+        padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 24))
     }
 }
 

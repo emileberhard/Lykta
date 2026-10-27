@@ -41,17 +41,13 @@ private struct AppView: View {
         ZStack {
             if model.isOnboarding {
                 Onboarding(model: model)
-                    .transition(transition)
+                    .transition(.replace(reduceMotion: reduceMotion))
             } else {
                 HomeView(model: model)
-                    .transition(transition)
+                    .transition(.replace(reduceMotion: reduceMotion))
             }
         }
         .animation(.smooth(duration: 0.6), value: model.isOnboarding)
         .onOpenURL { openURL($0) }
-    }
-
-    private var transition: AnyTransition {
-        reduceMotion ? .opacity : AnyTransition(.blurReplace)
     }
 }
