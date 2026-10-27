@@ -67,9 +67,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - The widget credential reads only its own phone's widgets and sends their
   report; the widget extension never holds the device secret. `WidgetCache`,
   under its file lock, is the only owner of cached widget answers, and 410
-  `widget_deleted` is the only answer that removes cached content. Widget
-  reports apply in `sequence` order, and only fetched content the phone can
-  draw counts as `fetched`.
+  `widget_deleted` and Reset are the only things that remove cached content.
+  It records an answer only while the credential that fetched it is current.
+  Widget reports apply in `sequence` order, and only fetched content the phone
+  can draw counts as `fetched`.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
   from the same commit. A notification example names its media files, kept

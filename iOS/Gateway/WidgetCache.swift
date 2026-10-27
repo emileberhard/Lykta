@@ -7,6 +7,15 @@ nonisolated enum WidgetCache {
         case unreachable(WidgetSnapshot?, failures: Int)
         case deleted
         case signedOut
+
+        init(_ answer: Result<WidgetAnswer, any Error>) {
+            self = switch answer {
+            case let .success(.snapshot(snapshot)): .current(snapshot)
+            case .success(.unchanged), .failure: .unreachable(nil, failures: 1)
+            case .success(.deleted): .deleted
+            case .success(.signedOut): .signedOut
+            }
+        }
     }
 
     private struct Entry: Codable {
@@ -19,15 +28,16 @@ nonisolated enum WidgetCache {
 
     private static let maximumEntries = 64
 
-    static func revision(of id: UUID) -> Int? {
-        update { entries in
+    static func snapshot(of id: UUID) throws -> WidgetSnapshot? {
+        try read { entries in
             guard let entry = entries[id.uuidString], !entry.isDeleted else { return nil }
-            return entry.snapshot?.revision
+            return entry.snapshot
         }
     }
 
-    static func record(_ answer: Result<WidgetAnswer, any Error>, for id: UUID, at now: Date) -> Outcome {
-        update { entries in
+    static func record(_ answer: Result<WidgetAnswer, any Error>, for id: UUID, fetchedWith credential: WidgetCredential, at now: Date) throws -> Outcome {
+        try update { entries in
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return .signedOut }
             var entry = entries[id.uuidString] ?? Entry(title: "", usedAt: now)
             entry.usedAt = now
             defer { entries[id.uuidString] = entry }
@@ -61,8 +71,9 @@ nonisolated enum WidgetCache {
         }
     }
 
-    static func remember(_ widgets: [WidgetSummary], at now: Date) {
-        update { entries in
+    static func remember(_ widgets: [WidgetSummary], listedWith credential: WidgetCredential, at now: Date) throws {
+        try update { entries in
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return }
             for widget in widgets where entries[widget.id.uuidString]?.isDeleted != true {
                 var entry = entries[widget.id.uuidString] ?? Entry(title: widget.title, usedAt: now)
                 entry.title = widget.title
@@ -71,31 +82,55 @@ nonisolated enum WidgetCache {
         }
     }
 
-    static func titles() -> [(id: UUID, title: String)] {
-        update { entries in
+    static func titles() throws -> [(id: UUID, title: String)] {
+        try read { entries in
             entries.filter { !$0.value.isDeleted && !$0.value.title.isEmpty }
                 .sorted { $0.value.usedAt > $1.value.usedAt }
                 .compactMap { key, entry in UUID(uuidString: key).map { ($0, entry.title) } }
         }
     }
 
-    private static func update<Result>(_ body: (inout [String: Entry]) -> Result) -> Result {
-        let directory = AppGroup.container.appending(path: "Library/Application Support/Widgets", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let lock = open(directory.appending(path: "cache.lock").path, O_CREAT | O_RDWR, 0o600)
-        defer { if lock >= 0 { close(lock) } }
-        if lock >= 0 { flock(lock, LOCK_EX) }
-        let file = directory.appending(path: "cache.json")
-        var entries = (try? JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: file))) ?? [:]
-        let result = body(&entries)
-        if entries.count > maximumEntries {
-            for (key, _) in entries.sorted(by: { $0.value.usedAt > $1.value.usedAt }).dropFirst(maximumEntries) {
-                entries[key] = nil
+    static func removeAll() throws {
+        try locked { file in
+            do {
+                try FileManager.default.removeItem(at: file)
+            } catch CocoaError.fileNoSuchFile {}
+        }
+    }
+
+    private static func read<Result>(_ body: ([String: Entry]) throws -> Result) throws -> Result {
+        try locked { file in try body(entries(in: file)) }
+    }
+
+    private static func update<Result>(_ body: (inout [String: Entry]) throws -> Result) throws -> Result {
+        try locked { file in
+            var entries = try entries(in: file)
+            let result = try body(&entries)
+            if entries.count > maximumEntries {
+                for (key, _) in entries.sorted(by: { $0.value.usedAt > $1.value.usedAt }).dropFirst(maximumEntries) {
+                    entries[key] = nil
+                }
             }
+            try JSONEncoder().encode(entries).write(to: file, options: .atomic)
+            return result
         }
-        if let data = try? JSONEncoder().encode(entries) {
-            try? data.write(to: file, options: .atomic)
+    }
+
+    private static func entries(in file: URL) throws -> [String: Entry] {
+        do {
+            return try JSONDecoder().decode([String: Entry].self, from: Data(contentsOf: file))
+        } catch CocoaError.fileReadNoSuchFile {
+            return [:]
         }
-        return result
+    }
+
+    private static func locked<Result>(_ body: (URL) throws -> Result) throws -> Result {
+        let directory = AppGroup.container.appending(path: "Library/Application Support/Widgets", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let lock = open(directory.appending(path: "cache.lock").path, O_CREAT | O_RDWR, 0o600)
+        guard lock >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { close(lock) }
+        guard flock(lock, LOCK_EX) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        return try body(directory.appending(path: "cache.json"))
     }
 }

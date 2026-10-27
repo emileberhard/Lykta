@@ -36,6 +36,7 @@ final class Model {
     private var syncFailures = 0
     private var runTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
+    private var widgetSync: Task<Void, Never>?
     private var registrationObservation: NotificationCenter.ObservationToken?
 
     init() {
@@ -77,7 +78,7 @@ final class Model {
                 await refreshNotifications()
                 await sync()
             }
-            Task { await syncWidgets() }
+            syncWidgets()
         }
     }
 
@@ -190,12 +191,14 @@ final class Model {
         guard let gateway, let credentials else { return }
         runTask?.cancel()
         retryTask?.cancel()
+        widgetSync?.cancel()
         let deleted = await showingErrors("reset") {
             do {
                 try await gateway.deleteDevice(secret: credentials.deviceSecret)
             } catch let error as AppError where error.status == 401 {}
             try KeychainItem.widget.delete()
             try KeychainItem.credentials.delete()
+            try WidgetCache.removeAll()
         }
         if deleted {
             self.credentials = nil
@@ -231,16 +234,24 @@ final class Model {
         self.credentials = credentials
         phase = .ready
         telemetry.startUploading { batch in try await gateway.upload(batch, secret: credentials.deviceSecret) }
+        syncWidgets()
         await withDiscardingTaskGroup { group in
             group.addTask { await self.observePushTokens() }
             group.addTask { await self.observeActivities() }
             group.addTask { await self.observeAuthorization() }
-            group.addTask { await self.syncWidgets() }
         }
     }
 
-    private func syncWidgets() async {
-        guard let gateway, let credentials else { return }
+    private func syncWidgets() {
+        let previous = widgetSync
+        widgetSync = Task {
+            await previous?.value
+            await reportWidgets()
+        }
+    }
+
+    private func reportWidgets() async {
+        guard let gateway, let credentials, !Task.isCancelled else { return }
         do {
             let places = WidgetSelection.places(in: try await WidgetCenter.shared.currentConfigurations())
             let report = WidgetReport(at: .now, pushToken: await Self.widgetPushToken(), layoutVersion: Layout.version, places: places)
@@ -265,6 +276,7 @@ final class Model {
 
     private func createWidgetCredential(_ gateway: GatewayClient, _ credentials: Credentials) async throws -> WidgetCredential {
         let credential = try await gateway.createWidgetCredential(secret: credentials.deviceSecret)
+        guard !Task.isCancelled, self.credentials?.deviceSecret == credentials.deviceSecret else { throw CancellationError() }
         try KeychainItem.widget.save(credential)
         telemetry.record("app.widgetCredential")
         WidgetCenter.shared.reloadAllTimelines()

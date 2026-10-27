@@ -20,13 +20,14 @@ nonisolated struct KeychainItem<Value: Codable>: Sendable {
     }
 
     func save(_ value: Value) throws {
-        let data = try JSONEncoder().encode(value)
-        SecItemDelete(query as CFDictionary)
-        let attributes = query.merging([
-            kSecValueData as String: data,
+        let attributes: [String: Any] = [
+            kSecValueData as String: try JSONEncoder().encode(value),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]) { $1 }
-        let status = SecItemAdd(attributes as CFDictionary, nil)
+        ]
+        var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(query.merging(attributes) { $1 } as CFDictionary, nil)
+        }
         guard status == errSecSuccess else { throw Self.failure(status) }
     }
 

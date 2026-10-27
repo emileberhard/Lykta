@@ -33,16 +33,12 @@ nonisolated struct WidgetEntity: AppEntity {
 
 nonisolated struct WidgetQuery: EntityQuery {
     func entities(for identifiers: [UUID]) async throws -> [WidgetEntity] {
-        let titles = Dictionary(WidgetCache.titles().map { ($0.id, $0.title) }) { first, _ in first }
+        let titles = Dictionary(try WidgetCache.titles().map { ($0.id, $0.title) }) { first, _ in first }
         return identifiers.map { WidgetEntity(id: $0, title: titles[$0] ?? String(localized: "Widget")) }
     }
 
     func suggestedEntities() async throws -> [WidgetEntity] {
         try await listed()
-    }
-
-    func defaultResult() async -> WidgetEntity? {
-        try? await listed().first
     }
 
     private func listed() async throws -> [WidgetEntity] {
@@ -51,12 +47,12 @@ nonisolated struct WidgetQuery: EntityQuery {
         }
         do {
             let widgets = try await gateway.widgets(widgetToken: credential.widgetToken)
-            WidgetCache.remember(widgets, at: .now)
+            try WidgetCache.remember(widgets, listedWith: credential, at: .now)
             return widgets.map { WidgetEntity(id: $0.id, title: $0.title) }
         } catch let error as AppError where error.status == 401 {
             throw AppError(status: nil, errorDescription: String(localized: "Open Lykta to connect it to your gateway."))
         } catch {
-            let cached = WidgetCache.titles()
+            let cached = try WidgetCache.titles()
             guard !cached.isEmpty else { throw error }
             return cached.map { WidgetEntity(id: $0.id, title: $0.title) }
         }

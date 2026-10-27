@@ -329,7 +329,9 @@ following a different widget. One widget kind, `Lykta`, is compiled into the
 app, and the user picks an agent's widget for each place through its
 `WidgetSelection` configuration intent, whose entity id is the widget's UUID.
 A kind per agent widget would need an app update; placements that follow the
-newest widget would let one new widget replace several places.
+newest widget would let one new widget replace several places. The entity
+query offers no default for the same reason: a new place asks the user to
+choose, so creating a widget never changes what an existing place shows.
 
 **A widget push only invalidates.** WidgetKit gives an install one widget push
 token, and a push carries no content and reloads every Lykta widget. The
@@ -367,9 +369,16 @@ widget in the app group, under a file lock, so concurrent reloads cannot
 overwrite a newer revision with an older one. A 410 leaves a fence no later
 answer can lift, and it is the only answer that removes cached content; a
 transient failure or a gateway older than widgets draws the cached content as
-stale and retries in 15 minutes, then hourly. A timeline reloads at the stale
-time or after three hours, whichever comes first. The cache keeps the 64
-widgets used most recently.
+stale and retries in 15 minutes, then hourly. A timeline asks for its reload
+at the stale time or after three hours, whichever comes first, and iOS decides
+when it happens. A fetch names the cached revision only when that content
+decodes, so an updated app replaces a cached `requires` answer. An answer is
+recorded only while the credential that fetched it is still the keychain's,
+and Reset deletes the credential and then the cache, so nothing from before a
+Reset shows after it. A cache that cannot be locked, read or written stops
+nothing: the provider draws the gateway's answer uncached. Gallery previews
+draw cached content and never fetch, because a preview is not a place. The
+cache keeps the 64 widgets used most recently.
 
 **Places are reported, then proved by fetches.** The extension's push handler
 sends the push token and the places WidgetKit reports; the app sends the same

@@ -31,6 +31,8 @@ struct WidgetEntryView: View {
             Notice(title: title, detail: "Update Lykta to show this widget.", symbol: "arrow.down.app")
         case let .unsupported(title):
             Notice(title: title, detail: "Not made for this size", symbol: "rectangle.dashed")
+        case let .notLoaded(title):
+            Notice(title: title, detail: "Loads once added", symbol: "square.dashed")
         case .signedOut:
             Notice(title: "Lykta", detail: "Open Lykta to connect it to your gateway.", symbol: "person.crop.circle.badge.questionmark")
         case .choose:
