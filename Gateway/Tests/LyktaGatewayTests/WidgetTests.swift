@@ -114,17 +114,17 @@ struct WidgetTests {
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall", token: token).status == 400)
     }
 
-    @Test func deletesInvalidatePlacedContentButUnplacedChangesDoNotPush() async throws {
+    @Test func onlyChangesToPlacedWidgetsPush() async throws {
         try await report([])
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await deliver(now)
         #expect(push.sent.isEmpty)
         try await report([created.id])
         try await deliver(now)
-        #expect(push.sent == ["widgets"])
+        #expect(push.sent.isEmpty)
         #expect(await send("DELETE", "/v1/widgets/steps").status == 204)
-        try await deliver(now + Store.widgetPushInterval)
-        #expect(push.sent == ["widgets", "widgets"])
+        try await deliver(now)
+        #expect(push.sent == ["widgets"])
         let gone: Failure = try await fetch(created.id).decoded()
         #expect(gone.error == "widget_deleted")
     }
@@ -143,6 +143,7 @@ struct WidgetTests {
         #expect(await send("PUT", "/v1/widgets/steps", ["title": "Still readable"]).status == 200)
         let placesOnly: JSONValue = ["layoutVersion": "0.11.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", placesOnly, token: token).status == 204)
+        #expect(await send("PUT", "/v1/widgets/steps", ["data": ["steps": "12"]]).status == 200)
         try await deliver(now)
         #expect(push.sent == ["widgets"])
     }

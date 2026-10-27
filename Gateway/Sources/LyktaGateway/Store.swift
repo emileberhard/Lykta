@@ -1204,10 +1204,8 @@ extension Store {
                 let added = try db.query("SELECT 1 FROM widget_places WHERE widget_id = ? AND family = ?", place.widget, place.family.rawValue).isEmpty
                 try db.run("INSERT OR IGNORE INTO widget_places (widget_id, family) VALUES (?, ?)", place.widget, place.family.rawValue)
                 if added {
-                    let generation = try widgetGeneration(device, id: place.widget)
-                    try db.run("UPDATE widgets SET generation = ? WHERE id = ?", generation, place.widget)
                     try record("widget.placed", device: device.id, activity: nil,
-                               ["widget": .string(widget.id.uuidString), "family": .string(place.family.rawValue), "placed": .bool(true), "generation": .number(Double(generation))])
+                               ["widget": .string(widget.id.uuidString), "family": .string(place.family.rawValue), "placed": .bool(true)])
                 }
             }
             try db.run("UPDATE widget_phones SET places_known = 1 WHERE device_id = ?", device.id)
