@@ -1,0 +1,230 @@
+import Foundation
+import LyktaCore
+import Testing
+@testable import LyktaGateway
+
+struct WidgetTests {
+    let store: Store
+    let push = FakePush()
+    let api: API
+    let credentials: Credentials
+    let token: String
+    let now = Int(Date().timeIntervalSince1970)
+
+    init() async throws {
+        store = try Store(path: ":memory:")
+        api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
+                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(0, 12, 0), shutdown: Shutdown())
+        let registration = Registration(environment: .development, appVersion: "0.12.0", proof: .invite(try await store.invite(now: now)))
+        credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:], body: Array(try JSONEncoder().encode(registration)))).decoded()
+        let response = await api.handle(HTTPRequest(method: "POST", target: "/v1/device/widgets/credential", headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
+        token = (try response.decoded() as WidgetCredential).widgetToken
+    }
+
+    private static let request: JSONValue = ["title": "Steps", "layout": ["systemSmall": ["text": "{{steps}}"]], "data": ["steps": "10"], "staleAfter": .number(60)]
+
+    private struct Status: Decodable {
+        struct Fetch: Decodable { let revision: Int; let at: String }
+        let id: UUID
+        let revision: Int
+        let delivery: String
+        let nextPush: String?
+        let error: String?
+        let placed: [WidgetLayout.Family]
+        let fetched: Fetch?
+        let layout: JSONValue?
+        let data: JSONValue?
+    }
+
+    @Test func createsUpdatesDeletesAndRecreationGetsANewIdentity() async throws {
+        let created = await send("PUT", "/v1/widgets/steps", Self.request)
+        #expect(created.status == 201)
+        let first: Status = try created.decoded()
+        #expect(first.revision == 1)
+        let repeated: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        #expect(repeated.revision == 1)
+        let updated: Status = try await send("PUT", "/v1/widgets/steps", ["data": ["steps": "20"], "ifRevision": .number(1)]).decoded()
+        #expect(updated.revision == 2)
+        #expect(updated.id == first.id)
+        let detail: Status = try await send("GET", "/v1/widgets/steps").decoded()
+        #expect(detail.data == ["steps": "20"])
+        #expect(detail.layout == ["systemSmall": ["text": "{{steps}}"]])
+        #expect(await send("DELETE", "/v1/widgets/steps").status == 204)
+        #expect(await send("GET", "/v1/widgets/steps").status == 404)
+        #expect(await fetch(first.id).status == 410)
+        let replacement: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        #expect(replacement.id != first.id)
+    }
+
+    @Test func derivesEveryDeliveryStateFromPlacesPushesAndFetchReceipts() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        #expect(created.delivery == "failed")
+        #expect(created.error?.contains("widget push token") == true)
+        try await report([])
+        #expect(try await status().delivery == "notPlaced")
+        try await report([created.id])
+        #expect(try await status().delivery == "pending")
+        try await deliver(now)
+        #expect(try await status().delivery == "accepted")
+        #expect(await fetch(created.id).status == 200)
+        let fetched = try await status()
+        #expect(fetched.delivery == "fetched")
+        #expect(fetched.fetched?.revision == 1)
+        #expect(fetched.placed == [.systemSmall])
+        try await report([created.id])
+        #expect(try await status().delivery == "fetched")
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "30"]])
+        push.fail("widgets", .rejected(status: 403, reason: "Forbidden"))
+        try await deliver(now + Store.widgetPushInterval)
+        #expect(try await status().delivery == "failed")
+        #expect(try await status().error == "APNs 403 Forbidden")
+    }
+
+    @Test func coalescesRevisionsAndWaitsTwentyMinutesBeforeTheNextPush() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "20"]])
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "30"]])
+        try await deliver(now)
+        #expect(push.sent == ["widgets"])
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "40"]])
+        try await deliver(now + Store.widgetPushInterval - 1)
+        #expect(push.sent == ["widgets"])
+        #expect(try await status().delivery == "pending")
+        #expect(try await status().nextPush != nil)
+        try await deliver(now + Store.widgetPushInterval)
+        #expect(push.sent == ["widgets", "widgets"])
+        let snapshot: WidgetSnapshot = try await fetch(created.id).decoded()
+        #expect(snapshot.revision == 4)
+        #expect(snapshot.content == .layout(["systemSmall": ["text": "40"]]))
+    }
+
+    @Test func fetchReturnsFullContentUnchangedOrRequiresAndAlwaysRecordsAReceipt() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        let full: WidgetSnapshot = try await fetch(created.id).decoded()
+        #expect(full.title == "Steps")
+        #expect(full.content == .layout(["systemSmall": ["text": "10"]]))
+        #expect(full.staleAt != nil)
+        #expect(await fetch(created.id, have: 1).status == 204)
+        let old = await fetch(created.id, have: 1, layout: "0.11.0")
+        #expect(old.status == 200)
+        #expect((try old.decoded() as WidgetSnapshot).content == .requires(Version(0, 12, 0)))
+        #expect(try await status().fetched?.revision == 1)
+        #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=unknown&layout=0.12.0", token: token).status == 400)
+        #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall", token: token).status == 400)
+    }
+
+    @Test func credentialRotationAndResetInvalidateWidgetAccess() async throws {
+        _ = await send("PUT", "/v1/widgets/steps", Self.request)
+        #expect(await send("GET", "/v1/device/widgets", token: token).status == 200)
+        let rotation: WidgetCredential = try await send("POST", "/v1/device/widgets/credential", token: credentials.deviceSecret).decoded()
+        #expect(rotation.widgetToken != token)
+        #expect(await send("GET", "/v1/device/widgets", token: token).status == 401)
+        #expect(await send("GET", "/v1/device/widgets", token: rotation.widgetToken).status == 200)
+        #expect(await send("DELETE", "/v1/device", token: credentials.deviceSecret).status == 204)
+        #expect(await send("GET", "/v1/device/widgets", token: rotation.widgetToken).status == 401)
+    }
+
+    @Test(arguments: ["/v1/widgets", "/v1/activities", "/v1/events", "/v1/device/widgets/credential"])
+    func widgetCredentialsCannotUseOtherRoutes(_ route: String) async {
+        #expect(await send(route.hasSuffix("credential") ? "POST" : "GET", route, token: token).status == 401)
+    }
+
+    @Test(arguments: ["agent", "device"])
+    func widgetRoutesRequireTheirOwnCredential(_ kind: String) async {
+        let wrong = kind == "agent" ? credentials.agentToken : credentials.deviceSecret
+        #expect(await send("GET", "/v1/device/widgets", token: wrong).status == 401)
+        #expect(await send("PUT", "/v1/device/widgets", token: wrong).status == 401)
+    }
+
+    @Test func enforcesTheLimitAndRevisionPreconditions() async throws {
+        for index in 0..<32 { #expect(await send("PUT", "/v1/widgets/w\(index)", Self.request).status == 201) }
+        let excess = await send("PUT", "/v1/widgets/excess", Self.request)
+        #expect(excess.status == 409)
+        #expect((try excess.decoded() as Failure).error == "too_many_widgets")
+        #expect(await send("PUT", "/v1/widgets/w0", ["title": "Updated", "ifRevision": .number(1)]).status == 200)
+        #expect(await send("PUT", "/v1/widgets/w0", ["title": "Stale", "ifRevision": .number(1)]).status == 409)
+        #expect(await send("PUT", "/v1/widgets/missing", ["ifRevision": .number(1)]).status == 409)
+        #expect(await send("DELETE", "/v1/widgets/w1").status == 204)
+        #expect(await send("PUT", "/v1/widgets/excess", Self.request).status == 201)
+    }
+
+    @Test(arguments: ["alert", "endAfter", "dismissAfter", "relevance"])
+    func rejectsActivityFieldsAtTheirJSONPath(_ key: String) async throws {
+        let response = await send("PUT", "/v1/widgets/steps", .object([key: .number(1)]))
+        #expect(response.status == 400)
+        let refusal: Refusal = try response.decoded()
+        #expect(refusal.error == "invalid_request")
+        #expect(refusal.message.hasPrefix(key + ":"))
+    }
+
+    @Test func expandsPartsAndNowBeforeAdmission() async throws {
+        let response = await send("PUT", "/v1/widgets/steps", ["title": "Timer", "layout": ["parts": ["timer": ["text": "{{ends}}"]], "systemSmall": ["use": "timer"]], "now": ["ends": .number(60)]])
+        #expect(response.status == 201)
+        let created: Status = try response.decoded()
+        #expect(created.layout == ["systemSmall": ["text": "{{ends}}"]])
+        let data = try #require(created.data)
+        guard case let .number(ends) = try data.value(at: "ends") else { Issue.record("now must write a number"); return }
+        #expect(ends >= Double(now + 60))
+    }
+
+    @Test func retriesUnknownOutcomesAndMovesBadTokensOnlyOnce() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        push.fail("widgets", .unknown("timeout"))
+        try await deliver(now)
+        #expect(try await status().delivery == "pending")
+        try await deliver(now + 1)
+        #expect(push.sent == ["widgets"])
+        push.acceptTokens(in: [.production])
+        try await deliver(now + 2)
+        try await deliver(now + 2)
+        #expect(try await status().delivery == "accepted")
+        _ = await send("PUT", "/v1/widgets/steps", ["title": "New"])
+        push.acceptTokens(in: [])
+        try await deliver(now + 2 + Store.widgetPushInterval)
+        #expect(try await status().delivery == "failed")
+    }
+
+    @Test func aWaitingPutFinishesWhenTheExtensionFetchesTheRevision() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        async let response = send("PUT", "/v1/widgets/steps?wait=5", ["data": ["steps": "20"]])
+        try await deliverOnceClaimable(store, push, at: now)
+        _ = await fetch(created.id)
+        let result: Status = try await response.decoded()
+        #expect(result.delivery == "fetched")
+    }
+
+    @Test func everyBundledWidgetExampleCanBePut() async throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/LyktaGateway/Skill/examples/widgets")
+        if !FileManager.default.fileExists(atPath: root.path) { return }
+        let examples = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+        for example in examples {
+            let body = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: example))
+            #expect(await send("PUT", "/v1/widgets/\(example.deletingPathExtension().lastPathComponent)", body).status == 201)
+        }
+    }
+
+    private func send(_ method: String, _ target: String, _ body: JSONValue? = nil, token: String? = nil) async -> HTTPResponse {
+        await api.handle(HTTPRequest(method: method, target: target, headers: ["authorization": "Bearer \(token ?? credentials.agentToken)"], body: body?.json ?? []))
+    }
+
+    private func fetch(_ id: UUID, have: Int? = nil, layout: String = "0.12.0") async -> HTTPResponse {
+        await send("GET", "/v1/device/widgets/\(id)?family=systemSmall&layout=\(layout)" + (have.map { "&have=\($0)" } ?? ""), token: token)
+    }
+
+    private func status() async throws -> Status { try await send("GET", "/v1/widgets/steps").decoded() }
+
+    private func report(_ ids: [UUID]) async throws {
+        let report = WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Version(0, 12, 0), places: ids.map { WidgetPlace(widget: $0, family: .systemSmall) })
+        let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(report))
+        #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
+    }
+
+    private func deliver(_ time: Int) async throws {
+        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
+        for job in try await store.claim(now: time, limit: 4) { try await store.finish(job, try await delivery.send(job, now: time), now: time) }
+    }
+}
