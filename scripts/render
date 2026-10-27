@@ -168,7 +168,7 @@ def render(xcode, identifier, index, presentation, dark, target):
                 launches += 1
                 continue
             raise
-        shutil.move(result["previewSnapshotPath"], target)
+        shutil.move(result["snapshot"]["path"], target)
         return
     raise RenderError("Xcode kept blocking previews; open the project in Xcode and check its package resolution")
 
