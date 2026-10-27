@@ -34,6 +34,7 @@ final class Model {
     private var syncRequests = 0
     private var pushToken: PushToken?
     private var syncFailures = 0
+    private var isLockHintPending = false
     private var runTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var widgetSync: Task<Void, Never>?
@@ -73,6 +74,10 @@ final class Model {
         @unknown default: "unknown"
         }
         telemetry.record("app.scene", ["phase": .string(name)])
+        if scenePhase == .background, showsLockHint {
+            UserDefaults.standard.set(true, forKey: Self.lockHintLearned)
+            isLockHintPending = false
+        }
         if scenePhase == .active, phase.isReady {
             Task {
                 await refreshNotifications()
@@ -121,12 +126,22 @@ final class Model {
         telemetry.record("app.example", ["example": .string(example.id)])
         let name = Example.activityName
         let isShowing = Activity<LyktaActivity>.activities.contains { $0.attributes.name == name && [.pending, .active, .stale].contains($0.activityState) }
-        return await showingErrors("example") {
+        let isSent = await showingErrors("example") {
             if !isShowing {
                 try await gateway.endActivity(name, agentToken: credentials.agentToken)
             }
             try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
         }
+        isLockHintPending = isSent && !UserDefaults.standard.bool(forKey: Self.lockHintLearned)
+        return isSent
+    }
+
+    var showsLockHint: Bool {
+        isLockHintPending && activities.contains { $0.attributes.name == Example.activityName && [.active, .stale].contains($0.state) }
+    }
+
+    func dismissLockHint() {
+        isLockHintPending = false
     }
 
     func send(_ example: WidgetExample) async -> Bool {
@@ -505,6 +520,8 @@ final class Model {
         let info = Bundle.main.infoDictionary ?? [:]
         return "\(info["CFBundleShortVersionString"] as? String ?? "") (\(info["CFBundleVersion"] as? String ?? ""))"
     }()
+
+    private static let lockHintLearned = "lockHintLearned"
 
     private static var bundleInstance: UUID {
         let defaults = UserDefaults.standard

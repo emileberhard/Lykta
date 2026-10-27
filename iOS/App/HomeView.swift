@@ -38,6 +38,15 @@ struct HomeView: View {
                 ActivityDetails(model: model, id: activity.id)
             }
         }
+        .overlay {
+            ZStack {
+                if model.showsLockHint {
+                    LockHint(dismiss: model.dismissLockHint)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.smooth, value: model.showsLockHint)
+        }
         .onOpenURL { openURL($0) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
