@@ -127,6 +127,7 @@ enum Schema {
           detail TEXT NOT NULL
         ) STRICT;
         CREATE INDEX IF NOT EXISTS device_events ON events(device_id, seq);
+        CREATE INDEX IF NOT EXISTS device_activity_events ON events(device_id, activity_id, name);
         CREATE TABLE IF NOT EXISTS actions (
           seq INTEGER PRIMARY KEY AUTOINCREMENT,
           id TEXT NOT NULL UNIQUE,

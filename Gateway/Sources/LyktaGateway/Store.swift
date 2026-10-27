@@ -233,6 +233,7 @@ actor Store {
             let relevance = request.relevance ?? current?.relevance
             let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
             let id: UUID
+            var stored = state
             if let current {
                 id = current.id
                 let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
@@ -242,6 +243,8 @@ actor Store {
                         UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
                           alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
                         """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
+                } else {
+                    stored = try current.contentState()
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -258,10 +261,10 @@ actor Store {
                     """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
             }
             let activity = try self.activity(id)
-            let size = try Self.measure(activity, on: device, now: now)
+            let size = try Self.measure(activity, contentState: stored, on: device, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
-                "fingerprint": .string(try activity.fingerprint()), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+                "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
                 "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
             ])
             return (activity, size)
@@ -549,7 +552,7 @@ actor Store {
                 throw APIError(.notFound, "The activity has ended.")
             }
             let activity = try Activity(row)
-            let layout = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(activity.content.utf8)).layout
+            let layout = try activity.contentState().layout
             var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
             let data = try decode(activity.data)
             let changed: JSONValue
@@ -576,7 +579,7 @@ actor Store {
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
                            Self.text(changed), Self.encoded(state), now, activity.id)
-                _ = try Self.measure(self.activity(activity.id), on: device, now: now)
+                _ = try Self.measure(self.activity(activity.id), contentState: state, on: device, now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -624,7 +627,7 @@ actor Store {
             }
             for row in try db.query("""
                 SELECT id, device_id FROM activities a WHERE phase = 'live' AND delivery = 'accepted' AND device_state IS NULL
-                  AND created_at <= ? AND NOT EXISTS (SELECT 1 FROM events WHERE activity_id = a.id AND name = 'activity.unseen')
+                  AND created_at <= ? AND NOT EXISTS (SELECT 1 FROM events WHERE device_id = a.device_id AND activity_id = a.id AND name = 'activity.unseen')
                 """, now - 60) {
                 try record("activity.unseen", device: try row.text("device_id", as: UUID.init(uuidString:)),
                            activity: try row.text("id", as: UUID.init(uuidString:)),
@@ -670,10 +673,15 @@ actor Store {
         if let after, after > (try db.query("SELECT COALESCE(MAX(seq), 0) AS seq FROM sqlite_sequence WHERE name = 'events'")[0].integer("seq")) {
             throw APIError(.invalidRequest, "after is newer than the newest event; read without after to start again.")
         }
-        let rows = if let after {
-            try db.query("SELECT * FROM events WHERE (?1 IS NULL OR device_id = ?1) AND seq > ?2 ORDER BY seq LIMIT ?3", device, after, limit)
-        } else {
-            Array(try db.query("SELECT * FROM events WHERE (?1 IS NULL OR device_id = ?1) ORDER BY seq DESC LIMIT ?2", device, limit).reversed())
+        let rows = switch (device, after) {
+        case let (device?, after?):
+            try db.query("SELECT * FROM events WHERE device_id = ? AND seq > ? ORDER BY seq LIMIT ?", device, after, limit)
+        case let (nil, after?):
+            try db.query("SELECT * FROM events WHERE seq > ? ORDER BY seq LIMIT ?", after, limit)
+        case let (device?, nil):
+            Array(try db.query("SELECT * FROM events WHERE device_id = ? ORDER BY seq DESC LIMIT ?", device, limit).reversed())
+        case (nil, nil):
+            Array(try db.query("SELECT * FROM events ORDER BY seq DESC LIMIT ?", limit).reversed())
         }
         return try rows.map(StoredEvent.init)
     }
@@ -909,8 +917,8 @@ actor Store {
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
-    private static func measure(_ activity: Activity, on device: Device, now: Int) throws -> Int {
-        let (size, stored) = try activity.admissionBytes(now: now, layoutVersion: device.layoutVersion)
+    private static func measure(_ activity: Activity, contentState: LyktaActivity.ContentState, on device: Device, now: Int) throws -> Int {
+        let (size, stored) = try activity.admissionBytes(contentState: contentState, now: now, layoutVersion: device.layoutVersion)
         let limit = maximumPayloadBytes
         let exceeded = if size > limit {
             "The push payload would be \(size) bytes; APNs allows \(limit)."

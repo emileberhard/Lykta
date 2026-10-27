@@ -195,13 +195,15 @@ private final class Signer: Sendable {
 
 extension Activity {
     func payload(_ event: Payload.Event, now: Int, channel: String? = nil, layoutVersion: Version?) throws -> Data {
-        try Self.encoder().encode(envelope(event, now: now, channel: channel, layoutVersion: layoutVersion))
+        let state = try contentState().encoded(for: layoutVersion)
+        return try Self.encoder().encode(envelope(event, now: now, channel: channel, contentState: state))
     }
 
-    func admissionBytes(now: Int, layoutVersion: Version?) throws -> (push: Int, activityKit: Int) {
+    func admissionBytes(contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> (push: Int, activityKit: Int) {
         let encoder = Self.encoder()
-        let current = try envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64), layoutVersion: layoutVersion)
-        var end = try envelope(.end, now: now, layoutVersion: layoutVersion)
+        let state = try contentState.encoded(for: layoutVersion)
+        let current = envelope(phase == .starting ? .start : .update, now: now, channel: String(repeating: "x", count: 64), contentState: state)
+        var end = envelope(.end, now: now, contentState: state)
         end.aps.dismissalDate = now + 4 * 3600
         let escaping = JSONEncoder()
         let stored = try escaping.encode(LyktaActivity(id: id, name: name.rawValue)).count + escaping.encode(current.aps.contentState).count
@@ -214,9 +216,8 @@ extension Activity {
         return encoder
     }
 
-    private func envelope(_ event: Payload.Event, now: Int, channel: String? = nil, layoutVersion: Version?) throws -> Payload {
-        let state = try JSONDecoder().decode(LyktaActivity.ContentState.self, from: Data(content.utf8))
-        var aps = Payload.APS(timestamp: now, event: event, contentState: try state.encoded(for: layoutVersion))
+    private func envelope(_ event: Payload.Event, now: Int, channel: String? = nil, contentState: LyktaActivity.ContentState) -> Payload {
+        var aps = Payload.APS(timestamp: now, event: event, contentState: contentState)
         if event == .start {
             aps.attributesType = "LyktaActivity"
             aps.attributes = LyktaActivity(id: id, name: name.rawValue)
