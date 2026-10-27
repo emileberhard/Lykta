@@ -1,7 +1,7 @@
 # Lykta
 
-Lykta shows server-defined native Live Activities and notifications on
-iPhone. Agents send JSON to a self-hosted gateway, which validates it and
+Lykta shows server-defined native Live Activities, widgets and notifications
+on iPhone. Agents send JSON to a self-hosted gateway, which validates it and
 delivers it over APNs. Read the [architecture record](docs/architecture.md) before changing a
 boundary below. `CLAUDE.md` is a symlink to this file.
 
@@ -11,9 +11,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
-| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
-| `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations |
-| `iOS/App` | Registration, Keychain credentials, ActivityKit observation, notification permission and token, device reports and telemetry, the in-app Lock Screen cards with their headers and details sheet, and the example gallery |
+| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
+| `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations, and the Lykta widget: its timeline provider, the states it draws and its push handler |
+| `iOS/Gateway` | The phone's link to its gateway, compiled into the app and the widget extension: `GatewayClient`, the Keychain items, among them the widget credential, the widget's `WidgetSelection` intent with its entity query, and `WidgetCache` |
+| `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the in-app Lock Screen cards with their headers and details sheet, and the example gallery |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
 | `iOS/Avatars` | The initials avatar for a sender without a picture, drawn by both the extension and the app's gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
@@ -30,8 +31,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 
 - A layout change touches `Core`, `Rendering` and the skill's `layout.md`
   together. Gateway tests compile every JSON example in `layout.md`, start
-  every activity in the skill's `examples` and send every notification in
-  `examples/notifications`. Look at a layout change with
+  every activity in the skill's `examples`, send every notification in
+  `examples/notifications` and put every widget in `examples/widgets`. Look at a layout change with
   `just render` before shipping it.
 - Every layout feature (node, key, enum case and value form the decoder
   accepts) is recorded while decoding and has a row, by exact name, in
@@ -54,8 +55,18 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   with the legacy fingerprint and deflated with `WireDictionary.v1`; the
   gateway stores the legacy form. Released forms and dictionaries never change:
   a new one takes a new prefix, and phones keep reading every released form.
-- Rendering is bounded and offline: layouts stay within the `Layout` budgets,
-  the widget makes no network requests, and view bodies never parse JSON.
+- Rendering is bounded: layouts stay within the `Layout` budgets, and views
+  never fetch or parse JSON. Only the Lykta widget's timeline provider, its
+  entity query and its push handler call the gateway, each with a bounded
+  wait; the Live Activity makes no network requests.
+- A widget push is a coalesced invalidation: a change raises the phone's
+  generation only when a place shows the widget or the phone's places are
+  unknown, and the gateway sends at most one push per phone per
+  `Store.widgetPushInterval`. It carries no content, so retrying it is safe.
+- The widget credential reads only its own phone's widgets and sends their
+  report; the widget extension never holds the device secret. `WidgetCache`,
+  under its file lock, is the only owner of cached widget answers, and 410
+  `widget_deleted` is the only answer that removes cached content.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
   from the same commit. A notification example names its media files, kept

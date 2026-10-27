@@ -13,12 +13,13 @@ For each registered phone:
 - the app version, the newest layout format it can draw, and which of Apple's
   push services, development or production, the phone registered with and
   each of its push tokens works with
-- the push tokens Apple issues for starting and updating Live Activities and
-  for notifications, or the error iOS gave when it refused a notification token
+- the push tokens Apple issues for starting and updating Live Activities, for
+  notifications and for reloading widgets, or the error iOS gave when it
+  refused a notification token
 - whether notifications are allowed and whether their banners are temporary
   or persistent
-- hashes of the device secret and the agent token; the tokens stay in the
-  phone's Keychain and with the agents you give them to
+- hashes of the device secret, the agent token and the widget token; the
+  tokens stay in the phone's Keychain and with the agents you give them to
 - the identifier of the App Attest key the app created to register, which is a
   hash of the key's public part and proves the registration came from a genuine
   copy of the app
@@ -31,6 +32,11 @@ For each Live Activity:
 - when it started, last changed and ends, which the app shows
 - each button press and toggle change, with its time, so your agents can act
   on it; these are kept for one day
+
+For each widget, until your agents delete it:
+
+- the name, title, layout and data your agents send
+- which widget sizes on the phone show it, and which version each last loaded
 
 For each notification, for one day:
 
@@ -45,7 +51,7 @@ or use:
 - the file, its type, its length or size, and a hash that finds a repeated
   upload
 
-Your agents supply all activity and notification content, including sounds and
+Your agents supply all activity, widget and notification content, including sounds and
 images, apart from the fixed examples you send from the app's gallery. Do not send content that you do not
 want stored on the gateway.
 
@@ -63,7 +69,7 @@ gateway a log of what it observes:
 - errors, and Apple's MetricKit crash, hang and performance reports
 
 The gateway logs what it did with each request and push. These logs contain no
-tokens, no activity or notification text and no uploaded files. Your agents can read your phone's log with the
+tokens, no activity, widget or notification text and no uploaded files. Your agents can read your phone's log with the
 agent token. The gateway's operator can read every phone's log. A refused
 request's message names layout paths and byte counts, never layout values.
 
@@ -72,7 +78,7 @@ request's message names layout paths and byte counts, never layout values.
 The gateway deletes ended activities about 7 days after they end,
 notifications a day after they arrive, uploaded sounds and images a day after
 their last upload or use, and diagnostics after 14 days. Reset in the app ends
-every activity and deletes the phone's registration, activities,
+every activity and deletes the phone's registration, activities, widgets,
 notifications, uploaded files and diagnostics from the gateway. If you delete
 the app without Reset, the registration stays; the gateway forgets its push
 tokens once Apple rejects them.
@@ -84,14 +90,17 @@ data deleted from the gateway is gone from its copies 14 days later.
 ## On the phone
 
 The app keeps the sounds and sender pictures it downloads for notifications,
-at most 64 files and 64 MiB, and removes the oldest first. iOS keeps a
+at most 64 files and 64 MiB, and removes the oldest first. The widget keeps
+the last content it loaded for at most 64 widgets, so it can still show them
+while the gateway is unreachable. iOS keeps a
 notification's image with the notification until you clear it. Deleting the
 app deletes them.
 
 ## Who else handles data
 
 Apple's Push Notification service delivers activity content and notifications
-to the phone. To show a notification as a message from its sender, the app
+to the phone, and tells its widgets when to reload; widget content travels
+only between the gateway and the phone. To show a notification as a message from its sender, the app
 shares the sender's name and the text with iOS on the phone, which may suggest
 the sender in Siri and the share sheet; this stays on the phone. The
 App Store app reaches its gateway over HTTPS through Cloudflare's network.

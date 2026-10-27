@@ -2,12 +2,14 @@
 
 [![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/kDAjDvfD)
 
-Lykta lets AI agents put native Live Activities on your iPhone and send you
-notifications. An agent sends a JSON layout to your Lykta gateway, and the
+Lykta lets AI agents put native Live Activities and widgets on your iPhone
+and send you notifications. An agent sends a JSON layout to your Lykta gateway, and the
 phone shows it on the Lock Screen and in the Dynamic Island, rendered with
 SwiftUI and kept current as the agent sends updates. Any layout works without
 an app update, including buttons, toggles and links that report back to the
-agent. For a single moment, such as a finished job, the agent sends a
+agent. For status with no end, such as today's steps, the same layout
+language draws a Home Screen widget that the agent keeps current. For a
+single moment, such as a finished job, the agent sends a
 notification that arrives like a message from a person, with the sender's
 name and picture, a sound of the agent's choosing and an image.
 
@@ -38,7 +40,9 @@ genuine copy, and shares its push-to-start token. When an agent starts an
 activity, the gateway validates the layout with the same Swift code the widget
 renders it with, then starts it through APNs and updates it over a broadcast
 channel. Timers and progress run on the phone, so agents only send changes.
-Notifications go out as alert pushes, and the app's notification extension
+Widgets reload when the gateway sends a contentless widget push, at most every
+20 minutes, and then fetch their content from the gateway with a credential
+that can only read them. Notifications go out as alert pushes, and the app's notification extension
 fetches the sender's picture, the sound and the image the agent uploaded, and
 tells the gateway what it showed.
 
@@ -51,7 +55,8 @@ token in `~/.config/lykta`, and prints the [skill](Gateway/Sources/LyktaGateway/
 `lykta` sends a request in one call and answers once Apple has, so agents
 spend their output on the activity rather than on HTTP plumbing. The skill
 covers the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
-covers every node, modifier and reusable layout part, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
+covers every node, modifier and reusable layout part, its [widgets reference](Gateway/Sources/LyktaGateway/Skill/references/widgets.md)
+covers Home Screen widgets, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
 covers senders, sounds and images. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping
 list, and the [example notifications](Gateway/Sources/LyktaGateway/Skill/examples/notifications)

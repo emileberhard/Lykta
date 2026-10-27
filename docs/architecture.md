@@ -7,7 +7,10 @@
 - An agent tells the user about a moment with one HTTP request, as a
   notification from a sender it names, with the picture, sound and image the
   agent chooses; nothing is bundled into the app.
-- What an agent writes is the activity or notification itself. Output tokens
+- An agent keeps a native widget on the Home Screen with one HTTP request, in
+  the same layout language, and keeps it current by sending data; it stays
+  until the agent deletes it.
+- What an agent writes is the activity, widget or notification itself. Output tokens
   and tool calls are an agent's dominant cost and latency, so sending, timing
   and checking delivery take one command each, while the docs may be long.
 - One person can self-host the gateway. Apple Push Notification service is the
@@ -40,6 +43,10 @@ sequenceDiagram
     Gateway->>APNs: alert push with media IDs and a fetch token
     APNs->>Phone: notification extension
     Phone->>Gateway: fetch media, report with the fetch token
+    Agent->>Gateway: PUT widget
+    Gateway->>APNs: widgets push, at most one per interval
+    APNs->>Phone: reload Lykta widgets
+    Phone->>Gateway: fetch each placed widget with the widget credential
 ```
 
 ## Decisions
@@ -310,6 +317,58 @@ its downloads, its donation and its report with semaphores on the thread
 iOS called it on; every wait is bounded, 20 seconds for media and 3 each for
 the donation and the report, within the 30 iOS allows.
 
+**A widget is a place, not an episode.** `/v1/widgets/{name}` sits beside
+activities and notifications because its lifecycle differs: no alert, no end
+and no 4 KB limit, and it stays until an agent deletes it. A layout names
+widget families, such as `systemSmall`, instead of Live Activity
+presentations; everything below the root is the same grammar, and one
+`Presentation` table in `Core` decides where links and controls work. Each
+widget has a UUID beside its name; a PUT after a DELETE creates a new id, so
+a place that showed the old widget shows it as removed instead of silently
+following a different widget. One widget kind, `Lykta`, is compiled into the
+app, and the user picks an agent's widget for each place through its
+`WidgetSelection` configuration intent, whose entity id is the widget's UUID.
+A kind per agent widget would need an app update; placements that follow the
+newest widget would let one new widget replace several places.
+
+**A widget push only invalidates.** WidgetKit gives an install one widget push
+token, and a push carries no content and reloads every Lykta widget. The
+gateway therefore keeps a generation per phone: a change raises it only when a
+place shows the changed widget or the phone has not yet reported its places,
+and the delivery loop sends one push per phone when the generation is ahead of
+the pushed one, at most once per `Store.widgetPushInterval`, 20 minutes, which
+stays within WidgetKit's budget. Placing a widget pushes nothing, because
+WidgetKit loads a new place itself. A push carries no content, so retrying one
+after a timeout is safe. Status derives `delivery` from these rows instead of
+storing it.
+
+**The widget extension fetches with a widget credential.** On a reload the
+timeline provider asks `GET /v1/device/widgets/{id}` with the family, the
+revision it holds and its layout version; the answer is the whole filled
+widget, 204 when the revision is current, 410 `widget_deleted`, or the title
+with the version it `requires`. The widget credential, created by the app with
+the device secret and kept in the keychain under the app group, can only read
+this phone's widgets and send their report, so the extension never holds the
+device secret. Every fetch records its place and revision, which is the
+receipt agents see as `fetched`. Only the provider, the entity query and the
+push handler call the gateway, each with a 10-second timeout; views never
+fetch.
+
+**One owner caches widget answers.** `WidgetCache` keeps the last answer per
+widget in the app group, under a file lock, so concurrent reloads cannot
+overwrite a newer revision with an older one. A 410 leaves a fence no later
+answer can lift, and it is the only answer that removes cached content; a
+transient failure or a gateway older than widgets draws the cached content as
+stale and retries in 15 minutes, then hourly. A timeline reloads at the stale
+time or after three hours, whichever comes first. The cache keeps the 64
+widgets used most recently.
+
+**Places are reported, then proved by fetches.** The extension's push handler
+sends the push token and the places WidgetKit reports, and saves the token in
+the app group; the app sends the same report from
+`WidgetCenter.currentConfigurations()` each time it becomes active, which
+recovers a report the extension could not send.
+
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for
 PowerShell 5.1 and later, with the same commands, output and exit codes. Each
@@ -386,8 +445,11 @@ limit bounds.
   each activity it observes with the content fingerprint it received, and
   MetricKit's crash, hang and daily metric reports. A bounded file queue holds
   them until a batch upload, so events from background wakes and offline
-  periods arrive later. The widget extension has no network access, so the app
-  observes rendered content through ActivityKit instead.
+  periods arrive later. The Live Activity makes no network requests, so the
+  app observes rendered content through ActivityKit instead.
+- Widgets add `widget.put`, `widget.delete`, `widget.credential`,
+  `widget.placed`, `push.widgets` and `widget.fetch`, the receipt of each
+  place's load, with ids, revisions, generations and families.
 - Agents read their phone's events through `GET /v1/events`; operators read
   every phone with `lykta-gateway events`.
 - Notifications add `media.put`, `notification.put`, `push.notification`,
@@ -421,5 +483,9 @@ limit bounds.
   notification fields of the device report.
 - The app group `group.<bundle ID>` and its `Library/Sounds`, which installed
   extensions write and self-hosters configure.
+- The widget kind `Lykta` and the `WidgetSelection` entity id, the widget's
+  UUID, which placed widgets store; the `/v1/widgets` fields and delivery
+  states, the widget presentation keys, and the device widget routes with
+  their answers and codes, which installed extensions call.
 - `sender.id` and what derives from it: Notification Center threads, Focus's
   allowed people and Siri's suggestions key on the handle and conversation.
