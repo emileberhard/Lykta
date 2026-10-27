@@ -82,9 +82,6 @@ final class Model {
         }
         telemetry.record("app.scene", ["phase": .string(name)])
         if scenePhase == .background {
-            if showsLockHint {
-                UserDefaults.standard.set(true, forKey: Self.lockHintLearned)
-            }
             isLockHintPending = false
         }
         if scenePhase == .active, phase.isReady {
@@ -152,7 +149,7 @@ final class Model {
             try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
         }
         guard isSent, self.credentials?.deviceSecret == credentials.deviceSecret else { return isSent }
-        isLockHintPending = UIApplication.shared.applicationState == .active && !UserDefaults.standard.bool(forKey: Self.lockHintLearned)
+        isLockHintPending = UIApplication.shared.applicationState == .active
         guard areActivitiesEnabled else { return true }
         await withTaskGroup { group in
             group.addTask { await self.exampleShows() }
@@ -565,7 +562,6 @@ final class Model {
         return "\(info["CFBundleShortVersionString"] as? String ?? "") (\(info["CFBundleVersion"] as? String ?? ""))"
     }()
 
-    private static let lockHintLearned = "lockHintLearned"
     private static let onboarded = "onboarded"
     private static let agentConnected = "agentConnected"
 

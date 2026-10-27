@@ -120,17 +120,16 @@ is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
 
-**A started example asks to lock the phone, until the app is left while it asks.**
+**Every started example asks to lock the phone.**
 iOS keeps an app's own Live Activity out of the Dynamic Island and banners
 while the app is in front, so starting an example seemed to do nothing. Once
-ActivityKit reports the example active, `Model` shows `LockHint` over the app.
-Going to the background clears it, and if it was showing, `Model` records in
-`UserDefaults` that the hint did its job and never shows it again; Not Now
-hides it only that time. The hint and the Start button wait for ActivityKit
-rather than the PUT's answer, because the gateway accepting a start does not
-prove the phone shows it, so the button's spinner lasts until the activity
-shows, for at most 10 seconds. A TipKit tip could own the same rule, but one
-flag in `Model` needs no datastore or extra observable state.
+ActivityKit reports the example active, `Model` shows `LockHint` over the app,
+and going to the background or Not Now hides it. It shows after every start,
+because showing it only until the app was first left made later starts look
+broken again. The hint and the Start button wait for ActivityKit rather than
+the PUT's answer, because the gateway accepting a start does not prove the
+phone shows it, so the button's spinner lasts until the activity shows, for at
+most 10 seconds.
 
 **First launch introduces Lykta and waits for the agent's hello.** A new
 install opens on `Onboarding`, not the home screen: what Lykta shows, a page

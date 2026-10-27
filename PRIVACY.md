@@ -98,10 +98,8 @@ The app keeps the sounds and sender pictures it downloads for notifications,
 at most 64 files and 64 MiB, and removes the oldest first. The widget keeps
 the last content it loaded for at most 64 widgets, so it can still show them
 while the gateway is unreachable; Reset deletes it. The app remembers whether
-you left it while it asked you to lock the phone after starting an example, so
-it asks only until then; Reset keeps this. It remembers whether you finished
-its introduction, which Reset keeps, and whether an agent has started an
-activity on the phone, which Reset forgets. iOS keeps a
+you finished its introduction, which Reset keeps, and whether an agent has
+started an activity on the phone, which Reset forgets. iOS keeps a
 notification's image with the notification until you clear it. Deleting the
 app deletes them.
 
