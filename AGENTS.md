@@ -84,11 +84,13 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   ends an activity only when the gateway reports it ended, or on Reset. The
   gateway's answer to End Activity, which names the activity by its id, is
   such a report.
-- A tap changes data only through the gateway, in the transaction that logs
-  it: a toggle sets its boolean and a button applies its `set`, `add` and
+- An activity or widget tap changes data only through the gateway, in the
+  transaction that logs it: a toggle sets its boolean and a button applies its `set`, `add` and
   `now`, all read from the data before the tap. A tap counts only for a
   control the current data shows, and a result that fails to fill, fit or
-  pass the phone's decoder version changes nothing.
+  pass the phone's decoder version changes nothing. Widget controls require 0.14.0;
+  widget and activity actions share one per-phone log and cursor, and each row
+  has exactly one target.
 - Unknown stays unknown. A start or notification with an unknown outcome is
   never sent again. A missing report never ends an activity, except when the
   activity is absent from the first report of a new app install or update.

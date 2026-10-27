@@ -326,6 +326,90 @@ struct WidgetTests {
         }
     }
 
+    private static let controls: JSONValue = [
+        "title": "Water", "data": ["count": .number(0), "done": .bool(false)],
+        "layout": ["systemSmall": ["vstack": .array([
+            ["if": .bool(true), "then": ["button": "drink", "label": "Drink", "add": ["count": .number(1)]]],
+            ["toggle": "done", "label": "Done"]
+        ])]]
+    ]
+
+    private func act(_ id: UUID, _ input: Action.Input, actionID: UUID = UUID()) async -> HTTPResponse {
+        let action = Action(id: actionID, target: .widget(id), input: input)
+        return await send("POST", "/v1/device/actions", try! JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(action)), token: credentials.deviceSecret)
+    }
+
+    @Test func widgetControlsChangeDataOnceAndShareTheActivityCursor() async throws {
+        let widget: Status = try await send("PUT", "/v1/widgets/water", Self.controls).decoded()
+        try await report([widget.id])
+        try await deliver(now)
+        let action = UUID()
+        #expect(await act(widget.id, .button("drink"), actionID: action).status == 204)
+        #expect(await act(widget.id, .button("drink"), actionID: action).status == 204)
+        #expect(await act(widget.id, .toggle("done", isOn: true)).status == 204)
+        let detail: Status = try await send("GET", "/v1/widgets/water").decoded()
+        #expect(detail.revision == 3)
+        #expect(detail.data == ["count": .number(1), "done": .bool(true)])
+        #expect(detail.delivery == "pending")
+        let device = try #require(await store.device(secret: credentials.deviceSecret))
+        _ = try await store.sync(device, report: DeviceReport(pushToStartToken: PushToken(Data(repeating: 7, count: 32)),
+                                  appVersion: Layout.version.description, layoutVersion: Layout.version, bundleInstance: UUID(), activities: [],
+                                  notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending)), now: now)
+        let activity: Identified = try await send("PUT", "/v1/activities/deploy", GatewayTests.question).decoded()
+        let activityAction = Action(id: UUID(), target: .activity(activity.id), input: .button("retry"))
+        #expect(await send("POST", "/v1/device/actions", try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(activityAction)), token: credentials.deviceSecret).status == 204)
+        let log: JSONValue = try await send("GET", "/v1/actions?after=0").decoded()
+        guard case let .array(entries) = try log.value(at: "actions") else { Issue.record("No actions"); return }
+        #expect(entries.count == 3)
+        #expect(try entries[0].value(at: "widget") == "water")
+        #expect(try entries[1].value(at: "isOn") == .bool(true))
+        #expect(try entries[2].value(at: "activity") == "deploy")
+        #expect(entries.allSatisfy { entry in
+            guard case let .object(fields) = entry else { return false }
+            return (fields["activity"] == nil) != (fields["widget"] == nil)
+        })
+        guard case let .number(cursor) = try log.value(at: "cursor") else { Issue.record("No cursor"); return }
+        let empty: JSONValue = try await send("GET", "/v1/actions?after=\(Int(cursor))").decoded()
+        #expect(try empty.value(at: "actions") == .array([]))
+        #expect(await send("PUT", "/v1/widgets/water", ["data": ["count": .number(10), "done": .bool(false)], "ifRevision": .number(1)]).status == 409)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.filter { $0.name == "widget.action" }.count == 2)
+        #expect(await act(widget.id, .toggle("missing", isOn: true)).status == 409)
+        #expect(await act(UUID(), .button("drink")).status == 404)
+        #expect(await send("DELETE", "/v1/widgets/water").status == 204)
+        #expect(await act(widget.id, .button("drink")).status == 404)
+    }
+
+    @Test(arguments: ["missing", "hidden", "unfillable", "oversized", "newFeature"])
+    func rejectedWidgetTapsChangeNeitherDataNorTheActionLog(reason: String) async throws {
+        let data: JSONValue = ["show": .bool(reason != "hidden"), "step": .number(1), "steps": ["1": "First"], "text": "x"]
+        let label: JSONValue = reason == "unfillable" ? "{{steps[step]}}" : reason == "oversized" ? .string(String(repeating: "{{text}}", count: 4000)) : "Next"
+        let button: JSONValue = ["button": "next", "label": label, "set": ["show": .bool(false), "text": "123456789"], "add": ["step": .number(1)]]
+        let layout: JSONValue = ["systemSmall": ["if": "{{show}}", "then": button, "else": "Done"]]
+        let widget: Status = try await send("PUT", "/v1/widgets/water", ["title": "Water", "layout": layout, "data": data]).decoded()
+        if reason == "newFeature" {
+            let device = try #require(await store.device(secret: credentials.deviceSecret))
+            _ = try await store.sync(device, report: DeviceReport(pushToStartToken: nil, appVersion: "0.13.0", layoutVersion: Version(0, 13, 0), bundleInstance: UUID(), activities: [], notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending)), now: now)
+        }
+        let response = await act(widget.id, .button(reason == "missing" ? "missing" : "next"))
+        #expect(response.status == 409)
+        let detail: Status = try await send("GET", "/v1/widgets/water").decoded()
+        #expect(detail.revision == 1)
+        #expect(detail.data == data)
+        let actions: JSONValue = try await send("GET", "/v1/actions?after=0").decoded()
+        #expect(try actions.value(at: "actions") == .array([]))
+    }
+
+    @Test func olderPhonesCannotReceiveWidgetControls() async throws {
+        let widget: Status = try await send("PUT", "/v1/widgets/water", Self.controls).decoded()
+        let fetched: WidgetSnapshot = try await fetch(widget.id, layout: "0.13.0").decoded()
+        #expect(fetched.content == .requires(Version(0, 14, 0)))
+        let device = try #require(await store.device(secret: credentials.deviceSecret))
+        _ = try await store.sync(device, report: DeviceReport(pushToStartToken: nil, appVersion: "0.13.0", layoutVersion: Version(0, 13, 0), bundleInstance: UUID(), activities: [], notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending)), now: now)
+        let refused = await send("PUT", "/v1/widgets/old", Self.controls)
+        #expect(try refused.decoded() as Failure == Failure(error: "app_update_required"))
+    }
+
     private func send(_ method: String, _ target: String, _ body: JSONValue? = nil, token: String? = nil) async -> HTTPResponse {
         await api.handle(HTTPRequest(method: method, target: target, headers: ["authorization": "Bearer \(token ?? credentials.agentToken)"], body: body?.json ?? []))
     }

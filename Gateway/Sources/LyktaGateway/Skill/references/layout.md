@@ -30,7 +30,7 @@ A widget's layout (see the [widgets reference](widgets.md)):
 | `accessoryCircular` | one family | A small circle on the Lock Screen, below the clock. |
 | `accessoryRectangular` | one family | A wider Lock Screen slot below the clock, about three lines of text. |
 | `accessoryInline` | one family | One line above the clock on the Lock Screen. Takes only `text`, `concat`, `symbol`, `date` and `timer` nodes with text modifiers and `privacySensitive`, or an `if` choosing between them. A `concat` with both a symbol and a relative date or timer holds only the symbol and then that one part. |
-| `background` | no | A paint, such as a color or `{"gradient": [...]}`, or a node such as an `svg`, behind the content. The system removes it or replaces it with glass or a tint in some places, so the content must read without it. It takes no links. |
+| `background` | no | A paint, such as a color or `{"gradient": [...]}`, or a node such as an `svg`, behind the content. The system removes it or replaces it with glass or a tint in some places, so the content must read without it. It takes no links, buttons or toggles. |
 | `link` | no | As for activities, for a tap anywhere outside a link. |
 
 A widget needs at least one family. The user can choose any widget in any
@@ -242,10 +242,12 @@ limit; repeating a path costs little because pushes are compressed.
 
 ## Links, buttons and toggles
 
-The system accepts taps only in `lockScreen` and `expanded`, so controls are
-rejected elsewhere, and a label cannot contain another control. A widget takes
-links in its Home Screen families and `accessoryRectangular` but no buttons or
-toggles yet. Buttons and toggles work once the phone is unlocked.
+Live Activities take controls only in `lockScreen` and `expanded`. Widgets
+take buttons and toggles in `systemSmall`, `systemMedium`, `systemLarge`,
+`accessoryCircular` and `accessoryRectangular`, from Lykta 0.14.0. They take
+links in the Home Screen families and `accessoryRectangular`. `accessoryInline`
+and the background take no controls, and a label cannot contain another
+control. Buttons and toggles work once the phone is unlocked.
 
 - A `link` opens its URL, like the presentation-wide `link`.
 - A `button` press is delivered to agents through `GET /v1/actions` with the
@@ -253,12 +255,12 @@ toggles yet. Buttons and toggles work once the phone is unlocked.
   `.`. Unless the button changes the data itself, nothing on the phone changes
   until an agent responds with an update.
 - A `toggle` names a boolean in the data instead of holding a state. A tap
-  flips that value on the gateway, which redraws the activity at once and also
+  flips that value on the gateway, which redraws the activity or reloads the widget and also
   reports the change through `GET /v1/actions`. A checklist therefore works
   without any agent listening. Inside `each`, `"toggle": "item.done"` names the
   current entry.
 
-A button changes the data on the gateway, which redraws the activity at once,
+A button changes the data on the gateway, which redraws the activity or reloads the widget,
 so it works while no agent runs:
 
 | Key | Change |

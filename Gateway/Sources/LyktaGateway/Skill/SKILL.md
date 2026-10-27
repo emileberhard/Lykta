@@ -205,10 +205,10 @@ EOF
 ## Buttons and toggles
 
 Layouts can hold links, buttons and toggles (see the layout reference). A
-toggle flips a boolean in the activity's data on the gateway and redraws at
-once, so a checklist works while no agent runs. A button can change the data
-the same way with `set`, `add` and `now`, so steppers, resets and pause buttons
-work on their own. Agents read every press and toggle with `lykta get actions`:
+toggle changes a boolean in the activity's or widget's data on the gateway and
+redraws the activity or reloads the widget, so a checklist works while no agent
+runs. A button can change the data the same way with `set`, `add` and `now`, so
+steppers, resets and pause buttons work on their own. Agents read every press and toggle with `lykta get actions`:
 
 ```sh
 lykta get actions
@@ -219,6 +219,9 @@ lykta get 'actions?after=40&wait=25'
 {"actions": [{"seq": 41, "activity": "deploy", "button": "retry", "at": "2026-10-21T18:02:11Z"}], "cursor": 41}
 ```
 
+Each record names exactly one of `activity` or `widget`, by its name. Widget
+controls need Lykta 0.14.0; see [widget taps](references/widgets.md#taps).
+
 Without `after`, only actions that arrive during the request count, and the
 `cursor` marks where to continue. `wait` (0 to 25 seconds) holds the request
 open until an action arrives, so loop on it with the returned cursor to answer
@@ -227,13 +230,13 @@ presses within a second. Toggle changes appear as
 
 Answer a press of a button without changes with a PUT, such as the next step
 or an outcome. A button with `set`, `add` or `now` has already changed the data
-when its press reaches you, so read the activity for the result instead of
-applying the press again. A press counts for the button with that name that the
-activity shows when the press arrives, so name buttons for what they do, such
-as `approve-deploy-42` rather than `yes`. Because the user can change the data
-at any moment, an agent that rewrites data reads the activity first and sends
-the `revision` it read as `ifRevision`; on `conflict`, read again and redo the
-change.
+when its press reaches you, so read the activity or widget for the result
+instead of applying the press again. A press counts for the button with that
+name that the activity or widget shows when the press arrives, so name buttons for what they
+do, such as `approve-deploy-42` rather than `yes`. Because the user can change
+the data at any moment, an agent that rewrites data reads the activity or widget first
+and sends the `revision` it read as `ifRevision`; on `conflict`, read again
+and redo the change.
 
 ## End
 

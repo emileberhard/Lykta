@@ -15,8 +15,9 @@ struct WidgetLayoutTests {
         (#"{"accessoryCircular": {"accessoryBackground": false}}"#, "accessoryCircular.accessoryBackground: expected true"),
         (#"{"accessoryCircular": {"link": "https://example.com", "label": "a"}}"#, "accessoryCircular.link: links work only in systemSmall, systemMedium, systemLarge and accessoryRectangular"),
         (#"{"systemSmall": "a", "background": {"text": "a", "modifiers": [{"privacySensitive": true}]}}"#, "background.modifiers[0].privacySensitive: privacySensitive works only in a widget's presentations"),
-        (#"{"systemSmall": {"button": "go", "label": "Go"}}"#, "systemSmall.button: buttons and toggles work only in Live Activities"),
-        (#"{"systemSmall": {"vstack": [{"toggle": "done", "isOn": true, "label": "Done"}]}}"#, "systemSmall.vstack[0].toggle: buttons and toggles work only in Live Activities"),
+        (#"{"accessoryInline": {"button": "go", "label": "Go"}}"#, "accessoryInline.button: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
+        (#"{"accessoryInline": {"toggle": "done", "isOn": true, "label": "Done"}}"#, "accessoryInline.toggle: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
+        (#"{"systemSmall": "a", "background": {"button": "go", "label": "Go"}}"#, "background.button: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular"),
         (#"{"systemSmall": "a", "background": {"link": "https://example.com", "label": "Open"}}"#, "background.link: a widget's background takes no links, buttons or toggles"),
         (#"{"systemSmall": "a", "link": "http://example.com"}"#, "link: expected an https URL or an app URL such as shortcuts://"),
         (#"{"systemSmall": {"text": "a", "modifiers": [{"padding": 4}]}, "background": {"vstack": [], "colour": "red"}}"#, "background.colour: unknown key"),
@@ -88,10 +89,20 @@ struct WidgetLayoutTests {
         let filled = try template.filled(with: .object(["steps": .string("6,400")]), for: .widget)
         #expect(filled == (try json(#"{"systemSmall": {"text": "6,400"}, "background": {"text": "6,400"}}"#)))
 
-        let controls = try json(#"{"parts": {"go": {"button": "go", "label": "Go"}}, "systemSmall": {"use": "go"}}"#)
-        #expect(throws: LayoutError("parts.go.button: buttons and toggles work only in Live Activities (used at systemSmall)")) {
+        let controls = try json(#"{"parts": {"go": {"button": "go", "label": "Go"}}, "accessoryInline": {"use": "go"}}"#)
+        #expect(throws: LayoutError("parts.go.button: buttons and toggles work only in systemSmall, systemMedium, systemLarge, accessoryCircular and accessoryRectangular (used at accessoryInline)")) {
             try controls.filled(with: .object([:]), for: .widget)
         }
+    }
+
+    @Test(arguments: WidgetLayout.Family.allCases.filter { $0 != .accessoryInline })
+    func widgetControlsRequireTheirOwnReleaseAndExposeOnlyShownControls(family: WidgetLayout.Family) throws {
+        let widget = try decode(#"{"\#(family.rawValue)": {"vstack": [{"button": "add", "label": "+", "add": {"count": 1}}, {"toggle": "done", "isOn": false, "label": "Done"}, {"if": false, "then": {"button": "hidden", "label": "Hidden"}}]}}"#)
+        #expect(Set(widget.buttons.keys) == ["add"])
+        #expect(widget.toggles == ["done": false])
+        #expect(widget.requirement?.version == Version(0, 14, 0))
+        #expect(Set(["widget.button", "widget.toggle"]).isSubset(of: widget.features))
+        #expect(widget.features.allSatisfy { Layout.introduced[$0] != nil })
     }
 
     private func json(_ text: String) throws -> JSONValue {

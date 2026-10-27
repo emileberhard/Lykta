@@ -56,7 +56,7 @@ token in `~/.config/lykta`, and prints the [skill](Gateway/Sources/LyktaGateway/
 spend their output on the activity rather than on HTTP plumbing. The skill
 covers the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node, modifier and reusable layout part, its [widgets reference](Gateway/Sources/LyktaGateway/Skill/references/widgets.md)
-covers Home Screen widgets, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
+covers Home Screen and Lock Screen widgets and their buttons and toggles, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
 covers senders, sounds and images. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
 show what an agent can build, from an App Review tracker to a shared shopping
 list, and the [example notifications](Gateway/Sources/LyktaGateway/Skill/examples/notifications)

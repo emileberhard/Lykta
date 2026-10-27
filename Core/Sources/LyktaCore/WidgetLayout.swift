@@ -54,6 +54,10 @@ public struct WidgetLayout: Decodable, Sendable {
         link = try fields.link("link")
     }
 
+    public var buttons: [String: Effects] { roots.buttons }
+
+    public var toggles: [String: Bool] { roots.toggles }
+
     private var roots: [Node] {
         let background: [Node] = if case let .node(node) = background { [node] } else { [] }
         return Family.allCases.compactMap { presentations[$0] } + background

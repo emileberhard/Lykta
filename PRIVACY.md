@@ -37,6 +37,8 @@ For each widget, until your agents delete it:
 
 - the name, title, layout and data your agents send
 - which widget sizes on the phone show it, and which version each last loaded
+- each button press and toggle change, with its time, kept for one day like
+  Live Activity taps, or until the widget is deleted
 
 For each notification, for one day:
 

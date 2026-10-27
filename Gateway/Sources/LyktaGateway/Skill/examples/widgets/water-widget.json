@@ -1,0 +1,59 @@
+{
+  "title": "Water",
+  "layout": {
+    "systemSmall": {
+      "vstack": [
+        {
+          "text": "{{glasses}} glasses",
+          "modifiers": [
+            {
+              "font": "title2"
+            },
+            {
+              "bold": true
+            }
+          ]
+        },
+        {
+          "button": "drink",
+          "label": {
+            "concat": [
+              {
+                "symbol": "plus"
+              },
+              " Drink"
+            ]
+          },
+          "add": {
+            "glasses": 1
+          },
+          "style": "borderedProminent"
+        },
+        {
+          "toggle": "goal",
+          "label": "Daily goal",
+          "style": "button"
+        }
+      ],
+      "spacing": 8
+    },
+    "accessoryCircular": {
+      "button": "drink",
+      "label": {
+        "symbol": "drop.fill"
+      },
+      "add": {
+        "glasses": 1
+      }
+    },
+    "accessoryRectangular": {
+      "toggle": "goal",
+      "label": "Daily water goal",
+      "style": "button"
+    }
+  },
+  "data": {
+    "glasses": 0,
+    "goal": false
+  }
+}

@@ -114,11 +114,35 @@ data, such as on the Lock Screen while the phone is locked.
 
 `link` opens a URL when the user taps the widget, and a `link` node opens its
 own URL for a part of it, in every Home Screen family and
-`accessoryRectangular`. Widgets take no buttons or toggles yet.
+`accessoryRectangular`.
 
 The [steps example](../examples/widgets/steps-widget.json) shows every family,
 with the week's chart in the medium and large ones, and renders them all in the
 app's examples.
+
+## Taps
+
+From Lykta 0.14.0, `button` and `toggle` work in every family except
+`accessoryInline`, and never in the background. Their [layout rules](layout.md#links-buttons-and-toggles)
+are the same as for Live Activities: a toggle sets its data boolean, and a
+button applies `set`, `add` and `now` using the data from before the tap.
+The gateway commits the change and its action log together, raises the
+revision, and the phone reloads after the tap without waiting for a push.
+A tap that cannot fill or fit the resulting layout, or needs a newer app,
+changes nothing. A control hidden since the phone loaded it returns `conflict`.
+
+Read taps with `lykta get 'actions?after=0'`. Widget and activity taps share
+one cursor; a widget record names `widget` instead of `activity`:
+
+```json
+{"seq": 41, "widget": "water", "button": "drink", "at": "2026-10-27T08:00:00Z"}
+```
+
+The [water example](../examples/widgets/water-widget.json) has a button and a
+toggle that work without an agent. Read `widgets/{name}` before rewriting its
+data, and send `ifRevision` so your update cannot overwrite a concurrent tap.
+A failed tap surfaces an error on the phone; read `widget.action` events for
+successful taps and the request failure event for a refusal.
 
 ## Read, list and delete
 
@@ -137,6 +161,6 @@ old to draw.
 
 `lykta get events` shows `widget.put`, `widget.delete`, `widget.placed` (a size
 added or removed on the phone), `push.widgets` with Apple's outcome and
-`widget.fetch` (a place loaded a revision). A `push.widgets` without a later
+`widget.fetch` (a place loaded a revision), and `widget.action` for taps. A `push.widgets` without a later
 `widget.fetch` means iOS has not reloaded yet, which it does when its budget
 allows.

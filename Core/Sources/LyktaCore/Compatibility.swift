@@ -172,6 +172,7 @@ extension Layout {
             "widget.accessoryRectangular", "widget.systemLarge", "widget.systemMedium",
             "Node.Content.Condition.Environment.vibrant",
         ],
+        "0.14.0": ["widget.button", "widget.toggle"],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

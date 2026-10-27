@@ -523,6 +523,9 @@ extension KeyedDecodingContainer<Key> {
 
     func control(_ kind: String) throws -> Node {
         if let refusal = Presentation(codingPath).refusal(of: kind) { throw invalid(refusal, at: kind) }
+        if case .widget = Presentation(codingPath), kind == "button" || kind == "toggle" {
+            record("widget.\(kind)", at: kind)
+        }
         let label: Node = try required("label")
         guard !label.descendants.contains(where: \.isControl) else {
             throw invalid("a label cannot contain links, buttons or toggles", at: "label")

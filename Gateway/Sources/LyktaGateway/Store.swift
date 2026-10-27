@@ -21,7 +21,11 @@ extension NotificationSettings.AlertStyle: SQLBindable {}
 extension ActionRecord {
     init(_ row: Row) throws {
         seq = try row.integer("seq")
-        activity = try row.text("name", as: Name.init(rawValue:))
+        target = if let name = try row.optionalText("activity", as: Name.init(rawValue:)) {
+            .activity(name)
+        } else {
+            .widget(try row.text("widget", as: Name.init(rawValue:)))
+        }
         input = if let button = try row.optionalString("button") {
             .button(button)
         } else {
@@ -533,7 +537,13 @@ actor Store {
     func act(_ device: Device, _ action: Action, now: Int) throws {
         try db.transaction {
             guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return }
-            guard case let .activity(activityID) = action.target else { throw APIError(.notFound, "The widget has been deleted.") }
+            let activityID: UUID
+            switch action.target {
+            case let .widget(id):
+                try actOnWidget(device, id: id, action: action, now: now)
+                return
+            case let .activity(id): activityID = id
+            }
             guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ? AND phase IN ('starting', 'live')",
                                          activityID, device.id).first else {
                 throw APIError(.notFound, "The activity has ended.")
@@ -575,7 +585,8 @@ actor Store {
 
     func actions(_ device: Device, after: Int64, limit: Int) throws -> [ActionRecord] {
         try db.query("""
-            SELECT x.seq, x.button, x.toggle, x.is_on, x.at, a.name FROM actions x JOIN activities a ON a.id = x.activity_id
+            SELECT x.seq, x.button, x.toggle, x.is_on, x.at, a.name AS activity, w.name AS widget
+              FROM actions x LEFT JOIN activities a ON a.id = x.activity_id LEFT JOIN widgets w ON w.id = x.widget_id
               WHERE x.device_id = ? AND x.seq > ? ORDER BY x.seq LIMIT ?
             """, device.id, after, limit).map(ActionRecord.init)
     }
@@ -1080,19 +1091,7 @@ extension Store {
                 do { data = try data.setting(path, to: .number(Double(now) + offset)) }
                 catch { throw APIError(.invalidRequest, "$.now: \(error)") }
             }
-            let layout: JSONValue
-            let content: JSONValue
-            let admitted: WidgetLayout
-            do {
-                layout = try template.expandingParts(for: .widget)
-                content = try template.filled(with: data, for: .widget)
-                admitted = try WidgetLayout(json: content.json)
-            } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
-            guard let requirement = admitted.requirement else { preconditionFailure("Every widget records its presentation's required version") }
-            if let draws = Self.draws(requirement.version, on: device) {
-                throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
-                               + "Ask the user to update Lykta and open it once.")
-            }
+            let (layout, content, requirement) = try Self.admitWidget(template, data: data, on: device)
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
             let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || request.staleAfter != nil
@@ -1112,6 +1111,58 @@ extension Store {
             }
             return (id, current == nil)
         }
+    }
+
+    private static func admitWidget(_ template: JSONValue, data: JSONValue, on device: Device) throws -> (JSONValue, JSONValue, Layout.Requirement) {
+        let layout: JSONValue
+        let content: JSONValue
+        let admitted: WidgetLayout
+        do {
+            layout = try template.expandingParts(for: .widget)
+            content = try template.filled(with: data, for: .widget)
+            admitted = try WidgetLayout(json: content.json)
+        } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+        guard let requirement = admitted.requirement else { preconditionFailure("Every widget records its presentation's required version") }
+        if let draws = Self.draws(requirement.version, on: device) {
+            throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
+                           + "Ask the user to update Lykta and open it once.")
+        }
+        return (layout, content, requirement)
+    }
+
+    private func actOnWidget(_ device: Device, id: UUID, action: Action, now: Int) throws {
+        guard let widget = try widget(device, id: id) else { throw APIError(.notFound, "The widget has been deleted.") }
+        let shown = try WidgetLayout(json: widget.content.json)
+        let changed: JSONValue
+        var detail: [String: JSONValue] = ["widget": .string(id.uuidString), "name": .string(widget.name.rawValue)]
+        switch action.input {
+        case let .button(name):
+            guard let effects = shown.buttons[name] else { throw APIError(.conflict, "The widget no longer shows the button \(name).") }
+            changed = try Self.pressing { () throws(LayoutError) in
+                try effects.applied(to: widget.data, at: Date(timeIntervalSince1970: Double(now)))
+            }
+            try db.run("INSERT INTO actions (id, device_id, widget_id, button, at) VALUES (?, ?, ?, ?, ?)",
+                       action.id, device.id, id, name, now)
+            detail["button"] = .string(name)
+        case let .toggle(path, isOn):
+            guard shown.toggles[path] != nil else { throw APIError(.conflict, "The widget no longer shows the toggle \(path).") }
+            changed = try Self.pressing { () throws(LayoutError) in try widget.data.replacing(path, with: .bool(isOn)) }
+            try db.run("INSERT INTO actions (id, device_id, widget_id, toggle, is_on, at) VALUES (?, ?, ?, ?, ?, ?)",
+                       action.id, device.id, id, path, isOn, now)
+            detail["toggle"] = .string(path)
+            detail["isOn"] = .bool(isOn)
+        }
+        let content: JSONValue
+        let requirement: Layout.Requirement
+        do { (_, content, requirement) = try Self.admitWidget(widget.layout, data: changed, on: device) }
+        catch let error as APIError where error.code == .invalidLayout { throw APIError(.conflict, error.message) }
+        let generation = try widgetGeneration(device, id: id)
+        try db.run("""
+            UPDATE widgets SET data = ?, content = ?, requires = ?, revision = revision + 1, generation = ?, updated_at = ? WHERE id = ?
+            """, Self.text(changed), Self.text(content), requirement.version.description, generation, now, id)
+        detail["revision"] = .number(Double(widget.revision + 1))
+        detail["generation"] = generation.map { .number(Double($0)) } ?? .null
+        try record("widget.action", device: device.id, activity: nil, detail)
     }
 
     func deleteWidget(_ device: Device, name: Name) throws {

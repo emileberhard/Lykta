@@ -205,7 +205,7 @@ can no longer read stays as it was until its next update or end, or until iOS
 removes it. An activity admitted larger than the older form allows can no
 longer update or end by push and stays until iOS removes it.
 
-**Taps travel through the gateway.** A button or toggle runs a
+**Taps travel through the gateway.** An activity button or toggle runs a
 `LiveActivityIntent` in the app, which posts the action to the gateway with the
 device secret. The gateway applies a toggle itself: it flips the boolean at the
 toggle's data path, raises the revision and pushes the new content, so the
@@ -224,6 +224,30 @@ agent that writes data a tap may have changed reads the activity and sends
 `ifRevision`, which the gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
 most 1,000 per phone. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip.
+
+**Widget taps share the action log.** From 0.14.0, widget buttons and toggles
+run an AppIntent in the app and send the device action with a widget UUID.
+`Action.Target` requires exactly one activity or widget. `Store` owns the
+transaction that checks the current controls, applies effects, admits the
+result through the same path as PUT, increments the widget revision and its
+phone's generation, and writes the action and `widget.action` event. An
+accepted widget tap advances the revision even when its effects leave data
+unchanged, so the ensuing reload has a new revision. Hidden controls and
+invalid results change nothing. Agents read names under exactly one of
+`activity` or `widget` in the existing log and cursor. A separate widget log
+would make agents coordinate two cursors for the same kind of interaction.
+
+`Schema.migrate` rebuilds `actions` to make `activity_id` nullable and add
+`widget_id REFERENCES widgets(id) ON DELETE CASCADE`, with a CHECK requiring
+exactly one target. It copies every row with its `seq` and preserves the
+AUTOINCREMENT high-water mark even when the highest rows were pruned. Schema
+version stays 1: the old gateway's explicit activity insert, activity join,
+retention and cursor statements still work; its activity join omits widget
+taps. No other table references actions. Tests execute those old statements
+against the rebuilt table, including migration after pruning every action.
+This keeps rollback readable without a separate shadow log or compatibility
+writer. Changing those old statements or adding a foreign key to actions
+requires revisiting the rebuild and rollback contract.
 
 **Notifications arrive as messages from their sender.** The gateway sends an
 alert push at priority 10 with the sender's name as the title, the body,
@@ -484,7 +508,7 @@ limit bounds.
   periods arrive later. The Live Activity makes no network requests, so the
   app observes rendered content through ActivityKit instead.
 - Widgets add `widget.put`, `widget.delete`, `widget.credential`,
-  `widget.placed`, `push.widgets` and `widget.fetch`, the receipt of each
+  `widget.placed`, `widget.action`, `push.widgets` and `widget.fetch`, the receipt of each
   place's load, with ids, revisions, generations and families.
 - Agents read their phone's events through `GET /v1/events`; operators read
   every phone with `lykta-gateway events`.

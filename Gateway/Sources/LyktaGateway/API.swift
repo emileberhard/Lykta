@@ -53,6 +53,7 @@ struct API: Sendable {
         "examples/shopping-list.json": PackageResources.shopping_list_json,
         "examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
         "examples/widgets/steps-widget.json": PackageResources.steps_widget_json,
+        "examples/widgets/water-widget.json": PackageResources.water_widget_json,
         "examples/notifications/benchy.jpg": PackageResources.benchy_jpg,
         "examples/notifications/doorbell.json": PackageResources.doorbell_json,
         "examples/notifications/doorbell.wav": PackageResources.doorbell_wav,
@@ -361,20 +362,28 @@ extension HTTPResponse {
 
 struct ActionRecord: Encodable, Sendable {
     let seq: Int64
-    let activity: Name
+    enum Target: Sendable {
+        case activity(Name)
+        case widget(Name)
+    }
+
+    let target: Target
     let input: Action.Input
     let at: Date
 
     func encode(to encoder: any Encoder) throws {
         var fields = encoder.container(keyedBy: CodingKeys.self)
         try fields.encode(seq, forKey: .seq)
-        try fields.encode(activity, forKey: .activity)
+        switch target {
+        case let .activity(name): try fields.encode(name, forKey: .activity)
+        case let .widget(name): try fields.encode(name, forKey: .widget)
+        }
         try input.encode(to: encoder)
         try fields.encode(at, forKey: .at)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seq, activity, at
+        case seq, activity, widget, at
     }
 }
 

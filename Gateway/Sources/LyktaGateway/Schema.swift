@@ -26,6 +26,21 @@ enum Schema {
                 try db.execute("INSERT INTO events SELECT * FROM reused_events; DROP TABLE reused_events;")
             }
         }
+        if try !db.query("SELECT 1 FROM sqlite_master WHERE name = 'actions'").isEmpty,
+           try db.query("SELECT 1 FROM pragma_table_info('actions') WHERE name = 'widget_id'").isEmpty {
+            try db.transaction {
+                try db.execute("ALTER TABLE actions RENAME TO activity_actions; DROP INDEX device_actions;")
+                try db.execute(tables)
+                try db.execute("""
+                    INSERT INTO actions (seq, id, device_id, activity_id, button, toggle, is_on, at)
+                      SELECT seq, id, device_id, activity_id, button, toggle, is_on, at FROM activity_actions;
+                    UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'activity_actions'), 0)) WHERE name = 'actions';
+                    INSERT INTO sqlite_sequence (name, seq)
+                      SELECT 'actions', seq FROM sqlite_sequence WHERE name = 'activity_actions' AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'actions');
+                    DROP TABLE activity_actions;
+                    """)
+            }
+        }
         try db.execute(tables)
         for added in addedColumns {
             guard try db.query("SELECT 1 FROM pragma_table_info('\(added.table)') WHERE name = ?", added.column).isEmpty else { continue }
@@ -116,11 +131,13 @@ enum Schema {
           seq INTEGER PRIMARY KEY AUTOINCREMENT,
           id TEXT NOT NULL UNIQUE,
           device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-          activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+          activity_id TEXT REFERENCES activities(id) ON DELETE CASCADE,
+          widget_id TEXT REFERENCES widgets(id) ON DELETE CASCADE,
           button TEXT,
           toggle TEXT,
           is_on INTEGER,
           at INTEGER NOT NULL,
+          CHECK ((activity_id IS NULL) != (widget_id IS NULL)),
           CHECK ((button IS NULL) != (toggle IS NULL) AND (toggle IS NULL) = (is_on IS NULL))
         ) STRICT;
         CREATE INDEX IF NOT EXISTS device_actions ON actions(device_id, seq);
