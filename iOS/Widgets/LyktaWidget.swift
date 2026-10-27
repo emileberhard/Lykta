@@ -8,7 +8,7 @@ struct LyktaWidget: Widget {
             WidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Lykta")
-        .description("Shows a widget an agent made for this iPhone.")
+        .description("Shows a widget an agent made for you.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline])
         .promptsForUserConfiguration()
         .pushHandler(WidgetPushes.self)

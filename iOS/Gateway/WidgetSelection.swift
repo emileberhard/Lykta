@@ -6,7 +6,7 @@ import WidgetKit
 struct WidgetSelection: WidgetConfigurationIntent {
     nonisolated static let kind = "Lykta"
     static let title: LocalizedStringResource = "Choose a Widget"
-    static let description = IntentDescription("Shows a widget an agent made for this iPhone.")
+    static let description = IntentDescription("Shows a widget an agent made for you.")
 
     @Parameter(title: "Widget") var widget: WidgetEntity?
 
