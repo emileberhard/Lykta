@@ -50,6 +50,9 @@ struct LockHint: View {
         .onTapGesture(perform: dismiss)
         .onAppear {
             withAnimation(.smooth(duration: 0.45)) { isShown = true }
+        }
+        .task {
+            guard (try? await Task.sleep(for: .seconds(0.45))) != nil else { return }
             isTitleFocused = true
         }
         .statusBarHidden()

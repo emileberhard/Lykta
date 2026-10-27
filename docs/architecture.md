@@ -120,7 +120,7 @@ is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
 
-**A started example asks to lock the phone, until the phone is locked once.**
+**A started example asks to lock the phone, until the app is left while it asks.**
 iOS keeps an app's own Live Activity out of the Dynamic Island and banners
 while the app is in front, so starting an example seemed to do nothing. Once
 ActivityKit reports the example active, `Model` shows `LockHint` over the app.

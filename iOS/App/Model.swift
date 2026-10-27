@@ -134,8 +134,9 @@ final class Model {
             }
             try await gateway.putActivity(name, example.request(at: .now), agentToken: credentials.agentToken)
         }
-        guard isSent else { return false }
+        guard isSent, self.credentials?.deviceSecret == credentials.deviceSecret else { return isSent }
         isLockHintPending = UIApplication.shared.applicationState == .active && !UserDefaults.standard.bool(forKey: Self.lockHintLearned)
+        guard areActivitiesEnabled else { return true }
         await withTaskGroup { group in
             group.addTask { await self.exampleShows() }
             group.addTask { _ = try? await Task.sleep(for: .seconds(10)) }
