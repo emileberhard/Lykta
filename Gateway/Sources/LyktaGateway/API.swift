@@ -51,6 +51,7 @@ struct API: Sendable {
         "examples/recipe-steps.json": PackageResources.recipe_steps_json,
         "examples/shopping-list.json": PackageResources.shopping_list_json,
         "examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
+        "examples/widgets/steps-widget.json": PackageResources.steps_widget_json,
         "examples/notifications/benchy.jpg": PackageResources.benchy_jpg,
         "examples/notifications/doorbell.json": PackageResources.doorbell_json,
         "examples/notifications/doorbell.wav": PackageResources.doorbell_wav,

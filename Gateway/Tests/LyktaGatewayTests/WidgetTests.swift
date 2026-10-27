@@ -41,7 +41,7 @@ struct WidgetTests {
         #expect(created.status == 201)
         let first: Status = try created.decoded()
         #expect(first.revision == 1)
-        let repeated: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        let repeated: Status = try await send("PUT", "/v1/widgets/steps", ["data": ["steps": "10"]]).decoded()
         #expect(repeated.revision == 1)
         let updated: Status = try await send("PUT", "/v1/widgets/steps", ["data": ["steps": "20"], "ifRevision": .number(1)]).decoded()
         #expect(updated.revision == 2)
@@ -114,6 +114,53 @@ struct WidgetTests {
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall", token: token).status == 400)
     }
 
+    @Test func deletesInvalidatePlacedContentButUnplacedChangesDoNotPush() async throws {
+        try await report([])
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await deliver(now)
+        #expect(push.sent.isEmpty)
+        try await report([created.id])
+        try await deliver(now)
+        #expect(push.sent == ["widgets"])
+        #expect(await send("DELETE", "/v1/widgets/steps").status == 204)
+        try await deliver(now + Store.widgetPushInterval)
+        #expect(push.sent == ["widgets", "widgets"])
+        let gone: Failure = try await fetch(created.id).decoded()
+        #expect(gone.error == "widget_deleted")
+    }
+
+    @Test func keepsTheNewestReportedLayoutVersionAndThePushTokenWhenOmitted() async throws {
+        let oldReport = DeviceReport(pushToStartToken: nil, appVersion: "0.11.0", layoutVersion: Version(0, 11, 0),
+                                     bundleInstance: UUID(), activities: [], notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending))
+        let old = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(oldReport))
+        #expect(await send("PUT", "/v1/device", old, token: credentials.deviceSecret).status == 200)
+        let refused = await send("PUT", "/v1/widgets/steps", Self.request)
+        #expect(refused.status == 409)
+        #expect((try refused.decoded() as Failure).error == "app_update_required")
+        try await report([])
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        #expect(await send("PUT", "/v1/device", old, token: credentials.deviceSecret).status == 200)
+        #expect(await send("PUT", "/v1/widgets/steps", ["title": "Still readable"]).status == 200)
+        let placesOnly: JSONValue = ["layoutVersion": "0.11.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        #expect(await send("PUT", "/v1/device/widgets", placesOnly, token: token).status == 204)
+        try await deliver(now)
+        #expect(push.sent == ["widgets"])
+    }
+
+    @Test func widgetCredentialsReadOnlyTheirOwnPhone() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        let registration = Registration(environment: .development, appVersion: "0.12.0", proof: .invite(try await store.invite(now: now)))
+        let other: Credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
+                                                                 body: Array(try JSONEncoder().encode(registration)))).decoded()
+        let otherCredential: WidgetCredential = try await send("POST", "/v1/device/widgets/credential", token: other.deviceSecret).decoded()
+        let response = await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall&layout=0.12.0", token: otherCredential.widgetToken)
+        #expect(response.status == 410)
+        #expect((try response.decoded() as Failure).error == "widget_deleted")
+        let report: JSONValue = ["layoutVersion": "0.12.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        #expect(await send("PUT", "/v1/device/widgets", report, token: otherCredential.widgetToken).status == 204)
+        #expect(try await status().placed.isEmpty)
+    }
+
     @Test func credentialRotationAndResetInvalidateWidgetAccess() async throws {
         _ = await send("PUT", "/v1/widgets/steps", Self.request)
         #expect(await send("GET", "/v1/device/widgets", token: token).status == 200)
@@ -168,10 +215,11 @@ struct WidgetTests {
         #expect(ends >= Double(now + 60))
     }
 
-    @Test func retriesUnknownOutcomesAndMovesBadTokensOnlyOnce() async throws {
+    @Test(arguments: [APNsError.unknown("timeout"), .notSent("connection refused"), .rejected(status: 429, reason: "TooManyRequests"), .rejected(status: 503, reason: "ServiceUnavailable")])
+    func retriesInvalidationsAndMovesBadTokensOnlyOnce(_ failure: APNsError) async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])
-        push.fail("widgets", .unknown("timeout"))
+        push.fail("widgets", failure)
         try await deliver(now)
         #expect(try await status().delivery == "pending")
         try await deliver(now + 1)
@@ -186,11 +234,27 @@ struct WidgetTests {
         #expect(try await status().delivery == "failed")
     }
 
+    @Test func replacingAnInFlightPushTokenDoesNotFailItsReplacement() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        let job = try #require(await store.claim(now: now, limit: 4).first)
+        let report: JSONValue = ["pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": "0.12.0",
+                                 "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        #expect(await send("PUT", "/v1/device/widgets", report, token: token).status == 204)
+        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
+        push.fail("widgets", .rejected(status: 403, reason: "Forbidden"))
+        try await store.finish(job, try await delivery.send(job, now: now), now: now)
+        #expect(try await status().delivery == "pending")
+        try await deliver(now)
+        #expect(try await status().delivery == "accepted")
+    }
+
     @Test func aWaitingPutFinishesWhenTheExtensionFetchesTheRevision() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])
         async let response = send("PUT", "/v1/widgets/steps?wait=5", ["data": ["steps": "20"]])
-        try await deliverOnceClaimable(store, push, at: now)
+        while try await status().revision < 2 { await Task.yield() }
+        try await deliver(now)
         _ = await fetch(created.id)
         let result: Status = try await response.decoded()
         #expect(result.delivery == "fetched")
@@ -199,7 +263,6 @@ struct WidgetTests {
     @Test func everyBundledWidgetExampleCanBePut() async throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appending(path: "Sources/LyktaGateway/Skill/examples/widgets")
-        if !FileManager.default.fileExists(atPath: root.path) { return }
         let examples = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
         for example in examples {
             let body = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: example))

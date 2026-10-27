@@ -30,6 +30,8 @@ final class SimulatedPhone: PushService {
         self.store = store
         self.device = device
         _ = try await store.widgetCredential(device)
+        try await store.reportWidgets(device, report: WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)),
+                                                                   layoutVersion: Layout.version, places: []), now: now)
         widgetTask = Task {
             var known = Set<UUID>()
             while !Task.isCancelled {

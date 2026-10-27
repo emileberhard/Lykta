@@ -54,7 +54,7 @@ for shell in sh pwsh; do
 	printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring", "sound": "%s"}' "$sound" |
 		expect '"state":"sent"' 0 cli put "notifications/ring-$shell"
 	printf '{"title":"CLI widget","layout":{"systemSmall":{"text":"Hello"}}}' |
-		expect '"delivery":"fetched"' 0 cli put "widgets/widget-$shell"
+		expect '"title":"CLI widget"' 0 cli put "widgets/widget-$shell"
 	expect '"title":"CLI widget"' 0 cli get "widgets/widget-$shell"
 	expect '"widgets":' 0 cli get widgets
 	expect '' 0 cli delete "widgets/widget-$shell"

@@ -1094,12 +1094,13 @@ extension Store {
             try raiseWidgetVersion(device, to: device.layoutVersion ?? Version(leading: device.appVersion))
             let phone = try widgetPhone(device)
             let version = try phone.optionalText("layout_version", as: Version.init)
-            if let requirement = admitted.requirement, version == nil || version! < requirement.version {
+            guard let requirement = admitted.requirement else { preconditionFailure("Every widget records its presentation's required version") }
+            if version == nil || version! < requirement.version {
                 throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later. Ask the user to update Lykta and open it once.")
             }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
-            let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || current?.staleAfter != staleAfter
+            let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || request.staleAfter != nil
             if changed {
                 let generation = try widgetGeneration(device, id: current?.id)
                 try db.run("""
@@ -1109,7 +1110,7 @@ extension Store {
                         content = excluded.content, requires = excluded.requires, stale_after = excluded.stale_after,
                         revision = widgets.revision + 1, generation = excluded.generation, updated_at = excluded.updated_at
                     """, id, device.id, name, title, Self.text(layout), Self.text(data), Self.text(content),
-                           (admitted.requirement?.version ?? Version(0, 12, 0)).description, staleAfter, generation, now, now)
+                           requirement.version.description, staleAfter, generation, now, now)
                 let saved = try widget(device, id: id)!
                 try record("widget.put", device: device.id, activity: nil,
                            ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": .number(Double(generation))])
@@ -1159,7 +1160,7 @@ extension Store {
             delivery = .notPlaced
         } else if try phone.optionalString("push_token") == nil {
             delivery = .failed
-            error = "The phone has not shared its widget push token yet. Open Lykta on the phone."
+            error = try phone.optionalString("error") ?? "The phone has not shared its widget push token yet. Open Lykta on the phone."
         } else if let failure = try phone.optionalString("error"), try phone.integer("retry_at") == 0 {
             delivery = .failed
             error = failure
@@ -1258,8 +1259,15 @@ extension Store {
     private func finish(_ job: WidgetJob, _ attempt: Attempt, now: Int) throws {
         try db.transaction {
             guard let row = try db.query("SELECT * FROM widget_phones WHERE device_id = ?", job.deviceID).first else { return }
+            let currentToken = try row.optionalString("push_token") == job.token.description
             let error: String?
             let result: String
+            if !currentToken {
+                try db.run("UPDATE widget_phones SET in_flight = 0 WHERE device_id = ?", job.deviceID)
+                try record("push.widgets", device: job.deviceID, activity: nil,
+                           attempt.detail.merging(["outcome": .string("superseded")]) { $1 })
+                return
+            }
             switch attempt.outcome {
             case .accepted:
                 result = "accepted"; error = nil
