@@ -17,14 +17,17 @@ OUTPUT = ROOT / ".local" / "renders"
 PROJECT = ROOT / "iOS" / "Lykta.xcodeproj"
 PREVIEW = "Widgets/RenderPreviews.swift"
 DEADLINE = 360
-STYLES = {
-    "lock": "Content (Lock Screen)",
-    "expanded": "Expanded",
-    "compact": "Compact",
-    "minimal": "Minimal",
-    "standby": "Content (StandBy)",
-    "smartstack": "Content (Smart Stack)",
+PRESENTATIONS = {
+    "lock": ("activity", "View Style", "Content (Lock Screen)"),
+    "expanded": ("activity", "View Style", "Expanded"),
+    "compact": ("activity", "View Style", "Compact"),
+    "minimal": ("activity", "View Style", "Minimal"),
+    "standby": ("activity", "View Style", "Content (StandBy)"),
+    "smartstack": ("activity", "View Style", "Content (Smart Stack)"),
+    "small": ("widget", "Widget Family", "Small"),
 }
+PREVIEWS = {"activity": 0, "widget": 1}
+FAMILIES = {"systemSmall", "systemMedium", "systemLarge", "accessoryCircular", "accessoryRectangular", "accessoryInline"}
 
 
 class RenderError(Exception):
@@ -116,13 +119,14 @@ def load(arguments):
                 body = json.loads(text)
             except json.JSONDecodeError as error:
                 raise RenderError(f"{name}: invalid JSON: {error}")
-            if not isinstance(body, dict) or not ("layout" in body or "lockScreen" in body):
+            if not isinstance(body, dict) or not ("layout" in body or "lockScreen" in body or FAMILIES & body.keys()):
                 raise RenderError(f"{name}: expected a layout or an object with a layout")
-            if "lockScreen" in body:
+            if "layout" not in body:
                 body = {"layout": body}
-            taken = {existing for existing, _ in bodies}
+            kind = "widget" if isinstance(body["layout"], dict) and FAMILIES & body["layout"].keys() else "activity"
+            taken = {existing for existing, _, _ in bodies}
             unique = name if name not in taken else next(f"{name}-{n}" for n in range(2, 1000) if f"{name}-{n}" not in taken)
-            bodies.append((unique, {"title": body.get("title", unique), "layout": body["layout"], "data": body.get("data", {})}))
+            bodies.append((unique, kind, {"title": body.get("title", unique), "layout": body["layout"], "data": body.get("data", {})}))
     if not bodies:
         raise RenderError("no inputs to render")
     return bodies
@@ -143,11 +147,12 @@ def workspace(xcode):
 
 
 def render(xcode, identifier, index, presentation, dark, target):
+    kind, group, variant = PRESENTATIONS[presentation]
     arguments = {
         "sourceFilePath": PREVIEW,
         "workspaceIdentifier": identifier,
-        "previewVariantOverrides": {"View Style": STYLES[presentation],
-                                    "Color Scheme": "Dark Appearance" if dark else "Light Appearance"},
+        "previewDefinitionIndexInFile": PREVIEWS[kind],
+        "previewVariantOverrides": {group: variant, "Color Scheme": "Dark Appearance" if dark else "Light Appearance"},
         "previewCanvasControlOverrides": {"timelineIndex": index},
         "timeout": 300,
     }
@@ -187,16 +192,17 @@ def main():
         description="Render Lykta layouts through Xcode's previews, all at once. Leaves the project open in Xcode "
                     "so later renders take seconds.")
     parser.add_argument("inputs", nargs="+",
-                        help="request bodies ({title, layout, data}) or bare layouts: files, directories, inline JSON, or - for stdin")
-    parser.add_argument("--only", default="lock,expanded,compact,minimal",
-                        help=f"comma-separated presentations from {', '.join(STYLES)} (default: lock,expanded,compact,minimal)")
+                        help="request bodies ({title, layout, data}) or bare layouts of activities or widgets: files, directories, inline JSON, or - for stdin")
+    parser.add_argument("--only", default="lock,expanded,compact,minimal,small",
+                        help=f"comma-separated presentations from {', '.join(PRESENTATIONS)}; each input renders those of its kind "
+                             "(default: lock,expanded,compact,minimal,small)")
     parser.add_argument("--dark", action="store_true", help="render in dark appearance")
     args = parser.parse_args()
     try:
         presentations = args.only.split(",")
-        unknown = [p for p in presentations if p not in STYLES]
+        unknown = [p for p in presentations if p not in PRESENTATIONS]
         if unknown:
-            raise RenderError(f"unknown presentation {', '.join(unknown)}; use {', '.join(STYLES)}")
+            raise RenderError(f"unknown presentation {', '.join(unknown)}; use {', '.join(PRESENTATIONS)}")
         bodies = load(args.inputs)
         STAGE.mkdir(parents=True, exist_ok=True)
         with open(ROOT / ".local" / "render.lock", "w") as lock:
@@ -204,27 +210,31 @@ def main():
             for stale in list(STAGE.iterdir()) + (list(OUTPUT.iterdir()) if OUTPUT.exists() else []):
                 stale.unlink()
             OUTPUT.mkdir(exist_ok=True)
-            for index, (name, body) in enumerate(bodies):
-                (STAGE / f"{index:03d}-{name}.json").write_text(json.dumps(body))
+            staged = []
+            for name, kind, body in bodies:
+                index = sum(1 for _, other in staged if other == kind)
+                staged.append((index, kind))
+                (STAGE / f"{kind}-{index:03d}-{name}.json").write_text(json.dumps(body))
             xcode = Xcode()
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
             try:
                 identifier = workspace(xcode)
-                jobs = {(index, presentation): OUTPUT / f"{name}-{presentation}.png"
-                        for presentation in presentations for index, (name, _) in enumerate(bodies)}
+                jobs = {(name, index, presentation): OUTPUT / f"{name}-{presentation}.png"
+                        for presentation in presentations
+                        for (name, kind, _), (index, _) in zip(bodies, staged) if PRESENTATIONS[presentation][0] == kind}
                 failures = {}
                 futures = {pool.submit(render, xcode, identifier, index, presentation, args.dark, target): target
-                           for (index, presentation), target in jobs.items()}
+                           for (_, index, presentation), target in jobs.items()}
                 for future in concurrent.futures.as_completed(futures):
                     if future.exception():
                         failures.setdefault(summary(str(future.exception())), []).append(futures[future].stem)
             finally:
                 xcode.close()
                 pool.shutdown(cancel_futures=True)
-            errors = [{"input": bodies[index][0], "error": (STAGE / f"{index:03d}-{name}.error").read_text()}
-                      for index, (name, _) in enumerate(bodies) if (STAGE / f"{index:03d}-{name}.error").exists()]
-            rendered = [(bodies[index][0], target) for (index, _), target in jobs.items() if target.exists()]
-            rows = [(name, [target for owner, target in rendered if owner == name]) for name, _ in bodies]
+            reports = [(name, STAGE / f"{kind}-{index:03d}-{name}.error") for (name, kind, _), (index, _) in zip(bodies, staged)]
+            errors = [{"input": name, "error": report.read_text()} for name, report in reports if report.exists()]
+            rendered = [(name, target) for (name, _, _), target in jobs.items() if target.exists()]
+            rows = [(name, [target for owner, target in rendered if owner == name]) for name, _, _ in bodies]
             result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": [{"error": error, "renders": sorted(names)} for error, names in failures.items()]}
             if rendered:
                 sheet([row for row in rows if row[1]], OUTPUT / "sheet.png")
