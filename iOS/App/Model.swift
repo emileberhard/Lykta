@@ -243,7 +243,7 @@ final class Model {
         guard let gateway, let credentials else { return }
         do {
             let places = WidgetSelection.places(in: try await WidgetCenter.shared.currentConfigurations())
-            let report = WidgetReport(pushToken: WidgetPushToken.saved, layoutVersion: Layout.version, places: places)
+            let report = WidgetReport(at: .now, pushToken: await Self.widgetPushToken(), layoutVersion: Layout.version, places: places)
             guard let credential = try KeychainItem.widget.load() else {
                 try await gateway.report(report, widgetToken: createWidgetCredential(gateway, credentials).widgetToken)
                 return
@@ -257,6 +257,10 @@ final class Model {
             guard !Task.isCancelled else { return }
             telemetry.record("app.error", ["operation": .string("widgets"), "error": .string(error.localizedDescription)])
         }
+    }
+
+    @concurrent private nonisolated static func widgetPushToken() async -> PushToken? {
+        await WidgetCenter.shared.currentPushInfo.map { PushToken($0.token) }
     }
 
     private func createWidgetCredential(_ gateway: GatewayClient, _ credentials: Credentials) async throws -> WidgetCredential {

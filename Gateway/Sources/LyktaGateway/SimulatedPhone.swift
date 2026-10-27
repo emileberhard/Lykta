@@ -30,7 +30,7 @@ final class SimulatedPhone: PushService {
         self.store = store
         self.device = device
         _ = try await store.widgetCredential(device)
-        try await store.reportWidgets(device, report: WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)),
+        try await store.reportWidgets(device, report: WidgetReport(at: Date(), pushToken: PushToken(Data(repeating: 9, count: 32)),
                                                                    layoutVersion: Layout.version, places: []), now: now)
         widgetTask = Task {
             var known = Set<UUID>()
@@ -104,7 +104,7 @@ final class SimulatedPhone: PushService {
             let layout = try WidgetLayout(json: detail.layout.filled(with: detail.data, for: .widget).json)
             places += layout.presentations.keys.map { WidgetPlace(widget: widget.id, family: $0) }
         }
-        try await store.reportWidgets(device, report: WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)),
+        try await store.reportWidgets(device, report: WidgetReport(at: Date(), pushToken: PushToken(Data(repeating: 9, count: 32)),
                                                                    layoutVersion: Layout.version, places: places), now: now)
         for place in places {
             _ = try await store.fetchWidget(device, id: place.widget, family: place.family, have: nil, layout: Layout.version, now: now)

@@ -88,7 +88,7 @@ struct Widget: Sendable {
     let requires: Version
     let staleAfter: Int?
     let revision: Int
-    let generation: Int
+    let generation: Int?
     let createdAt: Int
     let updatedAt: Int
 
@@ -104,7 +104,7 @@ struct Widget: Sendable {
         requires = try row.text("requires", as: Version.init)
         staleAfter = try row.optionalInteger("stale_after").map(Int.init)
         revision = Int(try row.integer("revision"))
-        generation = Int(try row.integer("generation"))
+        generation = try row.optionalInteger("generation").map(Int.init)
         createdAt = Int(try row.integer("created_at"))
         updatedAt = Int(try row.integer("updated_at"))
     }

@@ -122,7 +122,6 @@ actor Store {
 
     func sync(_ device: Device, report: DeviceReport, now: Int) throws -> SyncResult {
         try db.transaction {
-            try raiseWidgetVersion(device, to: report.layoutVersion)
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
@@ -493,6 +492,18 @@ actor Store {
                                   banners: NotificationStatus.Banners(device.notifications?.alertStyle),
                                   createdAt: Date(timeIntervalSince1970: Double(try row.integer("created_at"))),
                                   expires: Date(timeIntervalSince1970: Double(try row.integer("expires_at"))))
+    }
+
+    private static func draws(_ required: Version, on device: Device) -> String? {
+        let phone = device.layoutVersion ?? Version(leading: device.appVersion)
+        if let phone, phone >= required { return nil }
+        return if let layoutVersion = device.layoutVersion {
+            "this phone's Lykta app draws layouts up to \(layoutVersion)"
+        } else if phone != nil {
+            "this phone runs Lykta \(device.appVersion)"
+        } else {
+            "this phone's Lykta version (\(device.appVersion)) is unknown"
+        }
     }
 
     private static func admitNotifications(on device: Device) throws {
@@ -881,16 +892,7 @@ actor Store {
     }
 
     private static func admit(_ state: LyktaActivity.ContentState, on device: Device) throws {
-        guard let requirement = state.layout?.requirement else { return }
-        let phone = device.layoutVersion ?? Version(leading: device.appVersion)
-        if let phone, phone >= requirement.version { return }
-        let draws = if let layoutVersion = device.layoutVersion {
-            "this phone's Lykta app draws layouts up to \(layoutVersion)"
-        } else if phone != nil {
-            "this phone runs Lykta \(device.appVersion)"
-        } else {
-            "this phone's Lykta version (\(device.appVersion)) is unknown"
-        }
+        guard let requirement = state.layout?.requirement, let draws = draws(requirement.version, on: device) else { return }
         throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
@@ -1022,19 +1024,13 @@ extension Store {
         try db.query("SELECT * FROM widget_phones WHERE device_id = ?", device.id)[0]
     }
 
-    private func raiseWidgetVersion(_ device: Device, to version: Version?) throws {
-        try db.run("INSERT OR IGNORE INTO widget_phones (device_id, token_hash, layout_version) VALUES (?, ?, ?)",
-                   device.id, Self.hash(Self.token("lykta_widget_")), device.layoutVersion?.description)
-        let row = try widgetPhone(device)
-        let previous = try row.optionalText("layout_version", as: Version.init)
-        if let version, previous == nil || version > previous! {
-            try db.run("UPDATE widget_phones SET layout_version = ? WHERE device_id = ?", version.description, device.id)
-        }
+    private func addWidgetPhone(_ device: Device) throws {
+        try db.run("INSERT OR IGNORE INTO widget_phones (device_id, token_hash) VALUES (?, ?)", device.id, Self.hash(Self.token("lykta_widget_")))
     }
 
     func widgetCredential(_ device: Device) throws -> WidgetCredential {
         try db.transaction {
-            try raiseWidgetVersion(device, to: device.layoutVersion)
+            try addWidgetPhone(device)
             let token = Self.token("lykta_widget_")
             try db.run("UPDATE widget_phones SET token_hash = ? WHERE device_id = ?", Self.hash(token), device.id)
             try record("widget.credential", device: device.id, activity: nil, [:])
@@ -1057,12 +1053,12 @@ extension Store {
         try db.query("SELECT * FROM widgets WHERE device_id = ? AND id = ?", device.id, id).first.map(Widget.init)
     }
 
-    private func widgetGeneration(_ device: Device, id: UUID?) throws -> Int {
+    private func widgetGeneration(_ device: Device, id: UUID?) throws -> Int? {
+        try addWidgetPhone(device)
         let phone = try widgetPhone(device)
         let placed = try id.map { try !db.query("SELECT 1 FROM widget_places WHERE widget_id = ?", $0).isEmpty } ?? false
-        if try phone.integer("places_known") == 0 || placed {
-            try db.run("UPDATE widget_phones SET generation = generation + 1, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ?", device.id)
-        }
+        guard try phone.integer("places_known") == 0 || placed else { return nil }
+        try db.run("UPDATE widget_phones SET generation = generation + 1, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ?", device.id)
         return Int(try db.query("SELECT generation FROM widget_phones WHERE device_id = ?", device.id)[0].integer("generation"))
     }
 
@@ -1088,15 +1084,13 @@ extension Store {
             let admitted: WidgetLayout
             do {
                 layout = try template.expandingParts(for: .widget)
-                content = try layout.filled(with: data, for: .widget)
+                content = try template.filled(with: data, for: .widget)
                 admitted = try WidgetLayout(json: content.json)
             } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
-            try raiseWidgetVersion(device, to: device.layoutVersion ?? Version(leading: device.appVersion))
-            let phone = try widgetPhone(device)
-            let version = try phone.optionalText("layout_version", as: Version.init)
             guard let requirement = admitted.requirement else { preconditionFailure("Every widget records its presentation's required version") }
-            if version == nil || version! < requirement.version {
-                throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later. Ask the user to update Lykta and open it once.")
+            if let draws = Self.draws(requirement.version, on: device) {
+                throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
+                               + "Ask the user to update Lykta and open it once.")
             }
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
@@ -1113,7 +1107,7 @@ extension Store {
                            requirement.version.description, staleAfter, generation, now, now)
                 let saved = try widget(device, id: id)!
                 try record("widget.put", device: device.id, activity: nil,
-                           ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": .number(Double(generation))])
+                           ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
             }
             return (id, current == nil)
         }
@@ -1125,13 +1119,13 @@ extension Store {
             let generation = try widgetGeneration(device, id: widget.id)
             try db.run("DELETE FROM widgets WHERE id = ?", widget.id)
             try record("widget.delete", device: device.id, activity: nil,
-                       ["widget": .string(widget.id.uuidString), "revision": .number(Double(widget.revision)), "generation": .number(Double(generation))])
+                       ["widget": .string(widget.id.uuidString), "revision": .number(Double(widget.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
         }
     }
 
     func widgetList(_ device: Device, now: Int) throws -> [WidgetStatus] {
         try db.query("SELECT * FROM widgets WHERE device_id = ? ORDER BY updated_at DESC, id", device.id).map {
-            try widgetStatus(Widget($0), phone: widgetPhone(device), now: now)
+            try widgetStatus(Widget($0), device: device, now: now)
         }
     }
 
@@ -1141,10 +1135,11 @@ extension Store {
     }
 
     private func widgetDetail(_ widget: Widget, device: Device, now: Int) throws -> WidgetDetail {
-        try WidgetDetail(status: widgetStatus(widget, phone: widgetPhone(device), now: now), layout: widget.layout, data: widget.data)
+        try WidgetDetail(status: widgetStatus(widget, device: device, now: now), layout: widget.layout, data: widget.data)
     }
 
-    private func widgetStatus(_ widget: Widget, phone: Row, now: Int) throws -> WidgetStatus {
+    private func widgetStatus(_ widget: Widget, device: Device, now: Int) throws -> WidgetStatus {
+        let phone = try widgetPhone(device)
         let places = try db.query("SELECT * FROM widget_places WHERE widget_id = ? ORDER BY family", widget.id)
         let families = try places.map { try $0.text("family", as: WidgetLayout.Family.init(rawValue:)) }
         let receipt = try places.compactMap { row -> WidgetStatus.Fetch? in
@@ -1154,23 +1149,30 @@ extension Store {
         let delivery: WidgetStatus.Delivery
         var error: String?
         var nextPush: Date?
-        if receipt?.revision == widget.revision {
+        if let draws = Self.draws(widget.requires, on: device) {
+            delivery = .failed
+            error = "This widget needs Lykta \(widget.requires) or later, and \(draws). Ask the user to update Lykta and open it once."
+        } else if receipt?.revision == widget.revision {
             delivery = .fetched
         } else if families.isEmpty, try phone.integer("places_known") != 0 {
             delivery = .notPlaced
-        } else if try phone.optionalString("push_token") == nil {
-            delivery = .failed
-            error = try phone.optionalString("error") ?? "The phone has not shared its widget push token yet. Open Lykta on the phone."
-        } else if let failure = try phone.optionalString("error"), try phone.integer("retry_at") == 0 {
-            delivery = .failed
-            error = failure
-        } else if widget.generation <= Int(try phone.integer("pushed_generation")) {
-            delivery = .accepted
+        } else if let generation = widget.generation {
+            if try phone.optionalString("push_token") == nil {
+                delivery = .failed
+                error = try phone.optionalString("error") ?? "The phone has not shared its widget push token yet. Open Lykta on the phone."
+            } else if let failure = try phone.optionalString("error"), try phone.integer("retry_at") == 0 {
+                delivery = .failed
+                error = failure
+            } else if generation <= Int(try phone.integer("pushed_generation")) {
+                delivery = .accepted
+            } else {
+                delivery = .pending
+                let pushed = Int(try phone.integer("pushed_at"))
+                let next = max(now, pushed == 0 ? now : pushed + Self.widgetPushInterval, Int(try phone.integer("retry_at")))
+                nextPush = Date(timeIntervalSince1970: Double(next))
+            }
         } else {
             delivery = .pending
-            let pushed = Int(try phone.integer("pushed_at"))
-            let next = max(now, pushed == 0 ? now : pushed + Self.widgetPushInterval, Int(try phone.integer("retry_at")))
-            nextPush = Date(timeIntervalSince1970: Double(next))
         }
         return WidgetStatus(name: widget.name, id: widget.id, title: widget.title, revision: widget.revision, delivery: delivery,
                             nextPush: nextPush, error: error, placed: families, fetched: receipt,
@@ -1179,13 +1181,16 @@ extension Store {
 
     func widgetAttempted(_ device: Device, id: UUID, deadline: Int, now: Int) throws -> Bool {
         guard let widget = try widget(device, id: id) else { return true }
-        let status = try widgetStatus(widget, phone: widgetPhone(device), now: now)
+        let status = try widgetStatus(widget, device: device, now: now)
         return [.fetched, .notPlaced, .failed].contains(status.delivery) || status.nextPush.map { $0.timeIntervalSince1970 > Double(deadline) } == true
     }
 
     func reportWidgets(_ device: Device, report: WidgetReport, now: Int) throws {
         try db.transaction {
-            try raiseWidgetVersion(device, to: report.layoutVersion)
+            try addWidgetPhone(device)
+            guard report.sequence > (try widgetPhone(device).integer("report_sequence")) else { return }
+            try db.run("UPDATE widget_phones SET report_sequence = ? WHERE device_id = ?", report.sequence, device.id)
+            try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", report.layoutVersion.description, device.id)
             if let token = report.pushToken {
                 try db.run("UPDATE widget_phones SET push_token = ?, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ? AND push_token IS NOT ?", token, device.id, token)
             }
@@ -1222,12 +1227,16 @@ extension Store {
     func fetchWidget(_ device: Device, id: UUID, family: WidgetLayout.Family, have: Int?, layout: Version, now: Int) throws -> WidgetSnapshot? {
         try db.transaction {
             guard let widget = try widget(device, id: id) else { throw APIError(.widgetDeleted, "This widget was deleted. Choose another widget.") }
-            try raiseWidgetVersion(device, to: layout)
+            try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", layout.description, device.id)
             let readable = layout >= widget.requires
-            try db.run("""
-                INSERT INTO widget_places (widget_id, family, fetched_revision, fetched_at) VALUES (?, ?, ?, ?)
-                  ON CONFLICT(widget_id, family) DO UPDATE SET fetched_revision = excluded.fetched_revision, fetched_at = excluded.fetched_at
-                """, id, family.rawValue, widget.revision, now)
+            if readable {
+                try db.run("""
+                    INSERT INTO widget_places (widget_id, family, fetched_revision, fetched_at) VALUES (?, ?, ?, ?)
+                      ON CONFLICT(widget_id, family) DO UPDATE SET fetched_revision = excluded.fetched_revision, fetched_at = excluded.fetched_at
+                    """, id, family.rawValue, widget.revision, now)
+            } else {
+                try db.run("INSERT OR IGNORE INTO widget_places (widget_id, family) VALUES (?, ?)", id, family.rawValue)
+            }
             try record("widget.fetch", device: device.id, activity: nil,
                        ["widget": .string(id.uuidString), "revision": .number(Double(widget.revision)), "family": .string(family.rawValue), "readable": .bool(readable)])
             if readable, have == widget.revision { return nil }
@@ -1270,11 +1279,15 @@ extension Store {
             case .accepted:
                 result = "accepted"; error = nil
                 try db.run("UPDATE widget_phones SET pushed_generation = ?, pushed_at = ?, failures = 0, retry_at = 0, error = NULL WHERE device_id = ?", job.generation, now, job.deviceID)
-            case let .retry(message, _), let .unknown(message):
+            case let .retry(message, _):
                 result = "retry"; error = message
                 let failures = Int(try row.integer("failures"))
                 let delay = min(1 << min(failures + 1, 9), 300)
                 try db.run("UPDATE widget_phones SET failures = failures + 1, retry_at = ?, error = ? WHERE device_id = ?", now + delay, message, job.deviceID)
+            case let .unknown(message):
+                result = "unknown"; error = message
+                try db.run("UPDATE widget_phones SET failures = failures + 1, pushed_at = ?, retry_at = ?, error = ? WHERE device_id = ?",
+                           now, now + Self.widgetPushInterval, message, job.deviceID)
             case let .wrongEnvironment(message):
                 result = "wrongEnvironment"; error = message
                 try db.run("UPDATE widget_phones SET moved_push_token_hash = ? WHERE device_id = ? AND push_token = ?", Self.hash(job.token.description), job.deviceID, job.token)

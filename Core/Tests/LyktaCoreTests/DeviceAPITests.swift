@@ -40,11 +40,11 @@ struct DeviceAPITests {
 
     @Test func widgetReportsNameKnownFamiliesAndBoundTheirPlaces() throws {
         let place = #"{"widget": "\#(UUID())", "family": "systemSmall"}"#
-        let report = try JSONDecoder().decode(WidgetReport.self, from: Data(#"{"layoutVersion": "0.12.0", "places": [\#(place)]}"#.utf8))
+        let report = try JSONDecoder().decode(WidgetReport.self, from: Data(#"{"sequence": 1, "layoutVersion": "0.12.0", "places": [\#(place)]}"#.utf8))
         #expect(report.pushToken == nil && report.places.map(\.family) == [.systemSmall])
-        let unknown = #"{"layoutVersion": "0.12.0", "places": [{"widget": "\#(UUID())", "family": "systemHuge"}]}"#
+        let unknown = #"{"sequence": 1, "layoutVersion": "0.12.0", "places": [{"widget": "\#(UUID())", "family": "systemHuge"}]}"#
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(WidgetReport.self, from: Data(unknown.utf8)) }
-        let many = #"{"layoutVersion": "0.12.0", "places": [\#(Array(repeating: place, count: WidgetReport.maximumPlaces + 1).joined(separator: ","))]}"#
+        let many = #"{"sequence": 1, "layoutVersion": "0.12.0", "places": [\#(Array(repeating: place, count: WidgetReport.maximumPlaces + 1).joined(separator: ","))]}"#
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(WidgetReport.self, from: Data(many.utf8)) }
     }
 

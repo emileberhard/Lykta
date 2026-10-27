@@ -62,11 +62,14 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - A widget push is a coalesced invalidation: a change raises the phone's
   generation only when a place shows the widget or the phone's places are
   unknown, and the gateway sends at most one push per phone per
-  `Store.widgetPushInterval`. It carries no content, so retrying it is safe.
+  `Store.widgetPushInterval`, counting pushes with an unknown outcome. It
+  carries no content, so retrying it is safe.
 - The widget credential reads only its own phone's widgets and sends their
   report; the widget extension never holds the device secret. `WidgetCache`,
   under its file lock, is the only owner of cached widget answers, and 410
-  `widget_deleted` is the only answer that removes cached content.
+  `widget_deleted` is the only answer that removes cached content. Widget
+  reports apply in `sequence` order, and only fetched content the phone can
+  draw counts as `fetched`.
 - The app bundles the skill's `examples` folder, and its gallery draws and
   sends exactly those files, so every example must render in the app built
   from the same commit. A notification example names its media files, kept

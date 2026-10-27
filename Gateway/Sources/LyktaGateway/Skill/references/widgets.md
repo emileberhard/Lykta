@@ -46,25 +46,28 @@ the sizes that show it.
 
 The gateway tells the phone that its widgets changed with a push, at most once
 every 20 minutes, and iOS then reloads every Lykta widget when its budget
-allows. Updates in between collapse into the latest data. Widgets also reload
-by themselves at the stale time and at least every three hours. A widget
-therefore suits values that change over hours; for something that changes
+allows. Updates in between collapse into the latest data. Each widget also
+asks iOS to reload it at its stale time, or after three hours at the latest,
+and iOS decides when it does. A widget therefore suits values that change over
+hours; for something that changes
 from minute to minute, use a Live Activity. Timers and relative `date` nodes
 keep counting on the phone between reloads, so send a deadline once instead
 of a countdown.
 
-`lykta put` waits up to 10 seconds, returning early when the outcome is known,
-and prints the widget's status:
+`lykta put` waits up to 10 seconds for a place to load the change, returning
+early when the outcome is known, and prints the widget's status:
 
 | Field | Values |
 | --- | --- |
-| `delivery` | `notPlaced` (no place shows it; it loads when the user adds it), `pending` (the push goes out at `nextPush`), `accepted` (Apple took the push; the phone reloads when iOS allows), `fetched` (a place on the phone loaded this revision), `failed` (see `error`) |
+| `delivery` | `notPlaced` (no place shows it; it loads when the user adds it), `pending` (the push goes out at `nextPush`, or, without one, the phone loads the change when it next reloads), `accepted` (Apple took the push; the phone reloads when iOS allows), `fetched` (a place on the phone loaded this revision and can draw it), `failed` (see `error`, such as a Lykta app too old to draw the widget) |
 | `placed` | The sizes that show the widget |
 | `fetched` | `{"revision", "at"}` of the newest revision a place loaded |
 | `revision`, `id`, `createdAt`, `updatedAt` | As for activities |
 
 `pending` is normal: it means your change waits for the next push window, not
-that something failed. Don't send it again.
+that something failed. Don't send it again. An `accepted` that never becomes
+`fetched` usually means the phone was offline and missed the push; its next
+scheduled reload, within hours, still loads the change.
 
 ## Design
 

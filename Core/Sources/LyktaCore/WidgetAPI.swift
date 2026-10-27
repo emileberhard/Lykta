@@ -21,11 +21,13 @@ public struct WidgetPlace: Codable, Hashable, Sendable {
 public struct WidgetReport: Codable, Sendable {
     public static let maximumPlaces = 256
 
+    public let sequence: Int64
     public let pushToken: PushToken?
     public let layoutVersion: Version
     public let places: [WidgetPlace]
 
-    public init(pushToken: PushToken?, layoutVersion: Version, places: [WidgetPlace]) {
+    public init(at date: Date, pushToken: PushToken?, layoutVersion: Version, places: [WidgetPlace]) {
+        sequence = Int64((date.timeIntervalSince1970 * 1000).rounded(.down))
         self.pushToken = pushToken
         self.layoutVersion = layoutVersion
         self.places = places
@@ -33,7 +35,8 @@ public struct WidgetReport: Codable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let fields = try decoder.container(keyedBy: Key.self)
-        try fields.allowOnly(["pushToken", "layoutVersion", "places"])
+        try fields.allowOnly(["sequence", "pushToken", "layoutVersion", "places"])
+        sequence = try fields.required("sequence")
         pushToken = try fields.optional("pushToken")
         layoutVersion = try fields.required("layoutVersion")
         places = try fields.required("places")

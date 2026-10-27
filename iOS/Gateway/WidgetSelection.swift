@@ -63,18 +63,6 @@ nonisolated struct WidgetQuery: EntityQuery {
     }
 }
 
-nonisolated enum WidgetPushToken {
-    private static let key = "widgetPushToken"
-
-    static var saved: PushToken? {
-        UserDefaults(suiteName: AppGroup.identifier)?.string(forKey: key).flatMap(PushToken.init(hex:))
-    }
-
-    static func save(_ token: PushToken) {
-        UserDefaults(suiteName: AppGroup.identifier)?.set(token.description, forKey: key)
-    }
-}
-
 nonisolated extension WidgetLayout.Family {
     init?(_ family: WidgetFamily) {
         switch family {

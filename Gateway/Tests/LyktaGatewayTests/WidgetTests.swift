@@ -1,5 +1,6 @@
 import Foundation
 import LyktaCore
+import Synchronization
 import Testing
 @testable import LyktaGateway
 
@@ -10,6 +11,7 @@ struct WidgetTests {
     let credentials: Credentials
     let token: String
     let now = Int(Date().timeIntervalSince1970)
+    private let reports = Reports()
 
     init() async throws {
         store = try Store(path: ":memory:")
@@ -99,19 +101,46 @@ struct WidgetTests {
         #expect(snapshot.content == .layout(["systemSmall": ["text": "40"]]))
     }
 
-    @Test func fetchReturnsFullContentUnchangedOrRequiresAndAlwaysRecordsAReceipt() async throws {
+    @Test func fetchReturnsFullContentUnchangedOrRequiresAndRecordsOnlyDrawnRevisions() async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         let full: WidgetSnapshot = try await fetch(created.id).decoded()
         #expect(full.title == "Steps")
         #expect(full.content == .layout(["systemSmall": ["text": "10"]]))
         #expect(full.staleAt != nil)
         #expect(await fetch(created.id, have: 1).status == 204)
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "20"]])
         let old = await fetch(created.id, have: 1, layout: "0.11.0")
         #expect(old.status == 200)
         #expect((try old.decoded() as WidgetSnapshot).content == .requires(Version(0, 12, 0)))
-        #expect(try await status().fetched?.revision == 1)
+        let unreadable = try await status()
+        #expect(unreadable.fetched?.revision == 1)
+        #expect(unreadable.delivery == "failed")
+        #expect(unreadable.error?.hasPrefix("This widget needs Lykta 0.12.0 or later, and this phone's Lykta app draws layouts up to 0.11.0.") == true)
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=unknown&layout=0.12.0", token: token).status == 400)
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall", token: token).status == 400)
+    }
+
+    @Test func anUncertainPushCountsAgainstTheInterval() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        try await report([created.id])
+        push.fail("widgets", .unknown("timed out"))
+        try await deliver(now)
+        #expect(try await status().delivery == "pending")
+        _ = await send("PUT", "/v1/widgets/steps", ["data": ["steps": "20"]])
+        try await deliver(now + Store.widgetPushInterval - 1)
+        #expect(push.sent == ["widgets"])
+        try await deliver(now + Store.widgetPushInterval)
+        #expect(push.sent == ["widgets", "widgets"])
+        #expect(try await status().delivery == "accepted")
+    }
+
+    @Test func ignoresAReportOlderThanTheLastOne() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        let stale = WidgetReport(at: reports.next(), pushToken: nil, layoutVersion: Version(0, 12, 0), places: [])
+        try await report([created.id])
+        let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(stale))
+        #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
+        #expect(try await status().placed == [.systemSmall])
     }
 
     @Test func onlyChangesToPlacedWidgetsPush() async throws {
@@ -122,6 +151,9 @@ struct WidgetTests {
         try await report([created.id])
         try await deliver(now)
         #expect(push.sent.isEmpty)
+        let placed = try await status()
+        #expect(placed.delivery == "pending")
+        #expect(placed.nextPush == nil)
         #expect(await send("DELETE", "/v1/widgets/steps").status == 204)
         try await deliver(now)
         #expect(push.sent == ["widgets"])
@@ -129,7 +161,7 @@ struct WidgetTests {
         #expect(gone.error == "widget_deleted")
     }
 
-    @Test func keepsTheNewestReportedLayoutVersionAndThePushTokenWhenOmitted() async throws {
+    @Test func admitsAgainstThePhonesLatestLayoutVersionAndKeepsThePushTokenWhenOmitted() async throws {
         let oldReport = DeviceReport(pushToStartToken: nil, appVersion: "0.11.0", layoutVersion: Version(0, 11, 0),
                                      bundleInstance: UUID(), activities: [], notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending))
         let old = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(oldReport))
@@ -140,8 +172,9 @@ struct WidgetTests {
         try await report([])
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         #expect(await send("PUT", "/v1/device", old, token: credentials.deviceSecret).status == 200)
-        #expect(await send("PUT", "/v1/widgets/steps", ["title": "Still readable"]).status == 200)
-        let placesOnly: JSONValue = ["layoutVersion": "0.11.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        #expect(await send("PUT", "/v1/widgets/steps", ["title": "Downgraded"]).status == 409)
+        let placesOnly: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)), "layoutVersion": "0.12.0",
+                                     "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", placesOnly, token: token).status == 204)
         #expect(await send("PUT", "/v1/widgets/steps", ["data": ["steps": "12"]]).status == 200)
         try await deliver(now)
@@ -157,7 +190,7 @@ struct WidgetTests {
         let response = await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall&layout=0.12.0", token: otherCredential.widgetToken)
         #expect(response.status == 410)
         #expect((try response.decoded() as Failure).error == "widget_deleted")
-        let report: JSONValue = ["layoutVersion": "0.12.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
+        let report: JSONValue = ["sequence": .number(1), "layoutVersion": "0.12.0", "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", report, token: otherCredential.widgetToken).status == 204)
         #expect(try await status().placed.isEmpty)
     }
@@ -216,7 +249,7 @@ struct WidgetTests {
         #expect(ends >= Double(now + 60))
     }
 
-    @Test(arguments: [APNsError.unknown("timeout"), .notSent("connection refused"), .rejected(status: 429, reason: "TooManyRequests"), .rejected(status: 503, reason: "ServiceUnavailable")])
+    @Test(arguments: [APNsError.notSent("connection refused"), .rejected(status: 429, reason: "TooManyRequests"), .rejected(status: 503, reason: "ServiceUnavailable")])
     func retriesInvalidationsAndMovesBadTokensOnlyOnce(_ failure: APNsError) async throws {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])
@@ -239,7 +272,8 @@ struct WidgetTests {
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
         try await report([created.id])
         let job = try #require(await store.claim(now: now, limit: 4).first)
-        let report: JSONValue = ["pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": "0.12.0",
+        let report: JSONValue = ["sequence": .number(Double(reports.next().timeIntervalSince1970 * 1000)),
+                                 "pushToken": .string(String(repeating: "ab", count: 32)), "layoutVersion": "0.12.0",
                                  "places": .array([["widget": .string(created.id.uuidString), "family": "systemSmall"]])]
         #expect(await send("PUT", "/v1/device/widgets", report, token: token).status == 204)
         let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
@@ -282,7 +316,8 @@ struct WidgetTests {
     private func status() async throws -> Status { try await send("GET", "/v1/widgets/steps").decoded() }
 
     private func report(_ ids: [UUID]) async throws {
-        let report = WidgetReport(pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Version(0, 12, 0), places: ids.map { WidgetPlace(widget: $0, family: .systemSmall) })
+        let report = WidgetReport(at: reports.next(), pushToken: PushToken(Data(repeating: 9, count: 32)), layoutVersion: Version(0, 12, 0),
+                                  places: ids.map { WidgetPlace(widget: $0, family: .systemSmall) })
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(report))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
     }
@@ -290,5 +325,13 @@ struct WidgetTests {
     private func deliver(_ time: Int) async throws {
         let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
         for job in try await store.claim(now: time, limit: 4) { try await store.finish(job, try await delivery.send(job, now: time), now: time) }
+    }
+}
+
+private final class Reports: Sendable {
+    private let count = Mutex(0)
+
+    func next() -> Date {
+        Date(timeIntervalSince1970: Double(count.withLock { $0 += 1; return $0 }))
     }
 }

@@ -336,11 +336,15 @@ token, and a push carries no content and reloads every Lykta widget. The
 gateway therefore keeps a generation per phone: a change raises it only when a
 place shows the changed widget or the phone has not yet reported its places,
 and the delivery loop sends one push per phone when the generation is ahead of
-the pushed one, at most once per `Store.widgetPushInterval`, 20 minutes, which
-stays within WidgetKit's budget. Placing a widget pushes nothing, because
-WidgetKit loads a new place itself. A push carries no content, so retrying one
-after a timeout is safe. Status derives `delivery` from these rows instead of
-storing it.
+the pushed one, at most once per `Store.widgetPushInterval`, 20 minutes. That
+interval is Lykta's own throttle: WidgetKit's reload budget is dynamic and
+Apple's to apply. A push with an unknown outcome counts against the interval
+like an accepted one, because Apple may have taken it, and is retried once the
+interval passes; it carries no content, so retrying it is safe. Placing a
+widget pushes nothing, because WidgetKit loads a new place itself, and a widget
+changed while no place showed it has no generation, so its status stays
+`pending` without `nextPush` until that load. Status derives `delivery` from
+these rows instead of storing it.
 
 **The widget extension fetches with a widget credential.** On a reload the
 timeline provider asks `GET /v1/device/widgets/{id}` with the family, the
@@ -349,8 +353,12 @@ widget, 204 when the revision is current, 410 `widget_deleted`, or the title
 with the version it `requires`. The widget credential, created by the app with
 the device secret and kept in the keychain under the app group, can only read
 this phone's widgets and send their report, so the extension never holds the
-device secret. Every fetch records its place and revision, which is the
-receipt agents see as `fetched`. Only the provider, the entity query and the
+device secret. Every fetch records its place, and its revision when the
+answer is content the phone can draw, which is the receipt agents see as
+`fetched`. A phone's layout version is the one its latest report or fetch
+states, so admission and status follow a downgrade: an agent's next change is
+refused with `app_update_required`, and status shows `failed` while the phone
+cannot draw the current revision. Only the provider, the entity query and the
 push handler call the gateway, each with a 10-second timeout; views never
 fetch.
 
@@ -364,10 +372,12 @@ time or after three hours, whichever comes first. The cache keeps the 64
 widgets used most recently.
 
 **Places are reported, then proved by fetches.** The extension's push handler
-sends the push token and the places WidgetKit reports, and saves the token in
-the app group; the app sends the same report from
-`WidgetCenter.currentConfigurations()` each time it becomes active, which
-recovers a report the extension could not send.
+sends the push token and the places WidgetKit reports; the app sends the same
+report from `WidgetCenter.currentPushInfo` and `currentConfigurations()` each
+time it becomes active, one at a time, which recovers a report the extension
+could not send. Each report carries the time it was made, in milliseconds, as
+its `sequence`, and the gateway ignores a report no newer than the last it
+applied, so a delayed one cannot restore an old token or old places.
 
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for
