@@ -45,7 +45,7 @@ struct HomeView: View {
                         .transition(.opacity)
                 }
             }
-            .animation(.smooth, value: model.showsLockHint)
+            .animation(.smooth(duration: model.showsLockHint ? 0.45 : 0.25), value: model.showsLockHint)
         }
         .onOpenURL { openURL($0) }
         .task(id: scenePhase) {
