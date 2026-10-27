@@ -129,6 +129,7 @@ struct Activity: Sendable {
     let error: String?
     let deviceState: ObservedState?
     let createdAt: Int
+    let updatedAt: Int?
     let endedAt: Int?
 
     init(_ row: Row) throws {
@@ -154,6 +155,7 @@ struct Activity: Sendable {
         error = try row.optionalString("error")
         deviceState = try row.optionalText("device_state", as: ObservedState.init(rawValue:))
         createdAt = Int(try row.integer("created_at"))
+        updatedAt = try row.optionalInteger("updated_at").map(Int.init)
         endedAt = try row.optionalInteger("ended_at").map(Int.init)
     }
 

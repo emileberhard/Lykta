@@ -292,6 +292,25 @@ struct GatewayTests {
         #expect(result.end == [started.id])
     }
 
+    @Test func tellsThePhoneWhenItsActivitiesStartedLastChangedAndEnd() async throws {
+        guard case var .object(timer) = Self.start else { return }
+        timer["endAfter"] = .number(60)
+        let build: Identified = try await put("build", Self.start)
+        let timed: Identified = try await put("timer", .object(timer))
+        let device = try #require(try await store.device(agentToken: credentials.agentToken))
+        let later = now + 90
+        _ = try await store.put(device, name: Name(rawValue: "build")!, request: try JSONDecoder().decode(ActivityRequest.self, from: Data(#"{"data": {"step": "Sign"}}"#.utf8)),
+                                maximumLiveActivities: 2, now: later)
+        let result = try await report([.init(id: build.id, state: .active), .init(id: timed.id, state: .active), .init(id: UUID(), state: .active)])
+        let times = Dictionary(uniqueKeysWithValues: result.activities.map { ($0.id, $0) })
+        #expect(times.count == 2)
+        let started = try #require(times[build.id]).startedAt
+        #expect(times[build.id] == ActivityTimes(id: build.id, startedAt: started, updatedAt: Date(timeIntervalSince1970: Double(later)),
+                                                 endsAt: started.addingTimeInterval(8 * 3600)))
+        let timerStarted = try #require(times[timed.id]).startedAt
+        #expect(times[timed.id] == ActivityTimes(id: timed.id, startedAt: timerStarted, updatedAt: timerStarted, endsAt: timerStarted.addingTimeInterval(60)))
+    }
+
     @Test(arguments: [
         Rejection(method: "PUT", target: "/v1/activities/build", body: ["title": "Build", "colour": "red"], status: 400, error: "invalid_request"),
         Rejection(method: "PUT", target: "/v1/activities/Build", body: GatewayTests.start, status: 400, error: "invalid_name"),

@@ -148,9 +148,54 @@ public struct DeviceReport: Codable, Sendable {
 
 public struct SyncResult: Codable, Sendable {
     public let end: [UUID]
+    public let activities: [ActivityTimes]
 
-    public init(end: [UUID]) {
+    public init(end: [UUID], activities: [ActivityTimes]) {
         self.end = end
+        self.activities = activities
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: Key.self)
+        end = try fields.required("end")
+        activities = try fields.optional("activities") ?? []
+    }
+}
+
+public struct ActivityTimes: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let startedAt: Date
+    public let updatedAt: Date?
+    public let endsAt: Date
+
+    public init(id: UUID, startedAt: Date, updatedAt: Date?, endsAt: Date) {
+        self.id = id
+        self.startedAt = startedAt
+        self.updatedAt = updatedAt
+        self.endsAt = endsAt
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: Key.self)
+        id = try fields.required("id")
+        startedAt = try fields.date(fields.required("startedAt"), at: "startedAt")
+        updatedAt = try fields.optional("updatedAt").map { try fields.date($0, at: "updatedAt") }
+        endsAt = try fields.date(fields.required("endsAt"), at: "endsAt")
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var fields = encoder.container(keyedBy: Key.self)
+        try fields.encode(id, forKey: Key(stringValue: "id"))
+        try fields.encode(startedAt.formatted(.iso8601), forKey: Key(stringValue: "startedAt"))
+        try fields.encodeIfPresent(updatedAt?.formatted(.iso8601), forKey: Key(stringValue: "updatedAt"))
+        try fields.encode(endsAt.formatted(.iso8601), forKey: Key(stringValue: "endsAt"))
+    }
+}
+
+private extension KeyedDecodingContainer<Key> {
+    func date(_ text: String, at key: String) throws -> Date {
+        guard let date = try? Date(text, strategy: .iso8601) else { throw invalid("must be an ISO 8601 date", at: key) }
+        return date
     }
 }
 

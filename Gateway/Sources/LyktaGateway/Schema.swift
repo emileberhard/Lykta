@@ -12,6 +12,7 @@ enum Schema {
         (table: "devices", column: "moved_push_token_hash", type: "TEXT"),
         (table: "devices", column: "moved_notification_token_hash", type: "TEXT"),
         (table: "activities", column: "channel_environment", type: "TEXT"),
+        (table: "activities", column: "updated_at", type: "INTEGER"),
     ]
 
     static func migrate(_ db: Database) throws {

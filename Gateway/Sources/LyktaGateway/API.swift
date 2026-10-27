@@ -104,7 +104,7 @@ struct API: Sendable {
         case ("PUT", "v1/device"):
             let device = try await phone(request)
             let report: DeviceReport = try Self.decode(request.body)
-            return Self.json(200, SyncResult(end: try await store.sync(device, report: report, now: now)))
+            return Self.json(200, try await store.sync(device, report: report, now: now))
         case ("DELETE", "v1/device"):
             try await store.deleteDevice(try await phone(request))
             return .noContent

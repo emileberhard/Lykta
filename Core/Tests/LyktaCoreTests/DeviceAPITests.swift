@@ -31,6 +31,13 @@ struct DeviceAPITests {
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(Action.self, from: Data(mixed.utf8)) }
     }
 
+    @Test func readsTheSyncAnswerOfAGatewayThatSendsNoTimes() throws {
+        let id = UUID()
+        let result = try JSONDecoder().decode(SyncResult.self, from: Data(#"{"end": ["\#(id)"]}"#.utf8))
+        #expect(result.end == [id])
+        #expect(result.activities.isEmpty)
+    }
+
     private func decode(_ fields: [String: JSONValue]) throws(LayoutError) -> DeviceReport {
         do {
             return try JSONDecoder().decode(DeviceReport.self, from: Data(JSONValue.object(fields).json))

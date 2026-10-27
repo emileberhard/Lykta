@@ -120,7 +120,7 @@ actor Store {
         try device(column: "agent_hash", hash: Self.hash(agentToken))
     }
 
-    func sync(_ device: Device, report: DeviceReport, now: Int) throws -> [UUID] {
+    func sync(_ device: Device, report: DeviceReport, now: Int) throws -> SyncResult {
         try db.transaction {
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
@@ -183,8 +183,21 @@ actor Store {
                 "endedByReinstall": .array(abandoned),
                 "toldToEnd": .array(tombstones.map { .string($0.uuidString) }),
             ])
-            return tombstones
+            let times = try db.query("SELECT * FROM activities WHERE device_id = ? AND id IN (SELECT value FROM json_each(?))", device.id,
+                                     String(decoding: try JSONEncoder().encode(report.activities.map(\.id.uuidString)), as: UTF8.self))
+                .map { Self.times(of: try Activity($0)) }
+            return SyncResult(end: tombstones, activities: times)
         }
+    }
+
+    private static func times(of activity: Activity) -> ActivityTimes {
+        let plannedEnd = activity.endsAt.map { min($0, activity.createdAt + latestActivityEnd) } ?? activity.createdAt + activityLifetime
+        return ActivityTimes(id: activity.id, startedAt: date(activity.createdAt), updatedAt: activity.updatedAt.map(date),
+                             endsAt: date(activity.endedAt ?? plannedEnd))
+    }
+
+    private static func date(_ seconds: Int) -> Date {
+        Date(timeIntervalSince1970: Double(seconds))
     }
 
     func deleteDevice(_ device: Device) throws {
@@ -223,8 +236,8 @@ actor Store {
                 if changed {
                     try db.run("""
                         UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
-                          alert = COALESCE(?, alert), revision = revision + 1 WHERE id = ?
-                        """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, id)
+                          alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
+                        """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
                 }
             } else {
                 guard device.pushToken != nil else {
@@ -237,8 +250,8 @@ actor Store {
                 id = UUID()
                 try db.run("""
                     INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, ends_at, relevance, alert,
-                      revision, delivery, created_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?)
-                    """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now)
+                      revision, delivery, created_at, updated_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?)
+                    """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
             }
             let activity = try self.activity(id)
             let size = try Self.measure(activity, on: device, now: now)
@@ -527,7 +540,8 @@ actor Store {
                     try LyktaActivity.ContentState(title: activity.title, layout: template.filled(with: changed).json)
                 }
                 try Self.admit(state, on: device)
-                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1 WHERE id = ?", Self.text(changed), Self.encoded(state), activity.id)
+                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
+                           Self.text(changed), Self.encoded(state), now, activity.id)
                 _ = try Self.measure(self.activity(activity.id), on: device, now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))

@@ -109,7 +109,7 @@ final class SimulatedPhone: PushService {
             events = [event("activity.content", content), event("activity.state", ["state": .string(ObservedState.ended.rawValue)])]
         }
         try await store.ingest(device, EventBatch(events: events))
-        for ended in try await store.sync(device, report: report(shown, install: install), now: Int(now.timeIntervalSince1970)) {
+        for ended in try await store.sync(device, report: report(shown, install: install), now: Int(now.timeIntervalSince1970)).end {
             shown[ended] = .ended
         }
     }
