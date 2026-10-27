@@ -66,7 +66,7 @@ enum Schema {
           device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
           token_hash TEXT NOT NULL UNIQUE,
           push_token TEXT, moved_push_token_hash TEXT,
-          report_sequence INTEGER NOT NULL DEFAULT 0, places_known INTEGER NOT NULL DEFAULT 0,
+          report_sequence INTEGER NOT NULL DEFAULT 0, reported_at INTEGER NOT NULL DEFAULT 0, places_known INTEGER NOT NULL DEFAULT 0,
           generation INTEGER NOT NULL DEFAULT 0, pushed_generation INTEGER NOT NULL DEFAULT 0,
           pushed_at INTEGER NOT NULL DEFAULT 0, retry_at INTEGER NOT NULL DEFAULT 0,
           failures INTEGER NOT NULL DEFAULT 0, in_flight INTEGER NOT NULL DEFAULT 0, error TEXT

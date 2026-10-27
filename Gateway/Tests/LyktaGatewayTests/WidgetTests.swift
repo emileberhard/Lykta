@@ -116,6 +116,9 @@ struct WidgetTests {
         #expect(unreadable.fetched?.revision == 1)
         #expect(unreadable.delivery == "failed")
         #expect(unreadable.error?.hasPrefix("This widget needs Lykta 0.12.0 or later, and this phone's Lykta app draws layouts up to 0.11.0.") == true)
+        let medium = await send("GET", "/v1/device/widgets/\(created.id)?family=systemMedium&layout=\(Layout.version)", token: token)
+        #expect(medium.status == 200)
+        #expect(try await status().fetched?.revision == 1)
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=unknown&layout=0.12.0", token: token).status == 400)
         #expect(await send("GET", "/v1/device/widgets/\(created.id)?family=systemSmall", token: token).status == 400)
     }
@@ -141,6 +144,20 @@ struct WidgetTests {
         let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(stale))
         #expect(await send("PUT", "/v1/device/widgets", body, token: token).status == 204)
         #expect(try await status().placed == [.systemSmall])
+    }
+
+    @Test func aReportFromAClockThatRanAheadFencesOtherReportsForAMinute() async throws {
+        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
+        let device = try #require(try await store.device(secret: credentials.deviceSecret))
+        func report(_ places: [WidgetPlace], madeAt made: Int, receivedAt received: Int) async throws {
+            let report = WidgetReport(at: Date(timeIntervalSince1970: Double(made)), pushToken: nil, layoutVersion: Layout.version, places: places)
+            try await store.reportWidgets(device, report: report, now: received)
+        }
+        try await report([WidgetPlace(widget: created.id, family: .systemSmall)], madeAt: now + 86400, receivedAt: now)
+        try await report([], madeAt: now + 86399, receivedAt: now + 59)
+        #expect(try await status().placed == [.systemSmall])
+        try await report([], madeAt: now + 60, receivedAt: now + 60)
+        #expect(try await status().placed.isEmpty)
     }
 
     @Test func onlyChangesToPlacedWidgetsPush() async throws {

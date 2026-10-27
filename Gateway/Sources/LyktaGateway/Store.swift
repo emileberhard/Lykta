@@ -1019,6 +1019,7 @@ actor Store {
 extension Store {
     static let maximumWidgets = 32
     static let widgetPushInterval = 20 * 60
+    static let reportOrderingWindow = 60
 
     private func widgetPhone(_ device: Device) throws -> Row {
         try db.query("SELECT * FROM widget_phones WHERE device_id = ?", device.id)[0]
@@ -1188,8 +1189,15 @@ extension Store {
     func reportWidgets(_ device: Device, report: WidgetReport, now: Int) throws {
         try db.transaction {
             try addWidgetPhone(device)
-            guard report.sequence > (try widgetPhone(device).integer("report_sequence")) else { return }
-            try db.run("UPDATE widget_phones SET report_sequence = ? WHERE device_id = ?", report.sequence, device.id)
+            let phone = try widgetPhone(device)
+            let latest = try phone.integer("report_sequence")
+            let reportedAt = Int(try phone.integer("reported_at"))
+            guard report.sequence > latest || now >= reportedAt + Self.reportOrderingWindow else {
+                try record("widget.reportIgnored", device: device.id, activity: nil,
+                           ["sequence": .number(Double(report.sequence)), "latest": .number(Double(latest))])
+                return
+            }
+            try db.run("UPDATE widget_phones SET report_sequence = ?, reported_at = ? WHERE device_id = ?", report.sequence, now, device.id)
             try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", report.layoutVersion.description, device.id)
             if let token = report.pushToken {
                 try db.run("UPDATE widget_phones SET push_token = ?, error = NULL, failures = 0, retry_at = 0 WHERE device_id = ? AND push_token IS NOT ?", token, device.id, token)
@@ -1228,8 +1236,12 @@ extension Store {
         try db.transaction {
             guard let widget = try widget(device, id: id) else { throw APIError(.widgetDeleted, "This widget was deleted. Choose another widget.") }
             try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", layout.description, device.id)
-            let readable = layout >= widget.requires
-            if readable {
+            let drawn = if layout >= widget.requires, case let .object(presentations) = widget.content {
+                presentations[family.rawValue] != nil
+            } else {
+                false
+            }
+            if drawn {
                 try db.run("""
                     INSERT INTO widget_places (widget_id, family, fetched_revision, fetched_at) VALUES (?, ?, ?, ?)
                       ON CONFLICT(widget_id, family) DO UPDATE SET fetched_revision = excluded.fetched_revision, fetched_at = excluded.fetched_at
@@ -1238,11 +1250,11 @@ extension Store {
                 try db.run("INSERT OR IGNORE INTO widget_places (widget_id, family) VALUES (?, ?)", id, family.rawValue)
             }
             try record("widget.fetch", device: device.id, activity: nil,
-                       ["widget": .string(id.uuidString), "revision": .number(Double(widget.revision)), "family": .string(family.rawValue), "readable": .bool(readable)])
-            if readable, have == widget.revision { return nil }
+                       ["widget": .string(id.uuidString), "revision": .number(Double(widget.revision)), "family": .string(family.rawValue), "drawn": .bool(drawn)])
+            if drawn, have == widget.revision { return nil }
             return WidgetSnapshot(id: id, title: widget.title, revision: widget.revision,
                                   staleAt: widget.staleAfter.map { Date(timeIntervalSince1970: Double(widget.updatedAt) + Double($0)) },
-                                  content: readable ? .layout(widget.content) : .requires(widget.requires))
+                                  content: layout >= widget.requires ? .layout(widget.content) : .requires(widget.requires))
         }
     }
 

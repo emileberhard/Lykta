@@ -356,8 +356,8 @@ with the version it `requires`. The widget credential, created by the app with
 the device secret and kept in the keychain under the app group, can only read
 this phone's widgets and send their report, so the extension never holds the
 device secret. Every fetch records its place, and its revision when the
-answer is content the phone can draw, which is the receipt agents see as
-`fetched`. A phone's layout version is the one its latest report or fetch
+answer is content the phone can draw in that size, which is the receipt agents
+see as `fetched`. A phone's layout version is the one its latest report or fetch
 states, so admission and status follow a downgrade: an agent's next change is
 refused with `app_update_required`, and status shows `failed` while the phone
 cannot draw the current revision. Only the provider, the entity query and the
@@ -386,7 +386,9 @@ report from `WidgetCenter.currentPushInfo` and `currentConfigurations()` each
 time it becomes active, one at a time, which recovers a report the extension
 could not send. Each report carries the time it was made, in milliseconds, as
 its `sequence`, and the gateway ignores a report no newer than the last it
-applied, so a delayed one cannot restore an old token or old places.
+applied within the last `Store.reportOrderingWindow`, a minute of the
+gateway's clock, so a delayed one cannot restore an old token or old places,
+and a phone whose clock ran ahead is fenced out for at most that minute.
 
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for
