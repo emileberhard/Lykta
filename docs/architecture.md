@@ -394,7 +394,10 @@ report from `WidgetCenter.currentPushInfo` and `currentConfigurations()` each
 time it becomes active, one at a time, which recovers a report the extension
 could not send. Each report carries a `sequence` that the app and the
 extension take from one counter in the app group, under the cache's file lock:
-the larger of the last one plus one and the time in milliseconds. The gateway
+the larger of the last one plus one and the time in milliseconds. Each takes
+its sequence before it reads the token and places it reports, so sequences
+follow the order of what was observed, and a counter that cannot be read fails
+the report instead of starting again below the gateway's fence. The gateway
 ignores a report no newer than the last it applied, so a delayed one cannot
 restore an old token or old places. The fence never expires, because only the
 phone orders its reports, but a new install or update of the app, which its

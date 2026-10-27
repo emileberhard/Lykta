@@ -43,7 +43,6 @@ nonisolated enum WidgetCache {
 
     static func record(_ answer: Result<WidgetAnswer, any Error>, for id: UUID, fetchedWith credential: WidgetCredential, at now: Date) throws -> Outcome {
         try update(for: credential) { contents in
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return .signedOut }
             if case .success(.signedOut) = answer {
                 contents.entries = [:]
                 return .signedOut
@@ -78,12 +77,11 @@ nonisolated enum WidgetCache {
                 entry.failures += 1
                 return .unreachable(entry.snapshot, failures: entry.failures)
             }
-        }
+        } ?? .signedOut
     }
 
     static func remember(_ widgets: [WidgetSummary], listedWith credential: WidgetCredential, at now: Date) throws {
-        try update(for: credential) { contents in
-            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return }
+        _ = try update(for: credential) { contents in
             for widget in widgets where contents.entries[widget.id.uuidString]?.isDeleted != true {
                 var entry = contents.entries[widget.id.uuidString] ?? Entry(title: widget.title, usedAt: now)
                 entry.title = widget.title
@@ -115,8 +113,9 @@ nonisolated enum WidgetCache {
         }
     }
 
-    private static func update<Result>(for credential: WidgetCredential, _ body: (inout Contents) throws -> Result) throws -> Result {
+    private static func update<Result>(for credential: WidgetCredential, _ body: (inout Contents) throws -> Result) throws -> Result? {
         try AppGroup.lockingWidgets { directory in
+            guard try KeychainItem.widget.load()?.widgetToken == credential.widgetToken else { return nil }
             let file = file(in: directory)
             var contents = try contents(of: file, for: credential)
             let result = try body(&contents)
