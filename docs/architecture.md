@@ -124,13 +124,17 @@ when the activity ended or will end: at the earlier of its `endAfter` and the
 gateway's limit before iOS's, or after iOS's eight hours without one. Gateways
 before 0.11.0 do not set `updatedAt`, so an activity one of them last changed
 shows no change time, or after a rollback an earlier one, until it changes
-again. An agent reading
-`GET /v1/activities` keeps the fields it had; no agent needs these yet. End
-Activity sends the agent API's `DELETE` with `dismissAfter=0`, as the gallery
-does for its example, so the phone still ends an activity only when the
-gateway's push or its next report says so, and the header shows Ending until
-then. Ending by name reaches the live activity with that name, which is the one
-the phone shows, because a sync ends any older one the gateway already ended.
+again. An agent reading `GET /v1/activities` keeps the fields it had; no agent
+needs these yet. End Activity sends `DELETE /v1/device/activities/{id}` with
+the phone's secret, so it ends the activity the phone shows and never a newer
+one an agent started under its name. The gateway ends it as with
+`dismissAfter=0` and answers once that is committed, and the answer is the
+gateway reporting the end, so the app removes the activity itself instead of
+waiting for the end push, which may be late or fail, and its next report marks
+the activity dismissed. The header shows Ending only while the request runs.
+The app offers End only for an activity whose times the gateway sent, so with a
+gateway before 0.11.0, which has neither the times nor the route, it offers
+none.
 
 **Push-to-start and broadcast channels.** The gateway starts an activity with
 the phone's push-to-start token and updates it through a broadcast channel it

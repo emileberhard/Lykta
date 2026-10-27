@@ -12,7 +12,7 @@ enum Capture {
 struct CaptureView: View {
     private static let scale: CGFloat = 6
     private static let width: CGFloat = 370
-    private static let homeActivities = ["app-review", "agent-question"]
+    private static let homeActivities = ["app-review"]
     private static let locale = Locale(identifier: "en_US")
     private static let timeZone: TimeZone = {
         let offset = (9 * 3600 + 41 * 60 - Int(Date.now.timeIntervalSince1970) % 86400) / 60 * 60
@@ -65,7 +65,8 @@ struct CaptureView: View {
             let attributes = LyktaActivity(id: UUID(), name: id)
             let started = Date.now.addingTimeInterval(-25 * 60)
             return LiveActivity(id: id, attributes: attributes, content: example.preview, state: .active,
-                                times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-60), endsAt: started.addingTimeInterval(8 * 3600)))
+                                times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-60), endsAt: started.addingTimeInterval(8 * 3600)),
+                                isEnding: false)
         })
         try await Task.sleep(for: .seconds(1))
         try snapshot(await keyWindow(), named: "home")

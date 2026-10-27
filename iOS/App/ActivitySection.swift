@@ -3,7 +3,6 @@ import SwiftUI
 
 struct ActivitySection: View {
     let activity: LiveActivity
-    let isEnding: Bool
     let showDetails: () -> Void
     let end: () -> Void
 
@@ -12,9 +11,8 @@ struct ActivitySection: View {
             LockScreenCard(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
                 .lockScreenRow(activity.content)
         } header: {
-            ActivityHeader(title: activity.content.title, status: ActivityStatus(activity.state, isEnding: isEnding),
-                           updatedAt: activity.times?.updatedAt, canEnd: activity.isEndable && !isEnding,
-                           showDetails: showDetails, end: end)
+            ActivityHeader(title: activity.content.title, status: ActivityStatus(activity), updatedAt: activity.times?.updatedAt,
+                           canEnd: activity.canEnd, showDetails: showDetails, end: end)
         }
     }
 }
@@ -22,8 +20,8 @@ struct ActivitySection: View {
 enum ActivityStatus: Equatable {
     case starting, live, outOfDate, ending, ended, removed, unknown
 
-    init(_ state: ObservedState, isEnding: Bool) {
-        self = switch (state, isEnding) {
+    init(_ activity: LiveActivity) {
+        self = switch (activity.state, activity.isEnding) {
         case (.pending, false): .starting
         case (.active, false): .live
         case (.stale, false): .outOfDate
@@ -84,27 +82,21 @@ private struct ActivityHeader: View {
             }
             .labelIconToTitleSpacing(6)
             Spacer(minLength: 0)
-            ZStack {
-                if status == .ending {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Menu {
-                        Button("Details", systemImage: "info.circle", action: showDetails)
-                        if canEnd {
-                            Button("End Activity", systemImage: "xmark.circle", role: .destructive, action: end)
-                        }
-                    } label: {
-                        Label("More", systemImage: "ellipsis")
-                            .labelStyle(.iconOnly)
-                            .fontWeight(.semibold)
-                            .frame(width: 28, height: 28)
-                            .background(.fill.tertiary, in: .circle)
-                    }
-                    .tint(.primary)
+            Menu {
+                Button("Details", systemImage: "info.circle", action: showDetails)
+                if canEnd {
+                    Button("End Activity", systemImage: "xmark.circle", role: .destructive, action: end)
                 }
+            } label: {
+                Label("More for \(title)", systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
+                    .fontWeight(.semibold)
+                    .frame(width: 28, height: 28)
+                    .background(.fill.tertiary, in: .circle)
             }
-            .frame(width: 28, height: 28)
+            .tint(.primary)
+            .accessibilityShowsLargeContentViewer()
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .font(.subheadline)
         .textCase(nil)
@@ -118,4 +110,3 @@ private struct ActivityHeader: View {
         }
     }
 }
-

@@ -65,8 +65,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `just render`.
 - The gateway is the only content writer. The app never calls
   `Activity.request`, updates content or schedules local notifications; it
-  ends an activity only when the gateway reports it ended, or on Reset. Its
-  End Activity asks the gateway to end it, as an agent would.
+  ends an activity only when the gateway reports it ended, or on Reset. The
+  gateway's answer to End Activity, which names the activity by its id, is
+  such a report.
 - A tap changes data only through the gateway, in the transaction that logs
   it: a toggle sets its boolean and a button applies its `set`, `add` and
   `now`, all read from the data before the tap. A tap counts only for a

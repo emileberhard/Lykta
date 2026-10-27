@@ -72,8 +72,7 @@ struct HomeView: View {
                 Section { Problem(error) }
             }
             ForEach(model.activities) { activity in
-                ActivitySection(activity: activity, isEnding: model.ending.contains(activity.id),
-                                showDetails: { details = activity }, end: { Task { await model.end(activity) } })
+                ActivitySection(activity: activity, showDetails: { details = activity }, end: { Task { await model.end(activity) } })
             }
         }
     }
@@ -126,14 +125,14 @@ private struct Actions: View {
 
 #if DEBUG
 #Preview("Live") {
-    HomeView(model: .preview(.ready, activities: [.deploy, .deploy(id: "release", state: .stale), .deploy(id: "rollback", state: .active)],
-                             ending: ["rollback"]))
+    HomeView(model: .preview(.ready, activities: [.deploy, .deploy(id: "release", state: .stale, isEnding: false),
+                                                  .deploy(id: "rollback", state: .active, isEnding: true)]))
 }
 
 extension LiveActivity {
-    static let deploy = deploy(id: "deploy", state: .active)
+    static let deploy = deploy(id: "deploy", state: .active, isEnding: false)
 
-    static func deploy(id: String, state: ObservedState) -> LiveActivity {
+    static func deploy(id: String, state: ObservedState, isEnding: Bool) -> LiveActivity {
         let attributes = LyktaActivity(id: UUID(), name: id)
         let started = Date.now.addingTimeInterval(-40 * 60)
         return LiveActivity(id: id, attributes: attributes, content: try! LyktaActivity.ContentState(title: "Deploying the gateway", layout: Array(#"""
@@ -160,7 +159,8 @@ extension LiveActivity {
               "background": "indigo"
             }
             """#.utf8)), state: state,
-            times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-120), endsAt: started.addingTimeInterval(8 * 3600)))
+            times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-120), endsAt: started.addingTimeInterval(8 * 3600)),
+            isEnding: isEnding)
     }
 }
 

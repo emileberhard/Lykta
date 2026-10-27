@@ -17,7 +17,6 @@ final class Model {
 
     private(set) var phase: Phase
     private(set) var activities: [LiveActivity] = []
-    private(set) var ending: Set<LiveActivity.ID> = []
     private(set) var examples: [Example] = []
     private(set) var notificationExamples: [NotificationExample] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
@@ -29,6 +28,8 @@ final class Model {
     private let telemetry = Telemetry()
     private var credentials: Credentials?
     private var times: [UUID: ActivityTimes] = [:]
+    private var requestedEnds: Set<UUID> = []
+    private var syncRequests = 0
     private var pushToken: PushToken?
     private var syncFailures = 0
     private var runTask: Task<Void, Never>?
@@ -143,15 +144,17 @@ final class Model {
     }
 
     func end(_ activity: LiveActivity) async {
-        guard let gateway, let credentials, activity.isEndable, !ending.contains(activity.id) else { return }
-        telemetry.record("app.endActivity", activity: activity.attributes.id)
-        ending.insert(activity.id)
-        let requested = await showingErrors("endActivity") {
-            try await gateway.endActivity(activity.attributes.name, agentToken: credentials.agentToken)
+        let id = activity.attributes.id
+        guard let gateway, let credentials, activity.canEnd, requestedEnds.insert(id).inserted else { return }
+        telemetry.record("app.endActivity", activity: id)
+        refreshActivities()
+        if await showingErrors("endActivity", { try await gateway.end(id, secret: credentials.deviceSecret) }) {
+            for shown in Activity<LyktaActivity>.activities where shown.attributes.id == id {
+                await shown.end(nil, dismissalPolicy: .immediate)
+            }
         }
-        if !requested {
-            ending.remove(activity.id)
-        }
+        requestedEnds.remove(id)
+        refreshActivities()
     }
 
     func send(_ action: Action) async throws {
@@ -283,7 +286,6 @@ final class Model {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await content in activity.contentUpdates {
             telemetry.record("activity.content", activity: activity.attributes.id, Self.describe(content))
-            refreshActivities()
             await sync()
         }
     }
@@ -324,16 +326,19 @@ final class Model {
     }
 
     private func sync() async {
+        refreshActivities()
         guard let gateway, let credentials, let notifications else { return }
         let observed = Activity<LyktaActivity>.activities
-        refreshActivities()
         let deviceReport = DeviceReport(pushToStartToken: pushToken, appVersion: Self.appVersion, layoutVersion: Layout.version,
                                         bundleInstance: Self.bundleInstance,
                                         activities: observed.map { .init(id: $0.attributes.id, state: ObservedState($0.activityState)) },
                                         notifications: notifications)
         retryTask?.cancel()
+        syncRequests += 1
+        let request = syncRequests
         do {
             let result = try await gateway.sync(deviceReport, secret: credentials.deviceSecret)
+            guard request == syncRequests else { return }
             syncFailures = 0
             error = nil
             times = Dictionary(result.activities.map { ($0.id, $0) }) { $1 }
@@ -347,7 +352,7 @@ final class Model {
             runTask?.cancel()
             phase = .failed("The gateway no longer knows this phone. Reset Lykta to register it again.")
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == syncRequests else { return }
             telemetry.record("app.error", ["operation": .string("sync"), "error": .string(error.localizedDescription)])
             self.error = error.localizedDescription
             syncFailures += 1
@@ -362,8 +367,10 @@ final class Model {
     }
 
     private func refreshActivities() {
-        activities = Activity<LyktaActivity>.activities.map { LiveActivity($0, times: times[$0.attributes.id]) }
-        ending.formIntersection(activities.filter(\.isEndable).map(\.id))
+        activities = Activity<LyktaActivity>.activities.map {
+            let id = $0.attributes.id
+            return LiveActivity($0, times: times[id], isEnding: requestedEnds.contains(id))
+        }
     }
 
     @discardableResult
@@ -448,26 +455,27 @@ struct LiveActivity: Identifiable, Equatable {
     let content: LyktaActivity.ContentState
     let state: ObservedState
     let times: ActivityTimes?
+    let isEnding: Bool
 
-    var isEndable: Bool {
-        [.pending, .active, .stale].contains(state)
+    var canEnd: Bool {
+        times != nil && !isEnding && [.pending, .active, .stale].contains(state)
     }
 }
 
 private extension LiveActivity {
-    init(_ activity: Activity<LyktaActivity>, times: ActivityTimes?) {
-        self.init(id: activity.id, attributes: activity.attributes, content: activity.content.state, state: ObservedState(activity.activityState), times: times)
+    init(_ activity: Activity<LyktaActivity>, times: ActivityTimes?, isEnding: Bool) {
+        self.init(id: activity.id, attributes: activity.attributes, content: activity.content.state, state: ObservedState(activity.activityState),
+                  times: times, isEnding: isEnding)
     }
 }
 
 #if DEBUG
 extension Model {
-    static func preview(_ phase: Phase, activities: [LiveActivity] = [], ending: Set<LiveActivity.ID> = [], areActivitiesEnabled: Bool = true,
+    static func preview(_ phase: Phase, activities: [LiveActivity] = [], areActivitiesEnabled: Bool = true,
                         notifications: NotificationSettings = NotificationSettings(authorization: .authorized, alertStyle: .alert, registration: .pending)) -> Model {
         let model = Model()
         model.phase = phase
         model.activities = activities
-        model.ending = ending
         model.areActivitiesEnabled = areActivitiesEnabled
         model.notifications = notifications
         return model

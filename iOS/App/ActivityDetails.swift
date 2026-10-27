@@ -11,13 +11,12 @@ struct ActivityDetails: View {
         NavigationStack {
             List {
                 if let activity {
-                    let isEnding = model.ending.contains(id)
                     Section {
                         LockScreenCard(state: activity.content, activity: activity.attributes.id, isStale: activity.state == .stale)
                             .lockScreenRow(activity.content)
                     }
-                    ActivityFacts(status: ActivityStatus(activity.state, isEnding: isEnding), times: activity.times, name: activity.attributes.name)
-                    if activity.isEndable && !isEnding {
+                    ActivityFacts(status: ActivityStatus(activity), times: activity.times, name: activity.attributes.name)
+                    if activity.canEnd {
                         Section {
                             Button("End Activity", role: .destructive) {
                                 Task { await model.end(activity) }
