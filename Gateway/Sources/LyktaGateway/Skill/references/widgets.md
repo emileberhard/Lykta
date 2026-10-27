@@ -127,8 +127,9 @@ From Lykta 0.14.0, `button` and `toggle` work in every family except
 are the same as for Live Activities: a toggle sets its data boolean, and a
 button applies `set`, `add` and `now` using the data from before the tap.
 The gateway commits the change and its action log together and raises the
-revision when the data changed, and the phone reloads the widget right after
-the tap, so your answer to a press, a PUT, goes out as soon as you send it. A
+revision when the data changed, and the phone reloads the tapped widget right
+after the tap. A tap sends no push, so your answer to a press, a PUT, goes out
+at once unless a push went out in the last 20 minutes; `nextPush` says when. A
 tap on a locked phone asks the user to unlock it first. A tap on a control
 your latest PUT removed, or one whose result cannot fill or fit the layout or
 needs a newer app, changes nothing and never appears in `actions`.

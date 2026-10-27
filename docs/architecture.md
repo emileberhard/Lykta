@@ -234,8 +234,10 @@ data changed, and writes the action and `widget.action` event. A tap raises no
 push generation: WidgetKit reloads a widget once its tap's intent returns, and
 the intent returns after the gateway committed, while a push would spend the
 phone's 20-minute push interval and hold the agent's answer to the tap behind
-it. The app reloads every Lykta widget after a tap, so other places of the same
-widget follow. Taps require an unlocked phone, as Live Activity taps do.
+it. The app, which iOS launches in the background for the tap, reloads every
+Lykta widget only when another place shows the same widget, because that
+reload counts against every placed widget's budget while the tapped widget's
+own reload is free. Taps require an unlocked phone, as Live Activity taps do.
 Hidden controls and invalid results change nothing. Agents read names under exactly one of
 `activity` or `widget` in the existing log and cursor. A separate widget log
 would make agents coordinate two cursors for the same kind of interaction.

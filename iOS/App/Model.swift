@@ -179,22 +179,26 @@ final class Model {
         case let .toggle(path, isOn): ["toggle": .string(path), "isOn": .bool(isOn)]
         }
         let activity: UUID?
+        let event: String
         switch action.target {
         case let .activity(id):
             activity = id
+            event = "activity.action"
         case let .widget(id):
             activity = nil
+            event = "widget.action"
             detail["widget"] = .string(id.uuidString)
         }
-        telemetry.record(activity == nil ? "widget.action" : "activity.action", activity: activity, detail)
+        telemetry.record(event, activity: activity, detail)
         do {
             try await gateway.act(action, secret: credentials.deviceSecret)
-            if activity == nil {
-                WidgetCenter.shared.reloadAllTimelines()
-            }
         } catch {
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
+        }
+        if case let .widget(id) = action.target, let configurations = try? await WidgetCenter.shared.currentConfigurations(),
+           WidgetSelection.places(in: configurations).count(where: { $0.widget == id }) > 1 {
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
