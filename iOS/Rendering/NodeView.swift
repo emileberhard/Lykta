@@ -283,6 +283,8 @@ private struct ConditionalNodeView: View {
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.isActivityFullscreen) private var isFullscreen
     @Environment(\.isDynamicIslandLimitedInWidth) private var isLimitedInWidth
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.showsWidgetContainerBackground) private var showsBackground
 
     var body: some View {
         let holds = switch condition {
@@ -291,6 +293,9 @@ private struct ConditionalNodeView: View {
         case .luminanceReduced: isLuminanceReduced
         case .fullscreen: isFullscreen
         case .limitedWidth: isLimitedInWidth
+        case .fullColor: renderingMode == .fullColor
+        case .accented: renderingMode == .accented
+        case .showsBackground: showsBackground
         }
         if holds {
             NodeView(then)

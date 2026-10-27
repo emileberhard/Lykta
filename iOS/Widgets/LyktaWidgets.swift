@@ -6,6 +6,7 @@ import WidgetKit
 struct LyktaWidgets: WidgetBundle {
     var body: some Widget {
         LyktaLiveActivity()
+        LyktaWidget()
     }
 }
 

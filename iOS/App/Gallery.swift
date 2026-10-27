@@ -14,6 +14,13 @@ struct Gallery: View {
                 ForEach(model.examples) { example in
                     GalleryCard(example: example, transition: transition)
                 }
+                Heading("Widgets")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: WidgetPreview.side), spacing: GalleryCard.spacing, alignment: .leading)],
+                          alignment: .leading, spacing: GalleryCard.spacing) {
+                    ForEach(model.widgetExamples) { example in
+                        WidgetCard(example: example, transition: transition)
+                    }
+                }
                 Heading("Notifications")
                 ForEach(model.notificationExamples) { example in
                     NotificationCard(example: example, transition: transition)
@@ -28,6 +35,12 @@ struct Gallery: View {
             if let example = model.examples.first(where: { $0.id == id }) {
                 ExampleView(example: example, model: model)
                     .navigationTransition(.zoom(sourceID: id, in: transition))
+            }
+        }
+        .navigationDestination(for: WidgetExample.Route.self) { route in
+            if let example = model.widgetExamples.first(where: { $0.route == route }) {
+                WidgetExampleView(example: example, model: model)
+                    .navigationTransition(.zoom(sourceID: route, in: transition))
             }
         }
         .navigationDestination(for: NotificationExample.Route.self) { route in
@@ -51,6 +64,23 @@ private struct Heading: View {
             .font(.title3.weight(.semibold))
             .padding(.top, GalleryCard.spacing)
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+private struct WidgetCard: View {
+    let example: WidgetExample
+    let transition: Namespace.ID
+
+    var body: some View {
+        NavigationLink(value: example.route) {
+            WidgetPreview(layout: example.layout)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .contentShape(WidgetPreview.shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(example.title)
+        .matchedTransitionSource(id: example.route, in: transition) { $0.clipShape(WidgetPreview.shape) }
     }
 }
 

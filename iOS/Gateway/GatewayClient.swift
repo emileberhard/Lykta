@@ -1,13 +1,26 @@
 import Foundation
 import LyktaCore
 
-struct AppError: LocalizedError {
+nonisolated struct AppError: LocalizedError {
     let status: Int?
     let errorDescription: String?
 }
 
-struct GatewayClient: Sendable {
+nonisolated enum WidgetAnswer: Sendable {
+    case snapshot(WidgetSnapshot)
+    case unchanged
+    case deleted
+    case signedOut
+}
+
+nonisolated struct GatewayClient: Sendable {
     let url: URL
+    let timeout: TimeInterval
+
+    static func configured(timeout: TimeInterval) -> GatewayClient? {
+        let host = Bundle.main.object(forInfoDictionaryKey: "LyktaGatewayHost") as? String ?? ""
+        return host.isEmpty ? nil : URL(string: "https://\(host)").map { GatewayClient(url: $0, timeout: timeout) }
+    }
 
     func challenge() async throws -> Data {
         try JSONDecoder().decode(Challenge.self, from: await send("GET", url.appending(path: "v1/devices/challenge"), token: nil, body: nil)).challenge
@@ -37,8 +50,39 @@ struct GatewayClient: Sendable {
         _ = try await send("DELETE", url.appending(path: "v1/device"), token: secret, body: nil)
     }
 
+    func createWidgetCredential(secret: String) async throws -> WidgetCredential {
+        try JSONDecoder().decode(WidgetCredential.self, from: await send("POST", url.appending(path: "v1/device/widgets/credential"), token: secret, body: nil))
+    }
+
+    func report(_ report: WidgetReport, widgetToken: String) async throws {
+        _ = try await send("PUT", url.appending(path: "v1/device/widgets"), token: widgetToken, body: report)
+    }
+
+    func widgets(widgetToken: String) async throws -> [WidgetSummary] {
+        struct List: Decodable { let widgets: [WidgetSummary] }
+        return try JSONDecoder().decode(List.self, from: await send("GET", url.appending(path: "v1/device/widgets"), token: widgetToken, body: nil)).widgets
+    }
+
+    func widget(_ id: UUID, family: WidgetLayout.Family, have revision: Int?, widgetToken: String) async throws -> WidgetAnswer {
+        let query = [URLQueryItem(name: "family", value: family.rawValue), URLQueryItem(name: "layout", value: Layout.version.description)]
+            + (revision.map { [URLQueryItem(name: "have", value: String($0))] } ?? [])
+        let target = url.appending(path: "v1/device/widgets/\(id.uuidString.lowercased())").appending(queryItems: query)
+        let (data, status) = try await exchange("GET", target, token: widgetToken, body: nil, type: "application/json")
+        switch status {
+        case 200: return .snapshot(try JSONDecoder().decode(WidgetSnapshot.self, from: data))
+        case 204: return .unchanged
+        case 401: return .signedOut
+        case 410: return .deleted
+        default: throw Self.failure(status, data)
+        }
+    }
+
     func putActivity(_ name: String, _ request: JSONValue, agentToken: String) async throws {
         _ = try await send("PUT", url.appending(path: "v1/activities/\(name)"), token: agentToken, body: request)
+    }
+
+    func putWidget(_ name: String, _ request: JSONValue, agentToken: String) async throws {
+        _ = try await send("PUT", url.appending(path: "v1/widgets/\(name)"), token: agentToken, body: request)
     }
 
     func upload(_ medium: Data, agentToken: String) async throws -> MediaID {
@@ -63,7 +107,13 @@ struct GatewayClient: Sendable {
     }
 
     private func send(_ method: String, _ target: URL, token: String?, body: Data?, type: String) async throws -> Data {
-        var request = URLRequest(url: target, timeoutInterval: 20)
+        let (data, status) = try await exchange(method, target, token: token, body: body, type: type)
+        guard (200..<300).contains(status) else { throw Self.failure(status, data) }
+        return data
+    }
+
+    private func exchange(_ method: String, _ target: URL, token: String?, body: Data?, type: String) async throws -> (Data, Int) {
+        var request = URLRequest(url: target, timeoutInterval: timeout)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {
@@ -71,12 +121,11 @@ struct GatewayClient: Sendable {
             request.httpBody = body
         }
         let (data, response) = try await URLSession.shared.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            struct Failure: Decodable { let message: String }
-            throw AppError(status: status,
-                           errorDescription: (try? JSONDecoder().decode(Failure.self, from: data).message) ?? "The gateway answered \(status).")
-        }
-        return data
+        return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    private static func failure(_ status: Int, _ data: Data) -> AppError {
+        struct Failure: Decodable { let message: String }
+        return AppError(status: status, errorDescription: (try? JSONDecoder().decode(Failure.self, from: data).message) ?? "The gateway answered \(status).")
     }
 }

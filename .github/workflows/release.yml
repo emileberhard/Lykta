@@ -60,7 +60,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       VERSION: ${{ github.ref_name }}
-      ENTITLED: PlugIns/LyktaNotifications.appex=Notifications .=Lykta
+      ENTITLED: PlugIns/LyktaNotifications.appex=Notifications PlugIns/LyktaWidgets.appex=Widgets .=Lykta
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

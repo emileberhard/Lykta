@@ -19,7 +19,9 @@
     { "kind": "folder", "path": "Notifications", "target-membership": [ "LyktaNotifications" ] },
     { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     { "kind": "folder", "path": "Avatars", "target-membership": [ "Lykta", "LyktaNotifications" ] },
+    { "kind": "folder", "path": "Gateway", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     { "path": "../Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },
+    { "path": "../Gateway/Sources/LyktaGateway/Skill/examples/widgets/steps-widget.json", "target-membership": [ "LyktaWidgets/resources" ] },
     {
       "kind": "group",
       "path": "Config",
@@ -30,6 +32,7 @@
         { "path": "Notifications.plist" },
         { "path": "Lykta.entitlements" },
         { "path": "Notifications.entitlements" },
+        { "path": "Widgets.entitlements" },
       ],
     }, {
       "kind": "group",
@@ -105,6 +108,7 @@
         },
       ],
       "build-settings": {
+        "CODE_SIGN_ENTITLEMENTS": "Config/Widgets.entitlements",
         "INFOPLIST_FILE": "Config/Widgets.plist",
         "LD_RUNPATH_SEARCH_PATHS": [
           "$(inherited)",

@@ -7,6 +7,7 @@ import Observation
 import SwiftUI
 import UIKit
 import UserNotifications
+import WidgetKit
 
 @Observable
 final class Model {
@@ -19,6 +20,7 @@ final class Model {
     private(set) var activities: [LiveActivity] = []
     private(set) var examples: [Example] = []
     private(set) var notificationExamples: [NotificationExample] = []
+    private(set) var widgetExamples: [WidgetExample] = []
     private(set) var areActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
     private(set) var notifications: NotificationSettings?
     private(set) var error: String?
@@ -41,9 +43,8 @@ final class Model {
         guard let environment = (info["LyktaPushEnvironment"] as? String).flatMap(PushEnvironment.init) else {
             preconditionFailure("Info.plist needs LyktaPushEnvironment")
         }
-        let host = info["LyktaGatewayHost"] as? String ?? ""
         self.environment = environment
-        gateway = host.isEmpty ? nil : URL(string: "https://\(host)").map(GatewayClient.init)
+        gateway = GatewayClient.configured(timeout: 20)
         phase = gateway == nil ? .unconfigured : .connecting
         registrationObservation = NotificationCenter.default.addObserver(for: NotificationRegistration.self) { [weak self] in
             self?.registered($0)
@@ -76,13 +77,16 @@ final class Model {
                 await refreshNotifications()
                 await sync()
             }
+            Task { await syncWidgets() }
         }
     }
 
     func loadExamples() async {
         async let notificationExamples = NotificationExample.bundled()
+        async let widgetExamples = WidgetExample.bundled(at: .now)
         examples = await Example.bundled(at: .now)
         self.notificationExamples = await notificationExamples
+        self.widgetExamples = await widgetExamples
     }
 
     func copySetup() async -> Bool {
@@ -124,6 +128,14 @@ final class Model {
         }
     }
 
+    func send(_ example: WidgetExample) async -> Bool {
+        guard let gateway, let credentials else { return false }
+        telemetry.record("app.widgetExample", ["example": .string(example.id)])
+        return await showingErrors("widgetExample") {
+            try await gateway.putWidget(WidgetExample.widgetName, example.request(at: .now), agentToken: credentials.agentToken)
+        }
+    }
+
     func send(_ example: NotificationExample) async -> Bool {
         guard let gateway, let credentials else { return false }
         telemetry.record("app.notificationExample", ["example": .string(example.id)])
@@ -158,7 +170,7 @@ final class Model {
     }
 
     func send(_ action: Action) async throws {
-        guard let gateway, let credentials = try credentials ?? Keychain.load() else {
+        guard let gateway, let credentials = try credentials ?? KeychainItem.credentials.load() else {
             throw AppError(status: nil, errorDescription: "Lykta is not connected to a gateway.")
         }
         let detail: [String: JSONValue] = switch action.input {
@@ -182,10 +194,12 @@ final class Model {
             do {
                 try await gateway.deleteDevice(secret: credentials.deviceSecret)
             } catch let error as AppError where error.status == 401 {}
-            try Keychain.delete()
+            try KeychainItem.widget.delete()
+            try KeychainItem.credentials.delete()
         }
         if deleted {
             self.credentials = nil
+            WidgetCenter.shared.reloadAllTimelines()
             telemetry.reset()
             for activity in Activity<LyktaActivity>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
@@ -202,11 +216,11 @@ final class Model {
         await refreshNotifications()
         let credentials: Credentials
         do {
-            if let saved = try Keychain.load() {
+            if let saved = try KeychainItem.credentials.load() {
                 credentials = saved
             } else {
                 credentials = try await gateway.register(Registration(environment: environment, appVersion: Self.appVersion, proof: proof(gateway)))
-                try Keychain.save(credentials)
+                try KeychainItem.credentials.save(credentials)
                 telemetry.record("app.registered")
             }
         } catch {
@@ -221,7 +235,36 @@ final class Model {
             group.addTask { await self.observePushTokens() }
             group.addTask { await self.observeActivities() }
             group.addTask { await self.observeAuthorization() }
+            group.addTask { await self.syncWidgets() }
         }
+    }
+
+    private func syncWidgets() async {
+        guard let gateway, let credentials else { return }
+        do {
+            let places = WidgetSelection.places(in: try await WidgetCenter.shared.currentConfigurations())
+            let report = WidgetReport(pushToken: WidgetPushToken.saved, layoutVersion: Layout.version, places: places)
+            guard let credential = try KeychainItem.widget.load() else {
+                try await gateway.report(report, widgetToken: createWidgetCredential(gateway, credentials).widgetToken)
+                return
+            }
+            do {
+                try await gateway.report(report, widgetToken: credential.widgetToken)
+            } catch let error as AppError where error.status == 401 {
+                try await gateway.report(report, widgetToken: createWidgetCredential(gateway, credentials).widgetToken)
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            telemetry.record("app.error", ["operation": .string("widgets"), "error": .string(error.localizedDescription)])
+        }
+    }
+
+    private func createWidgetCredential(_ gateway: GatewayClient, _ credentials: Credentials) async throws -> WidgetCredential {
+        let credential = try await gateway.createWidgetCredential(secret: credentials.deviceSecret)
+        try KeychainItem.widget.save(credential)
+        telemetry.record("app.widgetCredential")
+        WidgetCenter.shared.reloadAllTimelines()
+        return credential
     }
 
     private func proof(_ gateway: GatewayClient) async throws -> Registration.Proof {

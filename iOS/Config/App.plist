@@ -4,6 +4,8 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LyktaAppGroup</key>
+	<string>group.$(LYKTA_BUNDLE_ID)</string>
 	<key>LyktaGatewayHost</key>
 	<string>$(LYKTA_GATEWAY_HOST)</string>
 	<key>LyktaPushEnvironment</key>
