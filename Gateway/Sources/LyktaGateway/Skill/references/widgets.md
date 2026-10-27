@@ -66,8 +66,8 @@ early when the outcome is known, and prints the widget's status:
 
 `pending` is normal: it means your change waits for the next push window, not
 that something failed. Don't send it again. An `accepted` that never becomes
-`fetched` usually means the phone was offline and missed the push; its next
-scheduled reload, within hours, still loads the change.
+`fetched` usually means the phone was offline and missed the push; the widget
+asks iOS to load it again within a few hours, and iOS decides when.
 
 ## Design
 
@@ -85,8 +85,8 @@ the Home Screen, so the content must stay readable without it:
   in the `else`, use `primary` and `secondary`.
 - When `accented` holds, the system draws the widget in one tint and tells
   parts apart only by opacity, so the layout must not rely on color.
-- A widget is visible to anyone near the phone in StandBy and on a Mac that
-  shows iPhone widgets. Leave private details out.
+- A widget is visible to anyone near the phone in StandBy, on a Mac that
+  shows iPhone widgets and on Apple HomeView. Leave private details out.
 
 `link` opens a URL when the user taps the widget, and a `link` node opens its
 own URL for a part of it. Widgets take no buttons or toggles yet.
