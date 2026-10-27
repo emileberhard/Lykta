@@ -19,14 +19,20 @@ struct CaptureView: View {
         return TimeZone(secondsFromGMT: (offset + 86400 + 43200) % 86400 - 43200)!
     }()
 
+    private enum Screen {
+        case home(Model), connect(Model)
+    }
+
     let directory: URL
-    @State private var model: Model?
+    @State private var screen: Screen?
 
     var body: some View {
         ZStack {
             Color.black
-            if let model {
-                HomeView(model: model)
+            switch screen {
+            case let .home(model): HomeView(model: model)
+            case let .connect(model): Connect(model: model, next: {}, later: {})
+            case nil: EmptyView()
             }
         }
         .preferredColorScheme(.dark)
@@ -60,16 +66,19 @@ struct CaptureView: View {
             try render(Image(uiImage: avatar).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle()), named: "\(example.id).avatar")
         }
         try render(Lights(separation: 0).frame(height: 400), named: "lights")
-        model = .preview(.ready, activities: try Self.homeActivities.map { id in
+        screen = .home(.preview(.ready, activities: try Self.homeActivities.map { id in
             guard let example = examples.first(where: { $0.id == id }) else { throw CaptureError("no bundled example is called \(id)") }
             let attributes = LyktaActivity(id: UUID(), name: id)
             let started = Date.now.addingTimeInterval(-25 * 60)
             return LiveActivity(id: id, attributes: attributes, content: example.preview, state: .active,
                                 times: ActivityTimes(id: attributes.id, startedAt: started, updatedAt: .now.addingTimeInterval(-60), endsAt: started.addingTimeInterval(8 * 3600)),
                                 isEnding: false)
-        })
+        }))
         try await Task.sleep(for: .seconds(1))
         try snapshot(await keyWindow(), named: "home")
+        screen = .connect(.preview(.ready))
+        try await Task.sleep(for: .seconds(1))
+        try snapshot(await keyWindow(), named: "connect")
     }
 
     private func render(_ view: some View, named name: String) throws {
