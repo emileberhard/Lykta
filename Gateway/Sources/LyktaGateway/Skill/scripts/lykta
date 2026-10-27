@@ -37,24 +37,12 @@ load() {
 	url=${url%/}
 }
 
-nothing() {
-	:
-}
-
-json() {
-	printf '%s' "$body"
-}
-
-medium() {
-	cat -- "$file"
-}
-
 call() {
-	feed=$1 method=$2 target=$3
-	shift 3
+	method=$1 target=$2
+	shift 2
 	tries=1
 	while :; do
-		out=$($feed | curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -D "$head" -w '%{http_code}' "$@" "$url$target")
+		status=$(curl -sS --connect-timeout 10 --max-time 90 -X "$method" -H "Authorization: Bearer $token" -D "$head" -o "$response" -w '%{http_code}' "$@" "$url$target")
 		code=$?
 		[ "$code" -eq 7 ] && [ "$tries" -lt 5 ] || break
 		tries=$((tries + 1))
@@ -67,13 +55,16 @@ call() {
 	7) fail "could not connect to $url, so nothing was sent; it may be restarting, so retry in a few seconds" 3 ;;
 	*) fail "$method $target got no answer from $url (curl exit $code); $again" 3 ;;
 	esac
-	status=${out#"${out%???}"}
-	response=${out%???}
 	case $status in
 	2??) ;;
-	4??) printf 'lykta: %s %s was refused with HTTP %s:\n%s\n' "$method" "$target" "$status" "$response" >&2; exit 1 ;;
-	*) printf 'lykta: %s %s failed with HTTP %s; %s:\n%s\n' "$method" "$target" "$status" "$again" "$response" >&2; exit 3 ;;
+	4??) { printf 'lykta: %s %s was refused with HTTP %s:\n' "$method" "$target" "$status"; answer; } >&2; exit 1 ;;
+	*) { printf 'lykta: %s %s failed with HTTP %s; %s:\n' "$method" "$target" "$status" "$again"; answer; } >&2; exit 3 ;;
 	esac
+}
+
+answer() {
+	cat "$response"
+	printf '\n'
 }
 
 api() {
@@ -82,15 +73,22 @@ api() {
 }
 
 served() {
-	grep -i '^lykta-skill:' "$head" | sed -n 's/^[^:]*: *\([0-9a-f]\{64\}\).*/\1/p' | tail -n 1
+	sed -n '
+		/^[Ll][Yy][Kk][Tt][Aa]-[Ss][Kk][Ii][Ll][Ll]: *[0-9a-f]\{64\}/ {
+			s/^[^:]*: *\([0-9a-f]\{64\}\).*/\1/
+			h
+		}
+		$ { x; p; }
+	' "$head"
 }
 
 stamp() {
+	[ -f "$1" ] && [ ! -L "$1" ] || return 0
 	sed -n '$s/^.*lykta-skill \([0-9a-f]\{64\}\).*$/\1/p' "$1" 2>/dev/null
 }
 
 owned() {
-	[ -f "$1" ] && [ ! -L "$1" ] && [ -n "$(stamp "$1")" ]
+	[ -n "$(stamp "$1")" ]
 }
 
 place() {
@@ -120,12 +118,15 @@ renew() {
 refresh() {
 	want=$(served)
 	[ -n "$want" ] && saved || return 0
-	if owned "$cli" && [ "$(stamp "$cli")" != "$want" ]; then
+	current=$(stamp "$cli")
+	if [ -n "$current" ] && [ "$current" != "$want" ]; then
 		renew scripts/lykta "$cli" '# lykta-skill %s' 755 || return 0
 	fi
 	[ -r "$config/skills" ] || return 0
 	while IFS= read -r dir; do
-		[ ! -L "$dir" ] && owned "$dir/SKILL.md" && [ "$(stamp "$dir/SKILL.md")" != "$want" ] || continue
+		[ ! -L "$dir" ] || continue
+		current=$(stamp "$dir/SKILL.md")
+		[ -n "$current" ] && [ "$current" != "$want" ] || continue
 		renew SKILL.md "$dir/SKILL.md" '<!-- lykta-skill %s -->' 644 || return 0
 	done <"$config/skills"
 }
@@ -137,7 +138,7 @@ setup() {
 	http://* | https://*) ;;
 	*) fail "the URL must start with https:// or http://" 2 ;;
 	esac
-	call nothing GET /v1/activities
+	call GET /v1/activities
 	(umask 077 && mkdir -p "$config" && rm -f "$config/token" && printf '%s\n' "$url" >"$config/url" && printf '%s\n' "$token" >"$config/token") ||
 		fail "could not save the setup in $config" 2
 	mkdir -p "${cli%/*}" && place scripts/lykta "$cli" '# lykta-skill %s' 755 ||
@@ -152,15 +153,15 @@ setup() {
 		printf 'Could not send the phone a Live Activity named hello:\n%s\n\n' "$note"
 	fi
 	printf 'Install this skill so later sessions have it: run %s install DIR with the folder your agent reads personal skills from, such as ~/.claude/skills for Claude Code or ~/.agents/skills for Codex, OpenCode and OpenClaw. Ask the user if you are unsure where your skills live.\n\n' "$run"
-	call nothing GET /skill/SKILL.md
-	printf '%s\n' "$response"
+	call GET /skill/SKILL.md
+	answer
 }
 
 hello() {
-	call nothing GET /skill/scripts/hello.json
-	body=$response
-	call json PUT '/v1/activities/hello?wait=10' -H 'Content-Type: application/json' --data-binary @-
-	printf '%s' "$response"
+	call GET /skill/scripts/hello.json
+	mv "$response" "$work/body" || fail 'could not prepare the hello activity' 2
+	call PUT '/v1/activities/hello?wait=10' -H 'Content-Type: application/json' --data-binary "@$work/body"
+	cat "$response"
 }
 
 install_skill() {
@@ -184,28 +185,31 @@ docs() {
 	[ $# -gt 0 ] || fail "usage: lykta docs FILE..., such as lykta docs references/layout.md" 2
 	for name do
 		[ $# -eq 1 ] || printf '==> %s <==\n' "$name"
-		call nothing GET "/skill/${name#/}"
-		printf '%s\n' "$response"
+		call GET "/skill/${name#/}"
+		answer
 	done
 }
 
 put() {
 	[ $# -eq 1 ] || [ $# -eq 2 ] || fail "usage: lykta put PATH [FILE], with the JSON body in FILE or on stdin" 2
 	if [ $# -eq 1 ] && [ -t 0 ]; then fail "send the JSON body on stdin, such as with a heredoc, or name a file" 2; fi
-	body=$(cat -- "${2:--}") || fail "could not read ${2:-stdin}" 2
+	cat -- "${2:--}" >"$work/body" || fail "could not read ${2:-stdin}" 2
 	api "$1"
 	case $path in *\?*) path=$path'&wait=10' ;; *) path=$path'?wait=10' ;; esac
-	call json PUT "$path" -H 'Content-Type: application/json' --data-binary @-
-	printf '%s\n' "$response"
+	call PUT "$path" -H 'Content-Type: application/json' --data-binary "@$work/body"
+	answer
 }
 
 media() {
 	[ $# -eq 1 ] || fail "usage: lykta media FILE" 2
 	file=$1
 	[ -f "$file" ] && [ -r "$file" ] || fail "could not read $file" 2
-	call medium POST /v1/media -H 'Content-Type: application/octet-stream' --data-binary @-
-	id=$(printf '%s' "$response" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
-	[ -n "$id" ] || fail "the gateway answered without a media id: $response" 3
+	call POST /v1/media -H 'Content-Type: application/octet-stream' --data-binary "@$file"
+	id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$response")
+	if [ -z "$id" ]; then
+		{ printf 'lykta: the gateway answered without a media id: '; answer; } >&2
+		exit 3
+	fi
 	printf '%s\n' "$id"
 }
 
@@ -215,15 +219,23 @@ send() {
 	[ $# -eq 1 ] || fail "usage: lykta $name PATH" 2
 	load
 	api "$1"
-	call nothing "$method" "$path"
-	printf '%s\n' "$response"
+	call "$method" "$path"
+	answer
 }
 
-command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
-head=$(mktemp) || fail "could not create a temporary file" 2
-trap 'rm -f "$head"' EXIT
 verb=${1:-}
 [ $# -eq 0 ] || shift
+case $verb in
+help | -h | --help) usage; exit 0 ;;
+'') usage >&2; exit 2 ;;
+setup | install | docs | put | get | delete | media) ;;
+*) usage >&2; fail "unknown command $verb" 2 ;;
+esac
+command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
+work=$(mktemp -d) || fail "could not create a temporary file" 2
+trap 'rm -rf "$work"' EXIT
+head=$work/headers
+response=$work/response
 case $verb in
 setup) setup "$@" ;;
 install) load && install_skill "$@" ;;
@@ -232,8 +244,5 @@ put) load && put "$@" ;;
 get) send GET get "$@" ;;
 delete) send DELETE delete "$@" ;;
 media) load && media "$@" ;;
-help | -h | --help) usage ;;
-'') usage >&2; exit 2 ;;
-*) usage >&2; fail "unknown command $verb" 2 ;;
 esac
 refresh || :

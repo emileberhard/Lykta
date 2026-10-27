@@ -84,6 +84,9 @@ for shell in sh pwsh; do
 	expect '"activities":' 0 cli get activities
 	chmod 600 "$HOME/.config/lykta/skills"
 	expect '==> examples/printer.json <==' 0 cli docs references/layout.md examples/printer.json
+	cli docs references/layout.md >"$work/out"
+	{ cat "$skill/references/layout.md"; printf '\n'; } >"$work/expected"
+	cmp "$work/expected" "$work/out"
 	expect 'refused with HTTP 404' 1 cli docs examples/missing.json
 	expect '"delivery":"accepted"' 0 cli put activities/printer "$skill/examples/printer.json"
 	printf '{"now": {"eta": 60}}' | expect '"revision":2' 0 cli put /v1/activities/printer
@@ -98,6 +101,8 @@ for shell in sh pwsh; do
 	expect '"title":"CLI widget"' 0 cli get "widgets/widget-$shell"
 	expect '"widgets":' 0 cli get widgets
 	expect '' 0 cli delete "widgets/widget-$shell"
+	printf '\n' >"$work/expected"
+	cmp "$work/expected" "$work/out"
 	expect 'refused with HTTP 404' 1 cli get "widgets/widget-$shell"
 	expect '"state":"ending"' 0 cli delete 'activities/printer?dismissAfter=0'
 	(export LYKTA_URL=http://127.0.0.1:1 LYKTA_TOKEN=unused; expect 'could not connect' 3 cli get activities)
