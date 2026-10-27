@@ -1,13 +1,14 @@
 ---
 name: lykta
-description: Reach the user's iPhone through their Lykta gateway, with Live Activities on the Lock Screen and Dynamic Island and with notifications. Use for countdowns, progress, builds, deliveries, checklists and questions answered with a tap, and to tell the user the moment something happens, such as a finished job or a failure.
+description: Reach the user's iPhone through their Lykta gateway, with Live Activities on the Lock Screen and Dynamic Island, widgets on the Home Screen and notifications. Use for countdowns, progress, builds, deliveries, checklists and questions answered with a tap, for status that should always be on the Home Screen, and to tell the user the moment something happens, such as a finished job or a failure.
 ---
 
 # Lykta
 
-Lykta reaches the user's iPhone in two forms: a Live Activity, which stays on
+Lykta reaches the user's iPhone in three forms: a Live Activity, which stays on
 the Lock Screen and in the Dynamic Island and changes while something goes on,
-and a notification, which tells the user about one moment. You send JSON to
+a widget, which is always on the Home Screen, and a notification, which tells
+the user about one moment. You send JSON to
 the user's gateway; the gateway validates it and pushes it to the phone. The
 Lykta app does not need to be open.
 
@@ -54,6 +55,10 @@ Pick the form from what the user asked for:
 - **Live Activity** for "keep me posted": something ongoing worth a glance,
   such as a countdown, progress, a delivery or a checklist. The rest of this
   file covers activities.
+- **Widget** for "always show me": a value with no end that changes over
+  hours, such as today's steps, a balance or a server's health. Read the
+  [widgets reference](references/widgets.md), which builds on the layout
+  reference.
 - **An activity's `alert`** when an activity about the subject is already
   showing and a moment in it needs attention, such as a failed step of a
   deploy it tracks. Update the activity rather than sending a notification
@@ -237,10 +242,11 @@ system keeps it on the Lock Screen for up to four hours;
 sooner.
 
 iOS ends an activity eight hours after it starts and keeps it on the Lock
-Screen for up to four more, beside any new activity with its name. For status
-that outlasts that, such as a dashboard, send `endAfter`, `title` and `layout`
-with every update: the gateway then removes the activity before the limit, and
-your next PUT starts a fresh one.
+Screen for up to four more, beside any new activity with its name. Status with
+no end, such as a dashboard, belongs in a [widget](references/widgets.md). To
+keep it in an activity anyway, send `endAfter`, `title` and `layout` with every
+update: the gateway then removes the activity before the limit, and your next
+PUT starts a fresh one.
 
 The user can also end an activity in the Lykta app. It then ends as with
 `dismissAfter=0`, and the phone records `app.endActivity` in the events.

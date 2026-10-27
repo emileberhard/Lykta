@@ -38,6 +38,7 @@ struct API: Sendable {
         "SKILL.md": PackageResources.SKILL_md,
         "references/layout.md": PackageResources.layout_md,
         "references/notifications.md": PackageResources.notifications_md,
+        "references/widgets.md": PackageResources.widgets_md,
         "examples/agent-question.json": PackageResources.agent_question_json,
         "examples/ai-usage.json": PackageResources.ai_usage_json,
         "examples/app-review.json": PackageResources.app_review_json,
