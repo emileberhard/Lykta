@@ -8,23 +8,30 @@ struct ChartNodeView: View {
     var body: some View {
         let view = Chart {
             ForEach(chart.marks.indices, id: \.self) { series in
-                MarkContent(mark: chart.marks[series], series: series)
+                MarkContent(mark: chart.marks[series], series: series, baseline: chart.range.map { min(max(0, $0.lowerBound), $0.upperBound) } ?? 0)
             }
         }
         .chartLegend(.hidden)
         .chartXAxis(chart.axes ? .automatic : .hidden)
         .chartYAxis(chart.axes ? .automatic : .hidden)
-        if let range = chart.range {
-            view.chartYScale(domain: range)
-        } else {
-            view
+        switch (chart.range, slots) {
+        case let (range?, slots?): view.chartYScale(domain: range).chartXScale(domain: slots)
+        case let (range?, nil): view.chartYScale(domain: range)
+        case let (nil, slots?): view.chartXScale(domain: slots)
+        case (nil, nil): view
         }
+    }
+
+    private var slots: ClosedRange<Double>? {
+        guard chart.marks.contains(where: { $0.kind == .bar }), let count = chart.marks.map(\.values.count).max() else { return nil }
+        return -0.5...(Double(count) - 0.5)
     }
 }
 
 private struct MarkContent: ChartContent {
     let mark: Node.Content.Chart.Mark
     let series: Int
+    let baseline: Double
 
     var body: some ChartContent {
         ForEach(mark.values.indices, id: \.self) { index in
@@ -42,7 +49,7 @@ private struct MarkContent: ChartContent {
                     .foregroundStyle(style(at: index))
             case .bar:
                 RectangleMark(xStart: .value("Index", Double(index) - 0.35), xEnd: .value("Index", Double(index) + 0.35),
-                              yStart: .value("Value", 0.0), yEnd: y)
+                              yStart: .value("Value", baseline), yEnd: y)
                     .cornerRadius(mark.cornerRadius)
                     .foregroundStyle(style(at: index))
             case .point:
