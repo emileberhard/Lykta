@@ -474,15 +474,12 @@ every self-hosted image, or a download from GitHub, for no gain an agent
 notices: sh and curl start in about 8 ms, against hundreds of milliseconds of
 network and APNs and seconds of model time per call. The scripts stay readable
 before they run and come from the same commit as the gateway that serves them.
-The sh client captures curl's status separately from its response body and
-keeps bodies in a private temporary directory for the command's lifetime.
-Matching a response-sized shell pattern to extract the status took quadratic
-CPU time in both macOS bash 3.2 and dash. File output preserves the response's
-trailing newlines, and a staged PUT body can be read again after a refused
-connection. PowerShell streams media from its file and writes downloaded
-content and its ownership stamp separately, without converting the content
-into a PowerShell object array. Requests, responses and streams have explicit
-disposal.
+The sh client takes curl's status from `-w` and keeps each body in a file in
+its private temporary directory. Splitting the status off a response-sized
+shell variable took quadratic time in bash 3.2 and dash, over a minute of CPU
+for a 1 MB answer. The file also keeps the body's trailing newlines and lets a
+PUT body be sent again after a refused connection. PowerShell streams media
+and downloads rather than copying them into arrays.
 Setup saves the URL and token in `~/.config/lykta` (`XDG_CONFIG_HOME` when
 set), the token readable only by the user through mode 600, or on Windows an
 access list for the user alone, and `LYKTA_URL` and `LYKTA_TOKEN`
