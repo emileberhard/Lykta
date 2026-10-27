@@ -308,20 +308,6 @@ private struct ConditionalNodeView: View {
     }
 }
 
-private extension Node.Content {
-    var isSymbol: Bool {
-        if case .symbol = self { true } else { false }
-    }
-
-    var isSelfUpdating: Bool {
-        switch self {
-        case .timer: true
-        case let .date(_, style): style != .time && style != .date
-        default: false
-        }
-    }
-}
-
 extension EnvironmentValues {
     @Entry var isActivityStale = false
     @Entry var activityID: UUID?

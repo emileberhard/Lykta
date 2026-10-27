@@ -29,7 +29,7 @@ A widget's layout (see the [widgets reference](widgets.md)):
 | `systemLarge` | one family | The large widget, two medium ones stacked. |
 | `accessoryCircular` | one family | A small circle on the Lock Screen, below the clock. |
 | `accessoryRectangular` | one family | A wider Lock Screen slot below the clock, about three lines of text. |
-| `accessoryInline` | one family | One line above the clock on the Lock Screen. Takes only `text`, `concat`, `symbol`, `date` and `timer` nodes with text modifiers and `privacySensitive`, or an `if` choosing between them. |
+| `accessoryInline` | one family | One line above the clock on the Lock Screen. Takes only `text`, `concat`, `symbol`, `date` and `timer` nodes with text modifiers and `privacySensitive`, or an `if` choosing between them. A `concat` with both a symbol and a relative date or timer holds only the symbol and then that one part. |
 | `background` | no | A paint, such as a color or `{"gradient": [...]}`, or a node such as an `svg`, behind the content. The system removes it or replaces it with glass or a tint in some places, so the content must read without it. It takes no links. |
 | `link` | no | As for activities, for a tap anywhere outside a link. |
 
@@ -100,7 +100,7 @@ below, its optional fields and an optional `modifiers` array.
 | `{"progress": [start, end]}` | `style`, `countsDown` (false), `pausedAt`. Fills on the phone between the two dates. |
 | `{"gauge": value}` | `min` (0), `max` (1), `style`: `circular` (default), `circularCapacity`, `linear`, `linearCapacity`. Label nodes: `label`, `currentValueLabel`, `minimumValueLabel`, `maximumValueLabel`. |
 | `{"viewThatFits": [nodes]}` | `in`: `horizontal`, `vertical`. Shows the first node that fits, so put the largest first. |
-| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`, `fullColor` (drawn in its own colors), `accented` (the system tints it, as on a tinted Home Screen), `vibrant` (the Lock Screen draws it in shades of one color over the wallpaper), `showsBackground` (false where the system removes the background, such as StandBy), or `true`/`false` from data: `{"if": "{{failed}}", ...}`. |
+| `{"if": condition, "then": node}` | `else`. Conditions: `stale`, `dark`, `luminanceReduced` (Always-On display), `fullscreen` (the activity fills the screen), `limitedWidth`, `fullColor` (drawn in its own colors), `accented` (the system tints it, as on a tinted Home Screen), `vibrant` (drawn in shades of one color over the wallpaper, as on the Lock Screen), `showsBackground` (false where the system removes the background, such as StandBy), or `true`/`false` from data: `{"if": "{{failed}}", ...}`. |
 | `{"grid": [[nodes], [nodes]]}` | Rows of cells whose columns line up. `alignment`, `horizontalSpacing`, `verticalSpacing`. |
 | `{"chart": [marks]}` | `min` and `max` for the value axis, `axes` (false). See [charts](#charts). |
 | `{"link": url, "label": node}` | Opens the URL. See [links, buttons and toggles](#links-buttons-and-toggles). |
@@ -149,7 +149,7 @@ Each modifier is an object with one key: `{"padding": 8}`.
 | `symbolRenderingMode` | `monochrome`, `hierarchical`, `palette`, `multicolor` |
 | `imageScale` | `small`, `medium`, `large` |
 | `accessibilityLabel` | Text for VoiceOver |
-| `privacySensitive` | `true`: the system hides the node while the phone is locked, if the user chose to hide widget data then. Widgets only |
+| `privacySensitive` | `true`: the system hides the node when it hides private data, such as on the Lock Screen while the phone is locked. Widgets only |
 
 A paint is a color, a level (`primary`, `secondary`, `tertiary`,
 `quaternary`), `{"gradient": [2 to 8 colors], "direction": d}` with `d` one

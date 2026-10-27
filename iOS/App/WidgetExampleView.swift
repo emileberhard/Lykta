@@ -1,5 +1,6 @@
 import LyktaCore
 import SwiftUI
+import WidgetKit
 
 struct WidgetExampleView: View {
     let example: WidgetExample
@@ -57,6 +58,7 @@ struct WidgetPreview: View {
                 .padding(12)
                 .background(LinearGradient(colors: [.indigo, .black], startPoint: .top, endPoint: .bottom), in: Self.shape)
                 .environment(\.colorScheme, .dark)
+                .environment(\.widgetRenderingMode, .vibrant)
                 .dynamicTypeSize(LockScreenCard.textSizes)
         } else {
             WidgetView(layout: layout, family: family, isStale: false)

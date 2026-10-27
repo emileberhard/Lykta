@@ -6,9 +6,11 @@ struct WidgetLayoutTests {
     @Test(arguments: [
         (##"{"background": "#112233"}"##, "a widget needs at least one of systemSmall, systemMedium, systemLarge, accessoryCircular, accessoryRectangular, accessoryInline"),
         (#"{"systemSmall": "a", "lockScreen": "b"}"#, "lockScreen: unknown key; expected accessoryCircular, accessoryInline, accessoryRectangular, background, link, systemLarge, systemMedium, systemSmall"),
-        (#"{"accessoryInline": {"vstack": ["a", "b"]}}"#, "accessoryInline: takes only text, concat, symbol, date and timer nodes with text modifiers and privacySensitive, or an if choosing between them"),
+        (#"{"accessoryInline": {"vstack": ["a", "b"]}}"#, "accessoryInline: takes only text, concat, symbol, date and timer nodes with text modifiers and privacySensitive, or an if choosing between them; a concat with both a symbol and a relative date or timer holds only the symbol and then that one part"),
         (#"{"accessoryInline": {"if": "vibrant", "then": "a", "else": {"gauge": 0.5}}}"#, "accessoryInline: takes only text"),
         (#"{"accessoryInline": {"text": "a", "modifiers": [{"padding": 4}]}}"#, "accessoryInline: takes only text"),
+        (#"{"accessoryInline": {"concat": [{"symbol": "clock"}, "Next ", {"date": 1793000000, "style": "relative"}]}}"#,
+         "accessoryInline: takes only text"),
         (#"{"systemSmall": {"zstack": [{"accessoryBackground": true}, "a"]}}"#, "systemSmall.zstack[0].accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular"),
         (#"{"accessoryCircular": {"accessoryBackground": false}}"#, "accessoryCircular.accessoryBackground: expected true"),
         (#"{"accessoryCircular": {"link": "https://example.com", "label": "a"}}"#, "accessoryCircular.link: links work only in systemSmall, systemMedium, systemLarge and accessoryRectangular"),
@@ -27,6 +29,11 @@ struct WidgetLayoutTests {
         let widget = try decode(#"{"systemSmall": {"link": "https://example.com/steps", "label": "Steps"}, "link": "shortcuts://run"}"#)
         #expect(widget.presentations.keys.sorted { $0.rawValue < $1.rawValue } == [.systemSmall])
         #expect(widget.link == URL(string: "shortcuts://run"))
+    }
+
+    @Test func takesASymbolBeforeOneRelativeDateOnOneLine() throws {
+        let widget = try decode(#"{"accessoryInline": {"concat": [{"symbol": "clock"}, {"date": 1793000000, "style": "relative"}]}}"#)
+        #expect(widget.presentations[.accessoryInline] != nil)
     }
 
     @Test func drawsEveryFamilyWithItsOwnNode() throws {

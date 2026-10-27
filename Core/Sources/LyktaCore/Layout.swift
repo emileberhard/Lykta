@@ -174,7 +174,10 @@ public struct Node: Decodable, Sendable {
             }
         }
         switch content {
-        case .text, .symbol, .date, .timer, .concat: return lineModifiers.allSatisfy(\.isTextModifier)
+        case .text, .symbol, .date, .timer: return lineModifiers.allSatisfy(\.isTextModifier)
+        case let .concat(parts):
+            let isOneText = !(parts.contains(where: \.content.isSymbol) && parts.contains(where: \.content.isSelfUpdating))
+            return lineModifiers.allSatisfy(\.isTextModifier) && (isOneText || parts.count == 2 && parts[0].content.isSymbol)
         case let .conditional(_, then, otherwise): return lineModifiers.isEmpty && then.fitsOneLine && otherwise?.fitsOneLine != false
         default: return false
         }
@@ -207,6 +210,18 @@ public struct Node: Decodable, Sendable {
 
 extension Node {
     public indirect enum Content: Sendable {
+        public var isSymbol: Bool {
+            if case .symbol = self { true } else { false }
+        }
+
+        public var isSelfUpdating: Bool {
+            switch self {
+            case .timer: true
+            case let .date(_, style): style != .time && style != .date
+            default: false
+            }
+        }
+
         case text(String)
         case symbol(String, value: Double?)
         case timer(ClosedRange<Date>, countsDown: Bool, pausedAt: Date?, showsHours: Bool)

@@ -22,7 +22,7 @@ name, and updates it otherwise. Names follow the rules for activities.
 | `layout` | Required to create: at least one family, such as `systemSmall`, and optionally `background` and `link`. |
 | `data` | Values for `{{path}}` placeholders. Replaces the previous data. |
 | `now` | `{"path": seconds}` sets each path to the gateway's time plus the seconds, as for activities. |
-| `staleAfter` | Seconds after a change until the widget draws as out of date, with `{"if": "stale"}` true. |
+| `staleAfter` | Seconds after a change until the widget draws as out of date: Home Screen sizes add a clock badge, and `{"if": "stale"}` holds, which is the only sign in the Lock Screen sizes. |
 | `ifRevision` | Apply the PUT only if the widget is still at this `revision`; otherwise fail with `conflict`. |
 
 A widget has no `alert`, `endAfter` or `relevance`; it stays until you delete
@@ -98,15 +98,19 @@ user tints the Home Screen, so the content must stay readable without it:
 
 The Lock Screen families are always `vibrant`: the system ignores their colors
 and draws them in shades of one color over the wallpaper, without a
-background. Use weight, size and opacity to separate parts. A gauge or
+background. Home Screen sizes can be `vibrant` too, such as on the iPad Lock
+Screen. Use weight, size and opacity to separate parts. A gauge or
 `{"accessoryBackground": true}`, first in a `zstack`, gives a circular or
-rectangular widget the system's own backdrop. `accessoryInline` shows only the
-first symbol and text of its line, so put the value first.
+rectangular widget the system's own backdrop. `accessoryInline` draws one line
+of text after an optional symbol, so put the value first. A Lock Screen widget
+shows no badge when its content goes out of date, so use `{"if": "stale"}` in
+those sizes when an old value would mislead.
 
 Widgets show on the Lock Screen, in StandBy, on a Mac that shows iPhone
-widgets and on Apple HomeView, where anyone nearby can read them. Leave private details out, or mark
-the nodes that hold them `{"privacySensitive": true}`, which hides them while
-the phone is locked if the user chose to hide widget data then.
+widgets and on Apple HomeView, where anyone nearby can read them. Leave
+private details out, or mark the nodes that hold them
+`{"privacySensitive": true}`, which the system hides when it hides private
+data, such as on the Lock Screen while the phone is locked.
 
 `link` opens a URL when the user taps the widget, and a `link` node opens its
 own URL for a part of it, in every Home Screen family and
