@@ -146,7 +146,6 @@ actor Store {
             let isNewInstall = previous != nil && previous != report.bundleInstance
             var abandoned: [JSONValue] = []
             if isNewInstall {
-                try db.run("UPDATE widget_phones SET report_sequence = 0 WHERE device_id = ?", device.id)
                 for row in try db.query("SELECT id FROM activities WHERE device_id = ? AND phase != 'ended'", device.id) {
                     let id = try row.text("id", as: UUID.init(uuidString:))
                     guard !reported.contains(id) else { continue }

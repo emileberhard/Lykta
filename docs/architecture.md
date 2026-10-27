@@ -400,9 +400,10 @@ follow the order of what was observed, and a counter that cannot be read fails
 the report instead of starting again below the gateway's fence. The gateway
 ignores a report no newer than the last it applied, so a delayed one cannot
 restore an old token or old places. The fence never expires, because only the
-phone orders its reports, but a new install or update of the app, which its
-device report shows, resets it: a reinstall erases the counter, and a clock
-that once ran ahead would otherwise lock the new install's reports out.
+phone orders its reports. A reinstall erases the counter, so a phone whose
+clock once ran ahead has its reports ignored until real time passes the last
+one the gateway applied; resetting the fence on a new install instead would let
+a delayed report from before an update restore stale places.
 
 **Agents send with a script the gateway serves.** The skill's `scripts`
 folder holds `lykta`, for POSIX sh with curl, and `lykta.ps1`, its twin for

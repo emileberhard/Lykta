@@ -146,23 +146,6 @@ struct WidgetTests {
         #expect(try await status().placed == [.systemSmall])
     }
 
-    @Test func aNewInstallAcceptsReportsBelowTheLastInstallsSequence() async throws {
-        let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
-        func install(_ instance: UUID) async throws {
-            let report = DeviceReport(pushToStartToken: nil, appVersion: Layout.version.description, layoutVersion: Layout.version, bundleInstance: instance,
-                                      activities: [], notifications: NotificationSettings(authorization: .denied, alertStyle: .banner, registration: .pending))
-            let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(report))
-            #expect(await send("PUT", "/v1/device", body, token: credentials.deviceSecret).status == 200)
-        }
-        try await install(UUID())
-        let ahead = WidgetReport(sequence: 1 << 53, pushToken: nil, layoutVersion: Layout.version,
-                                 places: [WidgetPlace(widget: created.id, family: .systemSmall)])
-        #expect(await send("PUT", "/v1/device/widgets", try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(ahead)), token: token).status == 204)
-        try await install(UUID())
-        try await report([])
-        #expect(try await status().placed.isEmpty)
-    }
-
     @Test func onlyChangesToPlacedWidgetsPush() async throws {
         try await report([])
         let created: Status = try await send("PUT", "/v1/widgets/steps", Self.request).decoded()
