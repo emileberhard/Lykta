@@ -29,7 +29,7 @@ first `scripts/lykta setup URL TOKEN` with the user's gateway and token.
 
 | Command | Does |
 | --- | --- |
-| `lykta put PATH [FILE]` | Sends the JSON in FILE, or on stdin, to `PUT /v1/PATH` and prints the result once Apple has answered |
+| `lykta put PATH [FILE]` | Sends the JSON in FILE, or on stdin, to `PUT /v1/PATH` and prints the result, once Apple has answered when it sends a push |
 | `lykta get PATH` | `GET /v1/PATH` |
 | `lykta delete PATH` | `DELETE /v1/PATH` |
 | `lykta media FILE` | Uploads an image or sound and prints its id |
@@ -56,14 +56,10 @@ in each PUT's query, and media as the body of `POST /v1/media`.
 Save a reusable node or template with `lykta put parts/NAME FILE`, list this
 phone's library with `lykta get parts`, and remove one with
 `lykta delete parts/NAME`. Use `{"use":"NAME"}` in any activity or widget node
-position, even without root `parts`. Body parts shadow saved parts.
-Placeholders and `each` use the activity's or widget's data. Each phone can
-save 64 parts; delete one before adding another at the limit.
-
-A saved part snapshots any other saved parts it uses when saved. An activity
-or widget snapshots its parts when its layout is sent. Replacing or deleting a
-saved part changes neither snapshot; send the layout again to refresh it.
-Saving checks shape and structural budgets; full validation happens at use.
+position, even without root `parts`. Saving copies the parts it uses, and so
+does sending a layout: replacing or deleting a saved part changes neither copy
+until you send it again. The
+[layout reference](references/layout.md#parts) has the details.
 
 ## Choose the form
 

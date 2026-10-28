@@ -53,25 +53,21 @@ placeholders and `each` are filled: a part reads data and `each` variables at
 its use site exactly as copied JSON would, with no parameters or separate scope.
 The gateway stores the expanded template, so parts cost no phone compatibility.
 
-Saved parts belong to one phone. `lykta put parts/NAME FILE` saves a node or
-template directly (object or text shorthand, without root `parts`).
-`lykta get parts` returns `{"parts":{"NAME":node}}` sorted by name;
-`lykta delete parts/NAME` removes one. Names use 1 to 64 lowercase letters,
-digits, `-`, `_` or `.`. PUT returns 201 (new) or 200 (replacement) with
-`{"name":"NAME","node":node}`; DELETE returns 204 or 404 `not_found`.
-The clients' `wait` query is ignored. A 65th name gets `too_many_parts`;
-replacement is allowed at the limit.
+Saved parts belong to one phone, up to 64 names. `lykta put parts/NAME FILE`
+saves a node or template without root `parts` and answers 201 or, replacing
+one, 200 with `{"name","node"}`; a 65th name gets `too_many_parts`.
+`lykta get parts` returns `{"parts":{"NAME":node}}`, and
+`lykta delete parts/NAME` removes one.
 
-`use` resolves body parts first, then saved parts, even without root `parts`.
-Unused saved parts are allowed. Unknown names list both sets; errors name the
-saved part and its use site. Saving checks shape, bytes, nodes, depth and
-modifiers only. Placeholders, `each` and widget-only nodes are allowed; full
-validation happens at use, for that presentation.
+`use` resolves body parts first, then saved parts, and an unknown name's error
+lists both. Saving checks only that the part is a node within the byte limit,
+so placeholders, `each` and widget-only nodes are fine. The rest is checked
+where the part is used, with errors such as
+`parts/icon.value: expected a value within 0...1 (used at lockScreen)`.
 
-Both boundaries take snapshots: saving expands other saved references, and
-activity and widget layouts store expanded templates. Replacing or deleting a
-part changes neither snapshot. Data updates and taps refill without library
-reads. Resend the outer part or layout to refresh it.
+Saving copies the saved parts a part uses, and a layout stores its parts
+copied, so replacing or deleting a saved part changes neither until you send
+it again.
 
 ## Data
 

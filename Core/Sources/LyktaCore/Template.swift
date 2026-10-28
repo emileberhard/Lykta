@@ -271,7 +271,7 @@ extension PreparedParts {
         let filled: JSONValue
         do { filled = try template.fill(value, at: "", output: "", in: [:]) }
         catch { throw parts.locating(error) }
-        if parts.hasDefinitions {
+        if parts.usesParts {
             do { try surface.validate(filled.json) }
             catch { throw parts.locating(template.locating(error)) }
         }

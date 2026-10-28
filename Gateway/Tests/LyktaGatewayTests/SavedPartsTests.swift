@@ -57,13 +57,35 @@ struct SavedPartsTests {
         #expect(try await drawnText() == "Data!")
     }
 
-    @Test(arguments: [JSONValue.object(["symbol": "wifi", "value": .number(2)]), JSONValue.object(["text": "{{missing}}"] )])
-    func errorsNameTheSavedPartAndItsUseSite(_ node: JSONValue) async throws {
+    @Test(arguments: [
+        (JSONValue.object(["symbol": "wifi", "value": .number(2)]), "parts/bad.name.value: expected a value within 0...1 (used at lockScreen)"),
+        (JSONValue.object(["text": "{{missing}}"]), #"parts/bad.name.text: data has no value at "missing" (used at lockScreen)"#),
+        (JSONValue.object(["vstack": .array(["ok", ["if": .bool(true), "then": .bool(false)]])]), "parts/bad.name.vstack[1].then: Expected to decode Dictionary<String, Any> but found bool instead. (used at lockScreen.vstack[1].then)"),
+        (JSONValue.object(["vstack": .array([["text": "x", "modifiers": ["bold": .bool(true)]]])]), "parts/bad.name.vstack[0].modifiers: Expected to decode Array<Any> but found a dictionary instead. (used at lockScreen.vstack[0])"),
+        (JSONValue.object(["accessoryBackground": .bool(true)]), "parts/bad.name.accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular (used at lockScreen)"),
+    ])
+    func savesAnyNodeAndNamesTheSavedPartAndItsUseSiteWhenItFails(_ node: JSONValue, _ message: String) async throws {
         #expect(await send("PUT", "/v1/parts/bad.name", node).status == 201)
         let refused: Refusal = try await send("PUT", "/v1/activities/example", request("activities", node: ["use": "bad.name"])).decoded()
-        #expect(refused.error == "invalid_layout")
-        #expect(refused.message.hasPrefix("parts.bad.name."))
-        #expect(refused.message.hasSuffix(" (saved part, used at lockScreen)"))
+        #expect(refused == Refusal(error: "invalid_layout", message: message))
+    }
+
+    @Test func aSavedModifierTemplateFillsFromData() async throws {
+        #expect(await send("PUT", "/v1/parts/styled", ["text": "Hello", "modifiers": "{{style}}"]).status == 201)
+        var body = request("activities", node: ["use": "styled"])
+        body = try body.setting("data.style", to: .array([["bold": .bool(true)]]))
+        #expect(await send("PUT", "/v1/activities/example", body).status == 200)
+        try await deliver()
+        #expect(try await drawnText() == "Hello")
+    }
+
+    @Test func aBodyPartCanUseASavedPart() async throws {
+        _ = await send("PUT", "/v1/parts/word", "Saved")
+        var body = request("activities", node: ["use": "label"])
+        body = try body.setting("layout.parts.label", to: ["use": "word"])
+        #expect(await send("PUT", "/v1/activities/example", body).status == 200)
+        try await deliver()
+        #expect(try await drawnText() == "Saved")
     }
 
     @Test func bodyPartsShadowSavedPartsAndOnlyBodyPartsMustBeUsed() async throws {
@@ -76,13 +98,21 @@ struct SavedPartsTests {
         #expect(try await drawnText() == "Body")
     }
 
-    @Test func anUnknownNameListsBodyAndSavedNames() async throws {
-        _ = await send("PUT", "/v1/parts/z", "Z")
-        _ = await send("PUT", "/v1/parts/a", "A")
+    @Test(arguments: [
+        (false, false, #"lockScreen: unknown part "missing"; no parts are saved"#),
+        (true, false, #"lockScreen: unknown part "missing"; defined parts: header; no parts are saved"#),
+        (false, true, #"lockScreen: unknown part "missing"; saved parts: a, z"#),
+        (true, true, #"lockScreen: unknown part "missing"; defined parts: header; saved parts: a, z"#),
+    ])
+    func anUnknownNameListsTheNamesThatExist(_ defined: Bool, _ saved: Bool, _ message: String) async throws {
+        if saved {
+            _ = await send("PUT", "/v1/parts/z", "Z")
+            _ = await send("PUT", "/v1/parts/a", "A")
+        }
         var body = request("activities", node: ["use": "missing"])
-        body = try body.setting("layout.parts.header", to: "Header")
+        if defined { body = try body.setting("layout.parts.header", to: "Header") }
         let refused: Refusal = try await send("PUT", "/v1/activities/example", body).decoded()
-        #expect(refused.message == #"lockScreen: unknown part "missing"; defined parts: header; saved parts: a, z"#)
+        #expect(refused == Refusal(error: "invalid_layout", message: message))
     }
 
     @Test(arguments: ["replace", "delete"])
@@ -104,6 +134,8 @@ struct SavedPartsTests {
         #expect(try outer.decoded() as JSONValue == ["name": "outer", "node": ["text": "Original {{word}}"]])
         _ = await send("PUT", "/v1/parts/inner", "Changed")
         _ = await send("DELETE", "/v1/parts/inner")
+        let refused: Refusal = try await send("PUT", "/v1/parts/again", ["use": "inner"]).decoded()
+        #expect(refused == Refusal(error: "invalid_layout", message: #"part: unknown part "inner"; saved parts: outer"#))
         #expect(await send("PUT", "/v1/activities/example", request("activities", node: ["use": "outer"])).status == 200)
         try await deliver()
         #expect(try await drawnText() == "Original Data")
@@ -136,38 +168,30 @@ struct SavedPartsTests {
         #expect(try await send("GET", "/v1/parts").decoded() as JSONValue == ["parts": ["private": "Private"]])
     }
 
-    @Test func aWidgetOnlyNodeIsValidatedAtItsPresentation() async throws {
+    @Test func aWidgetOnlyNodeIsValidAtAWidgetPresentation() async throws {
         #expect(await send("PUT", "/v1/parts/background", ["accessoryBackground": .bool(true)]).status == 201)
         #expect(await send("PUT", "/v1/widgets/example", ["title": "Widget", "layout": ["accessoryCircular": ["use": "background"]]]).status == 201)
-        let refused: Refusal = try await send("PUT", "/v1/activities/example", request("activities", node: ["use": "background"])).decoded()
-        #expect(refused.error == "invalid_layout")
-        #expect(refused.message.contains("saved part, used at lockScreen"))
     }
 
     @Test(arguments: [
-        (JSONValue.bool(true), "expected a node"),
-        (JSONValue.null, "expected a node"),
-        (JSONValue.array([]), "expected a node"),
-        (JSONValue.object(["parts": .object([:]), "text": .string("No")]), "cannot define parts"),
-        (JSONValue.string(String(repeating: "x", count: Layout.maximumBytes)), "bytes"),
-        (JSONValue.object(["hstack": .array(Array(repeating: .string("x"), count: Layout.maximumNodes))]), "256 nodes"),
-        (JSONValue.object(["text": .string("x"), "modifiers": .array(Array(repeating: .object(["bold": .bool(true)]), count: Layout.maximumModifiers + 1))]), "512 modifiers"),
+        (JSONValue.bool(true), "part: expected a node object or text shorthand"),
+        (JSONValue.null, "part: expected a node object or text shorthand"),
+        (JSONValue.array([]), "part: expected a node object or text shorthand"),
+        (JSONValue.object(["parts": .object([:]), "text": .string("No")]), "parts: a saved part cannot define parts; save each part separately"),
+        (JSONValue.string(String(repeating: "x", count: Layout.maximumBytes)), "part is \(Layout.maximumBytes + 2) bytes; the limit is \(Layout.maximumBytes)"),
     ])
-    func savingEnforcesShapeAndStructuralBudgets(_ node: JSONValue, _ message: String) async throws {
-        let response = await send("PUT", "/v1/parts/bad", node)
-        #expect(response.status == 400)
-        let refused: Refusal = try response.decoded()
-        #expect(refused.error == "invalid_layout")
-        #expect(refused.message.contains(message))
+    func savingRefusesWhatIsNoNodeOrTooLarge(_ node: JSONValue, _ message: String) async throws {
+        let refused: Refusal = try await send("PUT", "/v1/parts/bad", node).decoded()
+        #expect(refused == Refusal(error: "invalid_layout", message: message))
         #expect(try await send("GET", "/v1/parts").decoded() as JSONValue == ["parts": .object([:])])
     }
 
-    @Test func savingEnforcesTheNodeDepthBudget() async throws {
-        var node: JSONValue = "Leaf"
-        for _ in 0..<Layout.maximumDepth { node = ["vstack": .array([node])] }
-        let response = await send("PUT", "/v1/parts/deep", node)
-        #expect(response.status == 400)
-        #expect(try response.decoded() as Refusal == Refusal(error: "invalid_layout", message: "nodes nest deeper than 16 levels"))
+    @Test(arguments: [Layout.maximumNodes - 4, Layout.maximumNodes - 3])
+    func aSavedPartCountsTowardTheExpansionBudgetAtItsUse(_ children: Int) async throws {
+        #expect(await send("PUT", "/v1/parts/wide", ["hstack": .array(Array(repeating: "x", count: children))]).status == 201)
+        let response = await send("PUT", "/v1/activities/example", request("activities", node: ["use": "wide"]))
+        if children == Layout.maximumNodes - 4 { #expect(response.status == 200) }
+        else { #expect(try response.decoded() as Refusal == Refusal(error: "invalid_layout", message: "parts expand to more than 256 nodes")) }
     }
 
     @Test func templatesWithoutPartsKeepTheirFilledNodeBudget() async throws {

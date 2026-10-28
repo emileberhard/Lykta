@@ -219,9 +219,7 @@ actor Store {
             if !exists, try count(db.query("SELECT count(*) AS n FROM parts WHERE device_id = ?", device.id)) >= 64 {
                 throw APIError(.tooManyParts, "Delete a saved part before saving another; the limit is 64.")
             }
-            let expanded: JSONValue
-            do { expanded = try node.expandingPart(saved: savedParts(node.savedPartReferences(), on: device)) }
-            catch let error as LayoutError { throw try partError(error, on: device) }
+            let expanded = try expanding(node, on: device) { saved throws(LayoutError) in try node.expandingPart(saved: saved) }
             try db.run("""
                 INSERT INTO parts (device_id, name, node) VALUES (?, ?, ?)
                   ON CONFLICT(device_id, name) DO UPDATE SET node = excluded.node
@@ -243,38 +241,29 @@ actor Store {
 
     func deletePart(_ device: Device, name: Name) throws {
         try db.transaction {
-            guard let row = try db.query("SELECT node FROM parts WHERE device_id = ? AND name = ?", device.id, name).first else {
+            guard let row = try db.query("DELETE FROM parts WHERE device_id = ? AND name = ? RETURNING node", device.id, name).first else {
                 throw APIError(.notFound, "No saved part has the name \(name).")
             }
             let node = try decode(row.string("node"))
-            try db.run("DELETE FROM parts WHERE device_id = ? AND name = ?", device.id, name)
             try record("part.delete", device: device.id, activity: nil,
                        ["name": .string(name.rawValue), "fingerprint": .string(fingerprint(node.json))])
         }
     }
 
-    private func savedParts(_ names: Set<Name>, on device: Device) throws -> SavedParts {
-        guard !names.isEmpty else { return [:] }
-        let requested = JSONValue.array(names.map { .string($0.rawValue) })
+    private func expanding<Expanded>(_ value: JSONValue, on device: Device, _ expand: (SavedParts) throws(LayoutError) -> Expanded) throws -> Expanded {
+        let references = value.savedPartReferences()
         var saved: SavedParts = [:]
-        for row in try db.query("SELECT name, node FROM parts WHERE device_id = ? AND name IN (SELECT value FROM json_each(?))", device.id, Self.text(requested)) {
-            saved[try row.text("name", as: Name.init(rawValue:))] = try decode(row.string("node"))
+        if !references.isEmpty {
+            let requested = JSONValue.array(references.map { .string($0.rawValue) })
+            for row in try db.query("SELECT name, node FROM parts WHERE device_id = ? AND name IN (SELECT value FROM json_each(?))", device.id, Self.text(requested)) {
+                saved[try row.text("name", as: Name.init(rawValue:))] = try decode(row.string("node"))
+            }
         }
-        return saved
-    }
-
-    private func prepare(_ layout: JSONValue, for surface: Surface, on device: Device) throws -> PreparedParts {
-        do {
-            return try PreparedParts(layout, saved: savedParts(layout.savedPartReferences(for: surface), on: device), for: surface)
-        } catch let error as LayoutError { throw try partError(error, on: device) }
-    }
-
-    private func partError(_ error: LayoutError, on device: Device) throws -> APIError {
-        guard error.undefinedPart != nil else { return APIError(.invalidLayout, error.description) }
-        let names = try db.query("SELECT name FROM parts WHERE device_id = ? ORDER BY name", device.id)
-            .map { try $0.text("name", as: Name.init(rawValue:)).rawValue }
-        let suffix = names.isEmpty ? "" : "; saved parts: " + names.joined(separator: ", ")
-        return APIError(.invalidLayout, error.description + suffix)
+        do { return try expand(saved) } catch {
+            guard !references.isSubset(of: saved.keys) else { throw APIError(.invalidLayout, error.description) }
+            let names = try db.query("SELECT name FROM parts WHERE device_id = ? ORDER BY name", device.id).map { try $0.string("name") }
+            throw APIError(.invalidLayout, error.description + (names.isEmpty ? "; no parts are saved" : "; saved parts: " + names.joined(separator: ", ")))
+        }
     }
 
     func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
@@ -291,7 +280,7 @@ actor Store {
                 do { data = try data.setting(path, to: .number(Double(now) + offset)) }
                 catch { throw APIError(.invalidRequest, "now: \(error)") }
             }
-            let prepared = try prepare(layout, for: .activity, on: device)
+            let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
             let expandedLayout = prepared.value
             let state: LyktaActivity.ContentState
             let filled: JSONValue
@@ -1163,7 +1152,7 @@ extension Store {
                 do { data = try data.setting(path, to: .number(Double(now) + offset)) }
                 catch { throw APIError(.invalidRequest, "$.now: \(error)") }
             }
-            let prepared = try prepare(template, for: .widget, on: device)
+            let prepared = try expanding(template, on: device) { saved throws(LayoutError) in try PreparedParts(template, saved: saved, for: .widget) }
             let (layout, content, requirement) = try Self.admitWidget(prepared, data: data, on: device)
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
