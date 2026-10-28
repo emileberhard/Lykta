@@ -357,8 +357,9 @@ opaque slides, as App Store Connect requires. Look at the slides after a change
 to the app's UI or the examples, because the release uploads them. The same
 run redraws the README's images: `cover.jpg`, which is also the repository's
 social preview, uploaded by hand under Settings because GitHub has no API for
-it, and `examples.jpg`, every bundled example's Lock Screen card. Commit them
-with the change that altered them, and upload the cover again when it changes.
+it, and `examples.jpg`, a banner for every bundled notification and a Lock
+Screen card for every bundled activity. Commit them with the change that
+altered them, and upload the cover again when it changes.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own

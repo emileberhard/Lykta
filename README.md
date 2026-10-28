@@ -3,7 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://testflight.apple.com/join/kDAjDvfD"><img alt="Join the TestFlight beta" src="https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://testflight.apple.com/join/kDAjDvfD"><img alt="Join the TestFlight beta" src="https://img.shields.io/badge/TestFlight-Join_the_beta-2F7BFF?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/emileberhard/Lykta?style=for-the-badge&label=release&color=FF4F8B"></a>
+  <a href="LICENSE"><img alt="License: PolyForm Shield 1.0.0" src="https://img.shields.io/badge/license-PolyForm_Shield-FFB020?style=for-the-badge"></a>
 </p>
 
 Lykta lets AI agents put native Live Activities, widgets and notifications on
@@ -19,9 +21,9 @@ report back to the agent.
 - **Notifications** that arrive like a message from a person, with the
   sender's name and picture, a sound of the agent's choosing and an image.
 
-<a href="Gateway/Sources/LyktaGateway/Skill/examples"><img src="docs/readme/examples.jpg" alt="Lock Screen cards drawn from Lykta's example activities, from an agent's question with buttons and a pull request inbox to a recipe step, a 3D print and a shared shopping list."></a>
+<a href="Gateway/Sources/LyktaGateway/Skill/examples"><img src="docs/readme/examples.jpg" alt="Notifications and Lock Screen cards drawn from Lykta's examples, from a doorbell and a passing test run to an agent's question with buttons, a pull request inbox, a recipe step and a shared shopping list."></a>
 
-Every card above is one of the [example activities](Gateway/Sources/LyktaGateway/Skill/examples),
+Everything above is one of the [examples](Gateway/Sources/LyktaGateway/Skill/examples),
 which an agent sends as JSON. A minimal activity and a notification look like
 this:
 

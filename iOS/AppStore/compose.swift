@@ -451,49 +451,57 @@ struct Cover: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Night(glows: [
-                Glow(light: .pink, x: 1450, y: 60, size: 900, opacity: 0.8),
-                Glow(light: .blue, x: 120, y: 820, size: 1000, opacity: 0.75),
-                Glow(light: .amber, x: 1050, y: 860, size: 700, opacity: 0.55),
+                Glow(light: .pink, x: 725, y: 30, size: 450, opacity: 0.8),
+                Glow(light: .blue, x: 60, y: 410, size: 500, opacity: 0.75),
+                Glow(light: .amber, x: 525, y: 430, size: 350, opacity: 0.55),
             ])
-            Island(name: "orion-return", presentation: "expanded")
-                .scaled(2, from: capture("orion-return.expanded").size)
-                .rotationEffect(.degrees(2))
-                .lifted()
-                .offset(x: 790, y: 60)
-            Card(name: "agent-question")
-                .scaled(2, from: capture("agent-question.lock").size)
-                .rotationEffect(.degrees(-2.5))
-                .lifted()
-                .offset(x: 740, y: 430)
+            Group {
+                Island(name: "orion-return", presentation: "expanded")
+                    .rotationEffect(.degrees(2))
+                    .offset(x: 395, y: 30)
+                Card(name: "agent-question")
+                    .rotationEffect(.degrees(-2.5))
+                    .offset(x: 370, y: 215)
+            }
+            .shadow(color: .black.opacity(0.65), radius: 30, y: 17)
             VStack(alignment: .leading, spacing: 0) {
-                Image(nsImage: capture("lights")).resizable().scaledToFit().frame(height: 170)
+                Image(nsImage: capture("lights")).resizable().scaledToFit().frame(height: 85)
                 Text("Lykta")
-                    .font(.system(size: 150, weight: .bold))
-                    .tracking(-3)
-                    .padding(.top, 30)
+                    .font(.system(size: 75, weight: .bold))
+                    .tracking(-1.5)
+                    .padding(.top, 15)
                 Text("Your agents on\nthe Lock Screen")
-                    .font(.system(size: 54))
+                    .font(.system(size: 27))
                     .foregroundStyle(.white.opacity(0.62))
             }
             .foregroundStyle(.white)
-            .offset(x: 112, y: 150)
+            .offset(x: 56, y: 75)
             Grain().blendMode(.overlay)
         }
-        .frame(width: 1600, height: 800)
+        .frame(width: 800, height: 400)
         .clipped()
     }
 }
 
 struct Wall: View {
-    static let scale: CGFloat = 1.5
-    static let spacing: CGFloat = 36
+    enum Item: Hashable {
+        case notification(String)
+        case activity(String)
+    }
 
-    let names: [String]
+    static let spacing: CGFloat = 24
 
-    private var stacks: [[String]] {
-        names.reduce(into: Array(repeating: [String](), count: 3)) { stacks, name in
+    let notifications: [String]
+    let activities: [String]
+
+    private var stacks: [[Item]] {
+        let cards = activities.reduce(into: Array(repeating: [String](), count: 3)) { stacks, name in
             let heights = stacks.map { $0.reduce(0) { $0 + capture("\($1).lock").size.height + Self.spacing } }
             stacks[heights.indices.min { heights[$0] < heights[$1] }!].append(name)
+        }
+        return cards.indices.map { column in
+            notifications.indices.filter { $0 % cards.count == column }.map { Item.notification(notifications[$0]) }
+                + cards[column].map(Item.activity)
         }
     }
 
@@ -501,20 +509,22 @@ struct Wall: View {
         HStack(spacing: Self.spacing) {
             ForEach(stacks, id: \.self) { stack in
                 VStack(spacing: Self.spacing) {
-                    ForEach(stack, id: \.self) { name in
-                        Card(name: name)
-                            .scaled(Self.scale, from: capture("\(name).lock").size)
-                            .lifted()
+                    ForEach(stack, id: \.self) { item in
+                        switch item {
+                        case let .notification(name): Banner(example: name)
+                        case let .activity(name): Card(name: name)
+                        }
                     }
                 }
             }
         }
-        .padding(72)
+        .shadow(color: .black.opacity(0.65), radius: 40, y: 23)
+        .padding(48)
         .background {
             Night(glows: [
-                Glow(light: .pink, x: 1700, y: 100, size: 1100, opacity: 0.7),
-                Glow(light: .blue, x: 150, y: 1200, size: 1200, opacity: 0.7),
-                Glow(light: .amber, x: 1000, y: 700, size: 900, opacity: 0.5),
+                Glow(light: .pink, x: 1130, y: 70, size: 730, opacity: 0.7),
+                Glow(light: .blue, x: 100, y: 900, size: 800, opacity: 0.7),
+                Glow(light: .amber, x: 670, y: 520, size: 600, opacity: 0.5),
             ])
         }
         .overlay { Grain().blendMode(.overlay) }
@@ -522,8 +532,9 @@ struct Wall: View {
 }
 
 @MainActor
-func save(_ view: some View, to url: URL) {
+func save(_ view: some View, scale: CGFloat, to url: URL) {
     let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+    renderer.scale = scale
     guard let rendered = renderer.cgImage,
           let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
@@ -537,15 +548,19 @@ func save(_ view: some View, to url: URL) {
     guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
 }
 
-let shown = try! FileManager.default.contentsOfDirectory(atPath: captures.path)
-    .filter { $0.hasSuffix(".lock.png") }
-    .map { String($0.dropLast(".lock.png".count)) }
-    .sorted()
+func names(in directory: URL, ending suffix: String) -> [String] {
+    try! FileManager.default.contentsOfDirectory(atPath: directory.path)
+        .filter { $0.hasSuffix(suffix) }
+        .map { String($0.dropLast(suffix.count)) }
+        .sorted()
+}
 
 MainActor.assumeIsolated {
     for (name, slide) in slides {
-        save(slide, to: output.appending(path: "\(name).png"))
+        save(slide, scale: 1, to: output.appending(path: "\(name).png"))
     }
-    save(Cover(), to: readme.appending(path: "cover.jpg"))
-    save(Wall(names: shown), to: readme.appending(path: "examples.jpg"))
+    save(Cover(), scale: 2, to: readme.appending(path: "cover.jpg"))
+    save(Wall(notifications: names(in: examples.appending(path: "notifications"), ending: ".json"),
+              activities: names(in: captures, ending: ".lock.png")),
+         scale: 1.5, to: readme.appending(path: "examples.jpg"))
 }
