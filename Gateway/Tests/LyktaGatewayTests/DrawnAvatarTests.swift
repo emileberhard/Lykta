@@ -64,6 +64,8 @@ struct DrawnAvatarTests {
         (#"{"text":"X","modifiers":[{"overlay":{"timer":[0,100]}}]}"#, "sender.avatar.modifiers[0].overlay", "timers and interval progress change with time, and an avatar is drawn once; use a fixed value"),
         (#"{"vstack":["Hi",{"button":"go","label":"Go"}]}"#, "sender.avatar.vstack[1]", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
         (#"{"progress":2}"#, "sender.avatar.progress", "expected a value within 0...1"),
+        (#"{"progress":0.5}"#, "sender.avatar.progress", "a linear bar draws as a placeholder in an avatar image; use style circular"),
+        (#"{"gauge":0.5,"style":"linearCapacity"}"#, "sender.avatar.gauge", "a linearCapacity gauge draws as a placeholder in an avatar image; use style linear, circular or circularCapacity"),
         (#"{"accessoryBackground":true}"#, "sender.avatar.accessoryBackground", "accessoryBackground works only in accessoryCircular and accessoryRectangular"),
         (#"{"text":"X","modifiers":[{"privacySensitive":true}]}"#, "sender.avatar.modifiers[0].privacySensitive", "privacySensitive works only in a widget's presentations"),
     ], [false, true])
@@ -93,8 +95,14 @@ struct DrawnAvatarTests {
     }
 
     @Test func numericProgressAndAbsoluteDatesStayAllowed() async throws {
-        let body: JSONValue = ["vstack": .array([["progress": .number(0.5)], ["date": .number(0), "style": "date"]])]
+        let body: JSONValue = ["vstack": .array([["progress": .number(0.5), "style": "circular"], ["date": .number(0), "style": "date"]])]
         #expect(await send("PUT", "/v1/notifications/done", request(body)).status == 201)
+    }
+
+    @Test(arguments: ["linear", "circular", "circularCapacity"])
+    func gaugesThatRenderAsImagesStayAllowed(_ style: String) async throws {
+        let node: JSONValue = ["gauge": .number(0.5), "style": .string(style), "label": "Build"]
+        #expect(await send("PUT", "/v1/notifications/done", request(node)).status == 201)
     }
 
     @Test func oversizedDrawingsNameTheAvatarAndItsCompressedBytes() async throws {

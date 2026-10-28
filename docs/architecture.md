@@ -125,6 +125,9 @@ are refused before decoding. A pure exhaustive walk over decoded nodes and
 modifiers refuses interaction, interval progress, timers, relative dates and
 environment conditions with their paths; fixed values remain available. This
 keeps decoding shared and makes a new typed case demand a stillness decision.
+Device rendering also excludes linear progress and `linearCapacity` gauges:
+ImageRenderer produces placeholders for those UIKit-backed views. Circular
+progress and the other gauge styles remain available.
 
 The stored request uses `sender.drawing` for the expanded node and preserves
 `sender.avatar` for media ids. Previous gateways ignore the new storage key,

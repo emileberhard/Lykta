@@ -140,8 +140,11 @@ Use initials or a symbol rather than words that become unreadable at this size.
 
 An avatar has no data: placeholders and `each` are refused. Controls, links,
 timers, interval progress, relative dates and environment conditions are also
-refused because the result is drawn once. Fixed numeric progress, absolute
-dates and ordinary SVG remain available. Widget-only `accessoryBackground` and
+refused because the result is drawn once. Fixed circular progress, absolute
+dates and ordinary SVG remain available. Linear progress bars and gauges with
+style `linearCapacity` draw as placeholders in avatar images and are refused;
+use progress style `circular`, or gauge style `linear`, `circular` or
+`circularCapacity`. Widget-only `accessoryBackground` and
 `privacySensitive` are refused. If drawing fails, independent initials
 still identify the sender.
 

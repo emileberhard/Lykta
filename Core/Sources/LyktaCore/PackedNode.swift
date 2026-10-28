@@ -109,6 +109,8 @@ private extension Node {
             throw LayoutError("\(path): controls and links need interaction, and an avatar is drawn once; use a fixed node")
         case .timer, .progress(.interval, _):
             throw LayoutError("\(path): timers and interval progress change with time, and an avatar is drawn once; use a fixed value")
+        case .progress(.value, .linear):
+            throw LayoutError("\(path).progress: a linear bar draws as a placeholder in an avatar image; use style circular")
         case .date(_, .relative), .date(_, .offset), .date(_, .timer):
             throw LayoutError("\(path): relative dates change with time, and an avatar is drawn once; use a fixed date or time")
         case .conditional(.environment, _, _):
@@ -123,6 +125,11 @@ private extension Node {
                 for (index, node) in nodes.enumerated() { try node.admitAvatar(at: "\(path).grid[\(row)][\(index)]") }
             }
         case let .gauge(gauge):
+            switch gauge.style {
+            case .linearCapacity:
+                throw LayoutError("\(path).gauge: a linearCapacity gauge draws as a placeholder in an avatar image; use style linear, circular or circularCapacity")
+            case .linear, .circular, .circularCapacity: break
+            }
             for (key, node) in [("label", gauge.label), ("currentValueLabel", gauge.currentValueLabel),
                                 ("minimumValueLabel", gauge.minimumValueLabel), ("maximumValueLabel", gauge.maximumValueLabel)] {
                 try node?.admitAvatar(at: "\(path).\(key)")
@@ -130,7 +137,7 @@ private extension Node {
         case let .conditional(.value, then, otherwise):
             try then.admitAvatar(at: "\(path).then")
             try otherwise?.admitAvatar(at: "\(path).else")
-        case .text, .symbol, .shape, .svg, .spacer, .divider, .progress(.value, _), .date(_, .date), .date(_, .time), .chart, .accessoryBackground: break
+        case .text, .symbol, .shape, .svg, .spacer, .divider, .progress(.value, .circular), .date(_, .date), .date(_, .time), .chart, .accessoryBackground: break
         }
         for (index, modifier) in modifiers.enumerated() {
             switch modifier {
