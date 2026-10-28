@@ -5,13 +5,8 @@ import Synchronization
 
 nonisolated enum DrawnAvatar {
     static func png(_ node: Node) throws(PackedNode.Failure) -> Data {
+        dispatchPrecondition(condition: .notOnQueue(.main))
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        if Thread.isMainThread {
-            let result = MainActor.assumeIsolated { Result { () throws(PackedNode.Failure) in try render(node) } }
-            let data = try result.get()
-            guard ContinuousClock.now < deadline else { throw .deadline }
-            return data
-        }
         let pending = Render()
         DispatchQueue.main.async {
             guard pending.isWaiting, ContinuousClock.now < deadline else { return }

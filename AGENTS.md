@@ -11,12 +11,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
-| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; the app, widget extension and notification extension compile it, and `LYKTA_APP` marks the app's variants |
+| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; the app, widget extension and notification extension compile it, and `LYKTA_APP` marks app-only live timers; `LYKTA_WIDGET` selects widget-native circular progress, while the app and notification extension draw a determinate ring |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations, and the Lykta widget: its timeline provider, the states it draws and its push handler |
 | `iOS/Gateway` | The phone's link to its gateway, compiled into the app and the widget extension: `GatewayClient`, the Keychain items, among them the widget credential, the widget's `WidgetSelection` intent with its entity query, and `WidgetCache` |
 | `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the first-launch introduction that waits for the agent's hello, the in-app Lock Screen cards with their headers and details sheet, and the example gallery with its hint to lock the phone after each start |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
-| `iOS/Avatars` | The fixed-viewport drawn avatar and independent Core Graphics initials, shared by the notification extension and app gallery |
+| `iOS/Avatars` | The extension-only bounded drawn avatar and the independent Core Graphics initials shared by the extension and app gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |

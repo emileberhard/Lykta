@@ -42,7 +42,6 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
             do { avatar = try DrawnAvatar.png(drawing.node()) }
             catch { failure = error }
         }
-        guard keep(content) else { return }
         let intent = Self.intent(content, sender: payload.sender, avatar: avatar)
         if Self.donate(intent, within: 3), let communication = try? content.updating(from: intent) {
             guard keep(communication) else { return }

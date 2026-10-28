@@ -18,7 +18,14 @@
     { "kind": "folder", "path": "Widgets", "target-membership": [ "LyktaWidgets" ] },
     { "kind": "folder", "path": "Notifications", "target-membership": [ "LyktaNotifications" ] },
     { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets", "LyktaNotifications" ] },
-    { "kind": "folder", "path": "Avatars", "target-membership": [ "Lykta", "LyktaNotifications" ] },
+    {
+      "kind": "group",
+      "path": "Avatars",
+      "children": [
+        { "path": "Initials.swift", "target-membership": [ "Lykta/compile-sources", "LyktaNotifications/compile-sources" ] },
+        { "path": "DrawnAvatar.swift", "target-membership": [ "LyktaNotifications/compile-sources" ] },
+      ],
+    },
     { "kind": "folder", "path": "Gateway", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     { "path": "../Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },
     { "path": "../Gateway/Sources/LyktaGateway/Skill/examples/widgets/steps-widget.json", "target-membership": [ "LyktaWidgets/resources" ] },
@@ -118,6 +125,10 @@
         "PRODUCT_BUNDLE_IDENTIFIER": "$(LYKTA_BUNDLE_ID).widgets",
         "PRODUCT_NAME": "LyktaWidgets",
         "SKIP_INSTALL": "YES",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS": [
+          "$(inherited)",
+          "LYKTA_WIDGET",
+        ],
       },
     }, {
       "name": "LyktaNotifications",

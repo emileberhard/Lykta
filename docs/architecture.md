@@ -146,7 +146,9 @@ change. The notification envelope retains an invalid drawing for separate
 bounded decoding, so it still delivers with initials. The extension prefers a
 photo, then a drawing, then the independent Core Graphics initials. It draws
 `NodeView` inside 64 × 64 pt at scale 4 exactly once, with no measuring pass,
-background lifting or render cache. The gallery uses the same main-actor path.
+background lifting or render cache. The gallery retains a decoded node and
+draws its 64 pt view directly on the
+main actor, without a deadline or PNG round trip.
 Art, padding, then background gives ordinary composition in that viewport.
 
 A pending render has a two-second deadline; queued expired work is skipped
