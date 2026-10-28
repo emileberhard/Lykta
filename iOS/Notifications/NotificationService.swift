@@ -39,7 +39,7 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         var avatar = media.avatar
         var failure: PackedNode.Failure?
         if avatar == nil, let drawing = payload.drawing {
-            do { avatar = try DrawnAvatar.png(drawing.node(limit: Layout.maximumBytes)) }
+            do { avatar = try DrawnAvatar.png(drawing.node()) }
             catch { failure = error }
         }
         guard keep(content) else { return }

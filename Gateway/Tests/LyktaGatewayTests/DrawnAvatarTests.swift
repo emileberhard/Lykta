@@ -11,7 +11,11 @@ struct DrawnAvatarTests {
     private let now = Int(Date().timeIntervalSince1970)
 
     init() async throws {
-        store = try Store(path: ":memory:")
+        try await self.init(path: ":memory:")
+    }
+
+    private init(path: String) async throws {
+        store = try Store(path: path)
         api = API(store: store, maximumDevices: 1, maximumLiveActivities: 1, environments: [.development],
                   enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
         let registration = Registration(environment: .development, appVersion: "0.17.0", proof: .invite(try await store.invite(now: now)))
@@ -27,8 +31,7 @@ struct DrawnAvatarTests {
         let payload = try pushed()
         #expect(payload.avatar == nil)
         let drawing = try #require(payload.drawing)
-        #expect(drawing.fingerprint == fingerprint(JSONValue.string("ET").json))
-        guard case .text("ET") = try drawing.node(limit: Layout.maximumBytes).content else {
+        guard case .text("ET") = try drawing.node().content else {
             Issue.record("Expected the saved shorthand to remain a drawing")
             return
         }
@@ -47,26 +50,44 @@ struct DrawnAvatarTests {
     }
 
     @Test(arguments: [
-        (#"{"button":"go","label":"Go"}"#, "sender.avatar"),
-        (#"{"toggle":"done","isOn":true,"label":"Done"}"#, "sender.avatar"),
-        (#"{"link":"https://example.com","label":"Open"}"#, "sender.avatar"),
-        (#"{"timer":[0,100]}"#, "sender.avatar"),
-        (#"{"progress":[0,100]}"#, "sender.avatar"),
-        (#"{"date":0,"style":"relative"}"#, "sender.avatar"),
-        (#"{"date":0,"style":"offset"}"#, "sender.avatar"),
-        (#"{"date":0,"style":"timer"}"#, "sender.avatar"),
-        (#"{"if":"dark","then":"Dark","else":"Light"}"#, "sender.avatar.if"),
-        (#"{"text":"{{name}}"}"#, "sender.avatar.text"),
-        (#"{"vstack":[{"each":"items","as":"item","do":"{{item}}"}]}"#, "sender.avatar.vstack[0].each"),
-        (#"{"text":"X","modifiers":[{"overlay":{"timer":[0,100]}}]}"#, "sender.avatar.modifiers[0].overlay"),
-    ])
-    func nonStillFamiliesAreRefusedWithTheirAuthoredPath(_ source: String, _ path: String) async throws {
+        (#"{"button":"go","label":"Go"}"#, "sender.avatar", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
+        (#"{"toggle":"done","isOn":true,"label":"Done"}"#, "sender.avatar", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
+        (#"{"link":"https://example.com","label":"Open"}"#, "sender.avatar", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
+        (#"{"timer":[0,100]}"#, "sender.avatar", "timers and interval progress change with time, and an avatar is drawn once; use a fixed value"),
+        (#"{"progress":[0,100]}"#, "sender.avatar", "timers and interval progress change with time, and an avatar is drawn once; use a fixed value"),
+        (#"{"date":0,"style":"relative"}"#, "sender.avatar", "relative dates change with time, and an avatar is drawn once; use a fixed date or time"),
+        (#"{"date":0,"style":"offset"}"#, "sender.avatar", "relative dates change with time, and an avatar is drawn once; use a fixed date or time"),
+        (#"{"date":0,"style":"timer"}"#, "sender.avatar", "relative dates change with time, and an avatar is drawn once; use a fixed date or time"),
+        (#"{"if":"dark","then":"Dark","else":"Light"}"#, "sender.avatar.if", "environment conditions change after arrival, and an avatar is drawn once; use a fixed condition"),
+        (#"{"text":"{{name}}"}"#, "sender.avatar.text", "an avatar has no data; replace the placeholder with a fixed value"),
+        (#"{"vstack":[{"each":"items","as":"item","do":"{{item}}"}]}"#, "sender.avatar.vstack[0].each", "an avatar has no data; use a fixed node"),
+        (#"{"text":"X","modifiers":[{"overlay":{"timer":[0,100]}}]}"#, "sender.avatar.modifiers[0].overlay", "timers and interval progress change with time, and an avatar is drawn once; use a fixed value"),
+        (#"{"vstack":["Hi",{"button":"go","label":"Go"}]}"#, "sender.avatar.vstack[1]", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
+        (#"{"progress":2}"#, "sender.avatar.progress", "expected a value within 0...1"),
+    ], [false, true])
+    func nonStillFamiliesAreRefusedWithTheirAuthoredPath(_ input: (String, String, String), _ saved: Bool) async throws {
+        let (source, path, reason) = input
         let node = try JSONDecoder().decode(JSONValue.self, from: Data(source.utf8))
-        let response = await send("PUT", "/v1/notifications/done", request(node))
+        if saved { #expect(await send("PUT", "/v1/parts/with-button", node).status == 201) }
+        let response = await send("PUT", "/v1/notifications/done", request(saved ? ["use": "with-button"] : node))
         #expect(response.status == 400)
         let refused: Refusal = try response.decoded()
         #expect(refused.error == "invalid_layout")
-        #expect(refused.message.hasPrefix(path + ":"))
+        let authored = saved ? path.replacingOccurrences(of: "sender.avatar", with: "parts/with-button") : path
+        #expect(refused.message == authored + ": " + reason + (saved ? " (used at sender.avatar)" : ""))
+    }
+
+    @Test(arguments: [
+        (#"{"use":"clwad"}"#, #"sender.avatar: unknown part "clwad"; saved parts: clawd"#),
+        (#"{"use":"clawd","bogus":1}"#, #"sender.avatar: expected {"use": "name"} with optional modifiers"#),
+        (#"{"parts":{},"text":"ET"}"#, "sender.avatar: a node cannot define parts; save each part separately"),
+    ])
+    func avatarExpansionErrorsNameTheAvatar(_ source: String, _ expected: String) async throws {
+        _ = await send("PUT", "/v1/parts/clawd", "ET")
+        let node = try JSONDecoder().decode(JSONValue.self, from: Data(source.utf8))
+        let refused: Refusal = try await send("PUT", "/v1/notifications/done", request(node)).decoded()
+        #expect(refused.error == "invalid_layout")
+        #expect(refused.message == expected)
     }
 
     @Test func numericProgressAndAbsoluteDatesStayAllowed() async throws {
@@ -88,31 +109,48 @@ struct DrawnAvatarTests {
     }
 
     @Test(arguments: [NotificationReport.Avatar.image, .initials])
-    func oldReadersCanReadTheStoredDrawingRequestAndReport(_ avatar: NotificationReport.Avatar) async throws {
-        #expect(await send("PUT", "/v1/notifications/done", request(["text": "ET"])).status == 201)
-        let jobs = try await store.claim(now: now, limit: 1)
-        guard case let .notification(job) = try #require(jobs.first) else {
-            Issue.record("Expected the persisted notification")
-            return
-        }
-        let raw = Data(job.request.canonical.utf8)
+    func oldReadersCanReadThePersistedDrawingRequestAndReport(_ avatar: NotificationReport.Avatar) async throws {
+        let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
+        defer { Self.removeDatabase(at: path) }
+        let phone = try await Self(path: path)
+        #expect(await phone.send("PUT", "/v1/notifications/done", phone.request(["text": "ET"])).status == 201)
+        let database = try Database(path: path)
+        let raw = Data(try #require(database.query("SELECT request FROM notifications").first).string("request").utf8)
         let stored = try JSONDecoder().decode(JSONValue.self, from: raw)
         #expect(try stored.value(at: "sender.drawing") == ["text": "ET"])
         let old = try JSONDecoder().decode(Readers016.NotificationRequest.self, from: raw)
         #expect(old.sender.avatar == nil)
         #expect(old.body == "Finished")
-        let delivery = Delivery(store: store, push: push, shutdown: Shutdown())
-        try await store.finish(jobs[0], try await delivery.send(jobs[0], now: now), now: now)
-        let payload = try pushed()
-        #expect(await receive(payload, avatar: avatar, failure: avatar == .initials ? .render : nil).status == 204)
-        let status: JSONValue = try await send("GET", "/v1/notifications/done").decoded()
-        let phone = try status.value(at: "phone")
-        let report = try JSONDecoder().decode(Readers016.NotificationReport.self, from: Data(phone.json))
+        try await phone.deliver()
+        let payload = try phone.pushed()
+        #expect(await phone.receive(payload, avatar: avatar, failure: avatar == .initials ? "render" : nil).status == 204)
+        let rawReport = Data(try #require(database.query("SELECT phone FROM notifications").first).string("phone").utf8)
+        let report = try JSONDecoder().decode(Readers016.NotificationReport.self, from: rawReport)
         #expect(report.style == .communication(Readers016.NotificationReport.Avatar(rawValue: avatar.rawValue)!))
-        #expect(try phone.value(at: "avatar") == .string(avatar.rawValue))
-        #expect(throws: LayoutError.self) { try phone.value(at: "avatarFailure") }
-        let events: Events = try await send("GET", "/v1/events").decoded()
+        let events: Events = try await phone.send("GET", "/v1/events").decoded()
         #expect(events.events.first { $0.name == "notification.received" }?.detail["avatarFailure"] == (avatar == .initials ? "render" : nil))
+    }
+
+    @Test func deliveryPacksPersistedDrawingsWithoutDecodingThemAgain() async throws {
+        let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
+        defer { Self.removeDatabase(at: path) }
+        let phone = try await Self(path: path)
+        #expect(await phone.send("PUT", "/v1/notifications/done", phone.request(["text": "ET"])).status == 201)
+        let futureNode: JSONValue = ["futureAvatarNode": "supported by the writer"]
+        #expect(throws: LayoutError.self) { try futureNode.avatarNode() }
+        let database = try Database(path: path)
+        let stored: JSONValue = ["sender": ["id": "claude", "name": "Claude", "drawing": futureNode], "body": "Finished"]
+        try database.run("UPDATE notifications SET request = ?", String(decoding: stored.json, as: UTF8.self))
+        try await phone.deliver()
+        let payload = try phone.pushed()
+        let drawing = try #require(payload.drawing)
+        #expect(try JSONEncoder().encode(drawing) == JSONEncoder().encode(PackedNode(packing: futureNode)))
+        let status: JSONValue = try await phone.send("GET", "/v1/notifications/done").decoded()
+        #expect(try status.value(at: "state") == "sent")
+    }
+
+    private static func removeDatabase(at path: String) {
+        for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) }
     }
 
     @Test(arguments: ["replace", "delete"])
@@ -126,20 +164,23 @@ struct DrawnAvatarTests {
         #expect(refused.error == (change == "replace" ? "conflict" : "invalid_layout"))
         if change == "delete" { #expect(refused.message.contains("unknown part")) }
         try await deliver()
-        guard case .text("Original") = try #require(pushed().drawing).node(limit: Layout.maximumBytes).content else {
+        guard case .text("Original") = try #require(pushed().drawing).node().content else {
             Issue.record("The queued notification must keep its drawing")
             return
         }
     }
 
-    @Test(arguments: PackedNode.Failure.allCases)
-    func reportFailuresUseOnlyTheEventAndKeepTheOldReportShape(_ failure: PackedNode.Failure) async throws {
+    @Test(arguments: [("deadline", Optional("deadline")), ("memory", nil)])
+    func diagnosticQueriesNeverDiscardAReport(_ supplied: String, _ recorded: String?) async throws {
         _ = await send("PUT", "/v1/notifications/done", request(["text": "ET"]))
         try await deliver()
         let payload = try pushed()
-        #expect(await receive(payload, avatar: .initials, failure: failure).status == 204)
+        #expect(await receive(payload, avatar: .initials, failure: supplied).status == 204)
+        let status: JSONValue = try await send("GET", "/v1/notifications/done").decoded()
+        #expect(try status.value(at: "state") == "received")
+        #expect(try status.value(at: "phone") == ["style": "communication", "avatar": "initials", "sound": "none"])
         let events: Events = try await send("GET", "/v1/events").decoded()
-        #expect(events.events.first { $0.name == "notification.received" }?.detail["avatarFailure"] == .string(failure.rawValue))
+        #expect(events.events.first { $0.name == "notification.received" }?.detail["avatarFailure"] == recorded.map(JSONValue.string))
     }
 
     private func request(_ avatar: JSONValue) -> JSONValue {
@@ -168,9 +209,9 @@ struct DrawnAvatarTests {
         try JSONDecoder().decode(NotificationPayload.self, from: Data(try #require(push.alerts.last).payload.value(at: "lykta").json))
     }
 
-    private func receive(_ payload: NotificationPayload, avatar: NotificationReport.Avatar, failure: PackedNode.Failure?) async -> HTTPResponse {
+    private func receive(_ payload: NotificationPayload, avatar: NotificationReport.Avatar, failure: String?) async -> HTTPResponse {
         let body: JSONValue = ["style": "communication", "avatar": .string(avatar.rawValue), "sound": "none"]
-        let query = failure.map { "?avatarFailure=\($0.rawValue)" } ?? ""
+        let query = failure.map { "?avatarFailure=\($0)" } ?? ""
         return await api.handle(HTTPRequest(method: "POST", target: "/v1/device/notifications/\(payload.id)/report\(query)",
                                             headers: ["authorization": "Bearer \(payload.token)"], body: body.json))
     }

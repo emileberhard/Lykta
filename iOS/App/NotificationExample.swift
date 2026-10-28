@@ -47,7 +47,7 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
         self.body = body
         if case let .object(node)? = try? fields.value(at: "sender.avatar") {
             let drawing = try PackedNode.admitting(.object(node)).drawing
-            avatar = try DrawnAvatar.png(drawing.node(limit: Layout.maximumBytes))
+            avatar = try DrawnAvatar.png(drawing.node())
         } else { avatar = media["sender.avatar"] ?? Initials.avatar(of: sender, sender: senderID) }
         image = media["image"]
         self.media = media

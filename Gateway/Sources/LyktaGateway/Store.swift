@@ -407,7 +407,7 @@ actor Store {
         try db.transaction {
             try expireNotifications(now: now)
             try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ? AND in_flight = 0", device.id, name, now)
-            let request = try prepareNotification(request, on: device)
+            let (request, drawing) = try prepareNotification(request, on: device)
             let canonical = request.canonical
             if let row = try db.query("SELECT * FROM notifications WHERE device_id = ? AND name = ?", device.id, name).first {
                 guard try row.string("request") == canonical else {
@@ -437,11 +437,13 @@ actor Store {
                 throw error
             }
             let id = UUID()
-            let size = try request.payload(id: id, token: Self.token("lykta_fetch_")).count
+            let size = try request.payload(id: id, token: Self.token("lykta_fetch_"), drawing: drawing).count
             guard size <= Self.maximumPayloadBytes else {
                 let advice: String
-                if case let .drawing(node)? = request.sender.avatar,
-                   let bytes = try PackedNode.admitting(node).drawing.compressedBytes, bytes > request.body.utf8.count {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.withoutEscapingSlashes]
+                if let drawing, let bytes = drawing.compressedBytes,
+                   try encoder.encode(drawing).count > max(encoder.encode(request.body).count, encoder.encode(request.sender.name).count) {
                     advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
                 } else { advice = "Shorten the body." }
                 throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). \(advice)")
@@ -457,35 +459,35 @@ actor Store {
             case .default?: "default"
             case let .medium(id)?: id.rawValue
             }
-            let avatar: JSONValue = switch request.sender.avatar {
-            case let .medium(id)?: .string(id.rawValue)
-            case .drawing?: .string("drawing")
-            case nil: .null
-            }
-            let drawingFingerprint: [String: JSONValue]
-            if case let .drawing(node)? = request.sender.avatar { drawingFingerprint = ["avatarFingerprint": .string(fingerprint(node.json))] }
-            else { drawingFingerprint = [:] }
-            try record("notification.put", device: device.id, activity: nil, [
+            var detail: [String: JSONValue] = [
                 "notification": .string(id.uuidString), "name": .string(name.rawValue), "sender": .string(request.sender.id.rawValue),
-                "avatar": avatar, "sound": .string(sound),
-                "image": request.image.map { .string($0.rawValue) } ?? .null, "fingerprint": .string(fingerprint(canonical.utf8)),
-                "payloadBytes": .number(Double(size)),
-            ].merging(drawingFingerprint) { $1 })
+                "sound": .string(sound), "image": request.image.map { .string($0.rawValue) } ?? .null,
+                "fingerprint": .string(fingerprint(canonical.utf8)), "payloadBytes": .number(Double(size)),
+            ]
+            switch request.sender.avatar {
+            case let .medium(id)?: detail["avatar"] = .string(id.rawValue)
+            case let .drawing(node)?:
+                detail["avatar"] = .string("drawing")
+                detail["avatarFingerprint"] = .string(fingerprint(node.json))
+            case nil: detail["avatar"] = .null
+            }
+            try record("notification.put", device: device.id, activity: nil, detail)
             return true
         }
     }
 
-    private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> NotificationRequest {
-        guard case let .drawing(template)? = request.sender.avatar else { return request }
-        let (node, requirement) = try expanding(template, on: device) { saved throws(LayoutError) in
-            let node = try template.expandingPart(saved: saved)
-            return (node, try PackedNode.admitting(node).requirement)
+    private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> (NotificationRequest, PackedNode?) {
+        guard case let .drawing(template)? = request.sender.avatar else { return (request, nil) }
+        let (node, admitted) = try expanding(template, on: device) { saved throws(LayoutError) in
+            let prepared = try PreparedNode(template, saved: saved, at: "sender.avatar")
+            return (prepared.value, try prepared.admittingAvatar())
         }
+        let requirement = admitted.requirement
         if let draws = Self.draws(requirement.version, on: device) {
             throw APIError(.appUpdateRequired, "sender.avatar uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). Ask the user to update Lykta and open it once.")
         }
-        return NotificationRequest(sender: .init(id: request.sender.id, name: request.sender.name, avatar: .drawing(node)),
-                                   body: request.body, sound: request.sound, image: request.image)
+        return (NotificationRequest(sender: .init(id: request.sender.id, name: request.sender.name, avatar: .drawing(node)),
+                                    body: request.body, sound: request.sound, image: request.image), admitted.drawing)
     }
 
     func notificationAttempted(_ device: Device, name: Name, now: Int) throws -> Bool {

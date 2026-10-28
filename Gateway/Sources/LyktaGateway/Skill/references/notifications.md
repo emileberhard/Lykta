@@ -2,7 +2,7 @@
 
 A notification tells the user about one moment, such as a print that finished
 or a deploy that failed. It arrives like a message from a person: the sender's
-name as the title, a round avatar with the sender's picture or initials, and
+name as the title, a round avatar with the sender's picture, drawing or initials, and
 the body, optionally with its own sound and an image. Notifications from one
 sender gather in one thread.
 
@@ -23,7 +23,7 @@ EOF
 | --- | --- |
 | `sender.id` | Who sends it, in the name format. Keep it the same for every notification from this sender: the phone groups them in one thread and colors the avatar by it. |
 | `sender.name` | The title, up to 64 characters, such as `Printer` or `Deploy bot`. |
-| `sender.avatar` | Optional id of an image to show as the sender's round picture instead of initials. Reuse the same image for every notification from the sender. |
+| `sender.avatar` | Optional image id or node object, including `{"use":"name"}` for a saved part. The phone draws nodes once in a 64 pt viewport. |
 | `body` | Up to 500 characters. Say what happened and what the user can do about it. |
 | `sound` | `true` plays the default sound, the id of a sound plays that sound. Leave it out for a silent notification, for news the user can read later. |
 | `image` | Optional id of an image shown as a thumbnail and in full when the user expands the notification, such as a photo of the finished print. |
@@ -84,7 +84,7 @@ media files next to them where the ids go, so upload each and put its id there;
 | --- | --- |
 | `state` | `queued`, `sent` (Apple accepted it), `received` (the phone prepared it), `failed`, `unknown` |
 | `error` | Why it failed or is unknown, or `null` |
-| `phone` | What the phone prepared, such as `{"style": "communication", "avatar": "image", "sound": "custom"}`, or `null` before it reports. `"avatar": "initials"` means it drew initials, because the notification had no avatar or the phone could not fetch it; `"sound": "default"` for a requested sound means it played the default sound instead. `"style": "plain"` means it showed the title and body without the avatar |
+| `phone` | What the phone prepared, such as `{"style": "communication", "avatar": "image", "sound": "custom"}`, or `null` before it reports. `"avatar": "image"` covers a photo or drawn avatar. `"avatar": "initials"` means no avatar was supplied or fetching or drawing failed; `"sound": "default"` for a requested sound means it played the default sound instead. `"style": "plain"` means it showed the title and body without the avatar |
 | `banners` | The phone's banner style: `temporary`, `persistent` or `off`, or `null` before the phone reports it |
 | `createdAt`, `expires` | When the gateway accepted it and when it forgets it |
 
@@ -101,17 +101,20 @@ should you.
   refused the token, quotes its reason. Pass it on to the user.
 - `notifications_not_allowed`: the user turned notifications off for Lykta.
   Ask them to turn them on in Lykta or in Settings.
-- `app_update_required`: the user's Lykta app predates notifications. Ask them
-  to update Lykta and open it once.
+- `app_update_required`: the phone cannot draw a requested feature or predates
+  notifications. Ask the user to update Lykta and open it once.
 - `too_many_notifications`: a phone takes at most 60 notifications an hour.
   The `Retry-After` header says how many seconds to wait.
 - `conflict`: another notification used the name in the past day.
 - `invalid_request`: the message names the field to fix, including a media id
   this phone does not have or of the wrong type.
+- `invalid_layout`: the message names an avatar node, template construct or saved
+  part to fix, with its JSON path.
 - `unsupported_media`: the file is not a WAV, PNG or JPEG the phone can use;
   the message says how to convert it.
 - `payload_too_large`: the file is over 4 MiB, the phone's media would exceed
-  32 MiB, or the push would exceed Apple's size limit.
+  32 MiB, or the push would exceed Apple's size limit. For an oversized drawing,
+  the message names `sender.avatar` and its compressed bytes; simplify it.
 
 ## Debug
 
@@ -121,7 +124,10 @@ one, `push.notification` with Apple's outcome, `notification.media` for each
 file the phone fetched, `notification.received` when the phone prepared it,
 and `notification.unknown` or `notification.expired`. The phone's `device.sync`
 event shows its notification `authorization`, `alertStyle` and whether it has
-a notification `token`.
+a notification `token`. `notification.put` records `avatarFingerprint` for a
+drawing, never its node. On initials fallback, `notification.received` can record
+`avatarFailure`: `frame`, `inflate`, `decode`, `deadline` or `render`. Report
+bodies and notification status keep the same `image` or `initials` avatar values.
 
 ## Drawn avatars
 

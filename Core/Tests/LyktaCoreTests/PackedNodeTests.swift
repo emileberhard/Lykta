@@ -10,20 +10,18 @@ struct PackedNodeTests {
         let encoded = try JSONEncoder().encode(admitted.drawing)
         #expect(try JSONDecoder().decode(String.self, from: encoded).hasPrefix("~1"))
         let received = try JSONDecoder().decode(PackedNode.self, from: encoded)
-        #expect(received.fingerprint == fingerprint(value.json))
+        #expect(try JSONEncoder().encode(received) == encoded)
         #expect(received.compressedBytes == admitted.drawing.compressedBytes)
-        guard case .text("ET") = try received.node(limit: Layout.maximumBytes).content else {
+        guard case .text("ET") = try received.node().content else {
             Issue.record("Expected the admitted text")
             return
         }
     }
 
-    @Test func inflationStopsAtTheCallersLimit() throws {
-        let value = try json(#"{"text":"Some text that compresses"}"#)
-        let drawing = try PackedNode.admitting(value).drawing
-        #expect(throws: PackedNode.Failure.inflate) { try drawing.node(limit: value.json.count - 1) }
-        #expect(throws: PackedNode.Failure.inflate) { try drawing.node(limit: -1) }
-        _ = try drawing.node(limit: value.json.count)
+    @Test func inflationStopsAtTheLayoutBudget() throws {
+        let value = JSONValue.string(String(repeating: "A", count: Layout.maximumBytes + 1))
+        let drawing = try PackedNode(packing: value)
+        #expect(throws: PackedNode.Failure.inflate) { try drawing.node() }
     }
 
     @Test(arguments: ["frame", "inflate", "decode", "fingerprint"])
@@ -43,12 +41,7 @@ struct PackedNodeTests {
             expected = .frame
         }
         let drawing = try JSONDecoder().decode(PackedNode.self, from: JSONEncoder().encode(encoded))
-        #expect(throws: expected) { try drawing.node(limit: Layout.maximumBytes) }
-    }
-
-    @Test(arguments: PackedNode.Failure.allCases)
-    func failureNamesRoundTripThroughChoice(_ failure: PackedNode.Failure) throws {
-        #expect(try JSONDecoder().decode(PackedNode.Failure.self, from: JSONEncoder().encode(failure)) == failure)
+        #expect(throws: expected) { try drawing.node() }
     }
 
     @Test(arguments: [#""~1bad""#, #"{"broken":true}"#, "42"])
@@ -57,7 +50,7 @@ struct PackedNodeTests {
         let payload = try JSONDecoder().decode(NotificationPayload.self, from: Data(body.utf8))
         #expect(payload.sender == "bot")
         let drawing = try #require(payload.drawing)
-        #expect(throws: PackedNode.Failure.frame) { try drawing.node(limit: Layout.maximumBytes) }
+        #expect(throws: PackedNode.Failure.frame) { try drawing.node() }
     }
 
     private func json(_ text: String) throws -> JSONValue {

@@ -2,10 +2,13 @@ enum Presentation {
     case activity(String)
     case widget(WidgetLayout.Family)
     case widgetBackground
+    case avatar
 
     init(_ codingPath: [any CodingKey]) {
         let root = codingPath.first?.stringValue ?? ""
-        if let family = WidgetLayout.Family(rawValue: root) {
+        if codingPath.prefix(2).map(\.stringValue) == ["sender", "avatar"] {
+            self = .avatar
+        } else if let family = WidgetLayout.Family(rawValue: root) {
             self = .widget(family)
         } else if root == "background" {
             self = .widgetBackground
@@ -16,6 +19,7 @@ enum Presentation {
 
     func refusal(of feature: String) -> String? {
         switch (self, feature) {
+        case (.avatar, _): nil
         case (.widget(.accessoryCircular), "accessoryBackground"), (.widget(.accessoryRectangular), "accessoryBackground"): nil
         case (_, "accessoryBackground"): "accessoryBackground works only in accessoryCircular and accessoryRectangular"
         case (.widget, "privacySensitive"): nil

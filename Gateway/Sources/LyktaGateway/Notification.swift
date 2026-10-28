@@ -121,7 +121,8 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         case let .string(text)?:
             if let id = MediaID(rawValue: text) { return id }
             fallthrough
-        default: throw invalid("\(path) must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef.")
+        default: throw invalid("\(path) must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef."
+                          + (path == "sender.avatar" ? " For a drawn avatar, send a node object such as {\"text\":\"ET\"}." : ""))
         }
     }
 
@@ -131,15 +132,14 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         return String(decoding: try! encoder.encode(self), as: UTF8.self)
     }
 
-    func payload(id: UUID, token: String) throws -> Data {
+    func payload(id: UUID, token: String, drawing: PackedNode?) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
         let avatar: MediaID?
-        let drawing: PackedNode?
         switch sender.avatar {
-        case let .medium(id)?: avatar = id; drawing = nil
-        case let .drawing(node)?: avatar = nil; drawing = try PackedNode.admitting(node).drawing
-        case nil: avatar = nil; drawing = nil
+        case let .medium(id)?: avatar = id
+        case .drawing?: avatar = nil
+        case nil: avatar = nil
         }
         return try encoder.encode(Payload(
             aps: .init(alert: .init(title: sender.name, body: body), sound: sound == nil ? nil : "default", threadID: sender.id.rawValue),

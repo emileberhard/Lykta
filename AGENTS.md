@@ -143,9 +143,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   never the media-id key `sender.avatar`. Their push uses `drawing`, a
   `PackedNode` with the frozen `~1` frame shared with compact activity content.
   Report bodies and stored phone reports retain `image` and `initials`;
-  `avatarFailure` travels only in the report query and the received event.
-  Core admits still nodes with an exhaustive walk of typed content and
-  modifiers, without changing the decoder's existing presentation rules.
+  `avatarFailure` travels only in the report query and the received event;
+  unknown diagnostic values never discard a report. Core admits still nodes
+  once at PUT, with authored saved-part origins and a dedicated avatar
+  presentation. An exhaustive walk classifies typed content and modifiers.
+  Delivery packs stored nodes without decoding or admission, so content from
+  a newer gateway survives rollback.
 - The notification extension draws a node once in a 64 × 64 pt viewport at
   scale 4, with a two-second main-actor deadline and no measuring render.
   One lock owns the completion handler and best content; expiry delivers
@@ -169,7 +172,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   decoder with a JSON path; stored rows that fail to parse throw rather than
   default.
 - Mutable state has one owner: an actor, the main actor or a `Mutex` inside a
-  `Sendable` class. Never silence isolation with `@unchecked Sendable` or
+  `Sendable` class; the non-Sendable notification extension owns its pending
+  content handler under the lock shared with system expiry. Never silence
+  isolation with `@unchecked Sendable` or
   `nonisolated(unsafe)`; pass identifiers, not ActivityKit handles, across
   tasks.
 

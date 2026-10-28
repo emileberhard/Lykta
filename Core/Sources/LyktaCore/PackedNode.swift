@@ -1,7 +1,7 @@
 import Foundation
 
 public struct PackedNode: Codable, Sendable {
-    public enum Failure: String, Choice, Encodable, Error {
+    public enum Failure: String, Choice, Error {
         case frame, inflate, decode, deadline, render
     }
 
@@ -21,44 +21,52 @@ public struct PackedNode: Codable, Sendable {
         try container.encode(text)
     }
 
-    private init(text: String) { self.text = text }
-
-    public static func admitting(_ value: JSONValue) throws(LayoutError) -> (drawing: Self, requirement: Layout.Requirement) {
-        try value.refusingAvatarData(at: "sender.avatar")
-        let decoded = try avatarNode(value.json)
-        let packed = try Deflate.compress(value.json, dictionary: WireDictionary.v1)
-        return (Self(text: CompactFrame(hash: fnv1a(value.json), packed: packed).text), decoded.requirement)
+    public init(packing value: JSONValue) throws(LayoutError) {
+        let json = value.json
+        let packed = try Deflate.compress(json, dictionary: WireDictionary.v1)
+        text = CompactFrame(hash: fnv1a(json), packed: packed).text
     }
 
-    public var fingerprint: String? {
-        text.flatMap(CompactFrame.init).map { String($0.hash, radix: 16) }
+    public static func admitting(_ value: JSONValue) throws(LayoutError) -> (drawing: Self, requirement: Layout.Requirement) {
+        let decoded = try value.decodedAvatar()
+        return (try Self(packing: value), decoded.requirement)
     }
 
     public var compressedBytes: Int? {
         text.flatMap(CompactFrame.init)?.packed.count
     }
 
-    public func node(limit: Int) throws(Failure) -> Node {
+    public func node() throws(Failure) -> Node {
         guard let text, text.utf8.count <= Layout.maximumBytes * 2, let frame = CompactFrame(text) else { throw .frame }
-        guard (0...Layout.maximumBytes).contains(limit),
-              let json = Deflate.decompress(frame.packed, limit: limit, dictionary: WireDictionary.v1) else { throw .inflate }
+        guard let json = Deflate.decompress(frame.packed, limit: Layout.maximumBytes, dictionary: WireDictionary.v1) else { throw .inflate }
         guard fnv1a(json) == frame.hash else { throw .frame }
-        do { return try Self.avatarNode(json).node }
-        catch { throw .decode }
+        do {
+            let value = try JSONDecoder().decode(JSONValue.self, from: Data(json))
+            return try value.avatarNode()
+        } catch { throw .decode }
     }
+}
 
-    private static func avatarNode(_ json: [UInt8]) throws(LayoutError) -> (node: Node, requirement: Layout.Requirement) {
-        let value: JSONValue
-        do { value = try JSONDecoder().decode(JSONValue.self, from: Data(json)) }
-        catch let error as DecodingError { throw LayoutError(error) }
-        catch { throw LayoutError("\(error)") }
+extension PreparedNode {
+    public func admittingAvatar() throws(LayoutError) -> (drawing: PackedNode, requirement: Layout.Requirement) {
+        do { return try PackedNode.admitting(value) }
+        catch { throw parts.locating(error) }
+    }
+}
+
+extension JSONValue {
+    public func avatarNode() throws(LayoutError) -> Node { try decodedAvatar().node }
+
+    fileprivate func decodedAvatar() throws(LayoutError) -> (node: Node, requirement: Layout.Requirement) {
+        try refusingAvatarData(at: "sender.avatar")
         let decoded: (value: AvatarContent, log: FeatureLog)
-        do { decoded = try decodeLayout(AvatarContent.self, json: JSONValue.object(["lockScreen": value]).json) }
+        do { decoded = try decodeLayout(AvatarContent.self, json: JSONValue.object(["sender": .object(["avatar": self])]).json) }
         catch {
-            if let origin = error.origin(in: ["lockScreen": "sender.avatar"]) { throw LayoutError(origin.source + origin.rest) }
-            throw error
+            if error.description.hasPrefix("sender.avatar") { throw error }
+            throw LayoutError("sender.avatar: \(error)")
         }
-        try [decoded.value.node].admit()
+        do { try [decoded.value.node].admit() }
+        catch { throw LayoutError("sender.avatar: \(error)") }
         try decoded.value.node.admitAvatar(at: "sender.avatar")
         guard let requirement = decoded.log.requirement else { preconditionFailure("Every avatar records its required version") }
         return (decoded.value.node, requirement)
@@ -69,8 +77,9 @@ private struct AvatarContent: Decodable {
     let node: Node
 
     init(from decoder: any Decoder) throws {
-        FeatureLog.record("notification.avatar.node", at: [Key(stringValue: "sender"), Key(stringValue: "avatar")])
-        node = try decoder.container(keyedBy: Key.self).required("lockScreen")
+        let sender = try decoder.container(keyedBy: Key.self).nestedContainer(keyedBy: Key.self, forKey: Key(stringValue: "sender"))
+        FeatureLog.record("notification.avatar.node", at: sender.codingPath + [Key(stringValue: "avatar")])
+        node = try sender.required("avatar")
     }
 }
 
@@ -78,11 +87,11 @@ private extension JSONValue {
     func refusingAvatarData(at path: String) throws(LayoutError) {
         switch self {
         case let .object(fields):
-            if fields["each"] != nil { throw LayoutError("\(path).each: an avatar has no data; use a fixed node") }
+            if templateConstruct == .each { throw LayoutError("\(path).each: an avatar has no data; use a fixed node") }
             for key in fields.keys.sorted() { try fields[key]!.refusingAvatarData(at: "\(path).\(key)") }
         case let .array(items):
             for (index, value) in items.enumerated() { try value.refusingAvatarData(at: "\(path)[\(index)]") }
-        case let .string(text) where text.contains("{{"):
+        case .string where templateConstruct == .placeholder:
             throw LayoutError("\(path): an avatar has no data; replace the placeholder with a fixed value")
         case .string, .number, .bool, .null: break
         }
@@ -90,6 +99,10 @@ private extension JSONValue {
 }
 
 private extension Node {
+    static func admitAvatars(_ nodes: [Node], at path: String) throws(LayoutError) {
+        for (index, node) in nodes.enumerated() { try node.admitAvatar(at: "\(path)[\(index)]") }
+    }
+
     func admitAvatar(at path: String) throws(LayoutError) {
         switch content {
         case .link, .button, .toggle:
@@ -100,15 +113,11 @@ private extension Node {
             throw LayoutError("\(path): relative dates change with time, and an avatar is drawn once; use a fixed date or time")
         case .conditional(.environment, _, _):
             throw LayoutError("\(path).if: environment conditions change after arrival, and an avatar is drawn once; use a fixed condition")
-        case let .hstack(nodes, _, _), let .vstack(nodes, _, _), let .zstack(nodes, _), let .concat(nodes), let .viewThatFits(nodes, _):
-            let kind: String = switch content {
-            case .hstack: "hstack"
-            case .vstack: "vstack"
-            case .zstack: "zstack"
-            case .concat: "concat"
-            default: "viewThatFits"
-            }
-            for (index, node) in nodes.enumerated() { try node.admitAvatar(at: "\(path).\(kind)[\(index)]") }
+        case let .hstack(nodes, _, _): try Self.admitAvatars(nodes, at: "\(path).hstack")
+        case let .vstack(nodes, _, _): try Self.admitAvatars(nodes, at: "\(path).vstack")
+        case let .zstack(nodes, _): try Self.admitAvatars(nodes, at: "\(path).zstack")
+        case let .concat(nodes): try Self.admitAvatars(nodes, at: "\(path).concat")
+        case let .viewThatFits(nodes, _): try Self.admitAvatars(nodes, at: "\(path).viewThatFits")
         case let .grid(rows, _, _, _):
             for (row, nodes) in rows.enumerated() {
                 for (index, node) in nodes.enumerated() { try node.admitAvatar(at: "\(path).grid[\(row)][\(index)]") }

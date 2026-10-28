@@ -105,7 +105,10 @@ struct Delivery: Sendable {
     }
 
     private func send(_ job: NotificationJob, id: UUID) async throws -> Attempt {
-        let payload = try job.request.payload(id: job.id, token: job.fetchToken)
+        let drawing: PackedNode?
+        if case let .drawing(node)? = job.request.sender.avatar { drawing = try PackedNode(packing: node) }
+        else { drawing = nil }
+        let payload = try job.request.payload(id: job.id, token: job.fetchToken, drawing: drawing)
         var detail: [String: JSONValue] = [
             "pushID": .string(id.uuidString.lowercased()), "environment": .string(job.environment.rawValue),
             "notification": .string(job.id.uuidString), "name": .string(job.name.rawValue),

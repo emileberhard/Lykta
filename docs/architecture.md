@@ -117,7 +117,8 @@ or an existing layout requires explicitly sending it again.
 
 **Avatars are 64 pt viewports drawn by the extension.** A notification's
 `sender.avatar` is either an uploaded media id string or a node object. The
-gateway expands saved parts inside admission, then Core decodes the expanded
+gateway expands saved parts inside admission, preserving authored origins,
+then Core decodes the expanded
 node with its existing date strategy and feature log, recording
 `notification.avatar.node` at 0.17.0. Placeholders and `each` have no data and
 are refused before decoding. A pure exhaustive walk over decoded nodes and
@@ -131,8 +132,12 @@ so rollback can still send a notification without its drawing. Idempotency
 compares expanded canonical requests; changing a referenced part conflicts,
 and deleting it produces an unknown-part error. Neither changes queued content.
 `notification.put` records `avatar: drawing` and `avatarFingerprint`, never the
-node. The real APNs payload is measured with its complete packed drawing; an
-oversize error names the drawing and compressed bytes when it is largest.
+node. Admission returns the packed drawing once for payload measurement;
+delivery only packs the stored snapshot, without decoding or validation, so a
+rollback can still send nodes a newer writer accepted. The real APNs payload
+is measured with its complete packed drawing; an
+oversize error names the drawing and compressed bytes when its encoded payload
+share, including Base92, exceeds the body and title shares.
 
 `PackedNode` carries the frozen `~1` frame (eight-byte fingerprint, dictionary
 Deflate, Base92). `CompactFrame` owns that framing for both activity content
@@ -150,8 +155,9 @@ handler and best content, so system expiry and normal completion cannot both
 deliver. Media, donation and report waits remain bounded. Drawings report the
 old `image` avatar value; fallback reports `initials`. Only the report URL's
 `avatarFailure` query carries `frame`, `inflate`, `decode`, `deadline` or
-`render`, and only the received event stores it. Stored phone reports retain
-the 0.16 shape for rollback.
+`render`, and only the received event stores known values; unknown values
+are ignored without losing the report. Stored phone reports retain the 0.16
+shape for rollback.
 
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`

@@ -55,8 +55,8 @@ in each PUT's query, and media as the body of `POST /v1/media`.
 
 Save a reusable node or template with `lykta put parts/NAME FILE`, list this
 phone's library with `lykta get parts`, and remove one with
-`lykta delete parts/NAME`. Use `{"use":"NAME"}` in any activity or widget node
-position, even without root `parts`. Saving copies the parts it uses, and so
+`lykta delete parts/NAME`. Use `{"use":"NAME"}` in any activity, widget or
+notification-avatar node position, even without root `parts`. Saving copies the parts it uses, and so
 does sending a layout: replacing or deleting a saved part changes neither copy
 until you send it again. The
 [layout reference](references/layout.md#parts) has the details.

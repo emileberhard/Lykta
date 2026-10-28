@@ -13,6 +13,21 @@ public struct PreparedParts: Sendable {
     }
 }
 
+public struct PreparedNode: Sendable {
+    public let value: JSONValue
+    let parts: Parts
+
+    public init(_ value: JSONValue, saved: SavedParts, at root: String) throws(LayoutError) {
+        if case let .object(fields) = value, fields["parts"] != nil {
+            throw LayoutError("\(root): a node cannot define parts; save each part separately")
+        }
+        var parts = try Parts(value, saved: saved)
+        self.value = try parts.expandNode(value, at: root)
+        parts.retainUseSites()
+        self.parts = parts
+    }
+}
+
 struct Parts: Sendable {
     private let definitions: [String: JSONValue]?
     private let saved: SavedParts
@@ -56,8 +71,8 @@ struct Parts: Sendable {
         return LayoutError(source + rest + " (used at \(path))")
     }
 
-    mutating func expandNode(_ value: JSONValue) throws(LayoutError) -> JSONValue {
-        try node(value, at: "part", source: "part", stack: [])
+    mutating func expandNode(_ value: JSONValue, at root: String) throws(LayoutError) -> JSONValue {
+        try node(value, at: root, source: root, stack: [])
     }
 
     private mutating func node(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
@@ -116,6 +131,17 @@ struct Parts: Sendable {
             expanded = .object(result)
         }
         return expanded
+    }
+
+    fileprivate mutating func retainUseSites() {
+        var sites: [String: String] = [:]
+        for path in origins.keys.sorted(by: { $0.count < $1.count }) {
+            let source = origins[path]!
+            let ancestors = sites.keys.filter { path.hasPrefix($0 + ".") || path.hasPrefix($0 + "[") }
+            if let ancestor = ancestors.max(by: { $0.count < $1.count }), source == sites[ancestor]! + path.dropFirst(ancestor.count) { continue }
+            sites[path] = source
+        }
+        origins = sites
     }
 
     private mutating func copy(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
@@ -203,7 +229,7 @@ extension JSONValue {
             throw LayoutError("part: expected a node object or text shorthand")
         }
         var parts = try Parts(self, saved: saved)
-        let expanded = try parts.expandNode(self)
+        let expanded = try parts.expandNode(self, at: "part")
         let bytes = expanded.json.count
         guard bytes <= Layout.maximumBytes else { throw LayoutError("part is \(bytes) bytes; the limit is \(Layout.maximumBytes)") }
         return expanded
