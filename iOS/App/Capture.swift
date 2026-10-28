@@ -62,8 +62,7 @@ struct CaptureView: View {
                        named: "\(example.id).compact")
         }
         for example in await NotificationExample.bundled() {
-            guard let avatar = UIImage(data: example.avatar) else { throw CaptureError("could not read the avatar of \(example.id)") }
-            try render(Image(uiImage: avatar).resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle()), named: "\(example.id).avatar")
+            try render(NotificationAvatar(avatar: example.avatar), named: "\(example.id).avatar")
         }
         try render(Lights(separation: 0).frame(height: 400), named: "lights")
         screen = .home(.preview(.ready, activities: try Self.homeActivities.map { id in

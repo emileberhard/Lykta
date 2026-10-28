@@ -6,10 +6,14 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
         let id: String
     }
 
+    enum Avatar: Sendable {
+        case picture(Data), drawing(Node)
+    }
+
     let id: String
     let sender: String
     let body: String
-    let avatar: Data
+    let avatar: Avatar
     let image: Data?
     let media: [String: Data]
     private let fields: JSONValue
@@ -45,7 +49,9 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
         id = file.deletingPathExtension().lastPathComponent
         self.sender = sender
         self.body = body
-        avatar = media["sender.avatar"] ?? Initials.avatar(of: sender, sender: senderID)
+        if case let .object(node)? = try? fields.value(at: "sender.avatar") {
+            avatar = .drawing(try JSONValue.object(node).avatarNode())
+        } else { avatar = .picture(media["sender.avatar"] ?? Initials.avatar(of: sender, sender: senderID)) }
         image = media["image"]
         self.media = media
         self.fields = fields

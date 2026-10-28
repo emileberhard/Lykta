@@ -131,7 +131,7 @@ struct NotificationTests {
         (["sender": ["id": "printer", "name": "Printer", "color": "red"], "body": "Done"],
          "Unknown key \"sender.color\"; expected avatar, id, name."),
         (["sender": ["id": "printer", "name": "Printer", "avatar": "printer.png"], "body": "Done"],
-         "sender.avatar must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef."),
+         "sender.avatar must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef. For a drawn avatar, send a node object such as {\"text\":\"ET\"}."),
         (["sender": ["id": "Printer", "name": "Printer"], "body": "Done"],
          "sender.id names the sender: 1 to 64 lowercase letters, digits, '-', '_' or '.', the same for every notification it sends."),
         (["sender": ["id": "printer", "name": "Printer"], "body": ""], "body must be 1 to 500 characters."),

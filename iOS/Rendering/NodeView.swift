@@ -106,10 +106,10 @@ private struct ProgressNodeView: View {
     var body: some View {
         switch style {
         case .linear: view.progressViewStyle(.linear)
-        #if LYKTA_APP
-        case .circular: view.progressViewStyle(RingProgressViewStyle())
-        #else
+        #if LYKTA_WIDGET
         case .circular: view.progressViewStyle(.circular)
+        #else
+        case .circular: view.progressViewStyle(RingProgressViewStyle())
         #endif
         }
     }
@@ -147,7 +147,9 @@ private struct ProgressSchedule: TimelineSchedule {
         }
     }
 }
+#endif
 
+#if !LYKTA_WIDGET
 private struct RingProgressViewStyle: ProgressViewStyle {
     func makeBody(configuration: Configuration) -> some View {
         ZStack {

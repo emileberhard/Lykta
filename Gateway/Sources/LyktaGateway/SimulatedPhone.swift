@@ -203,8 +203,8 @@ final class SimulatedPhone: PushService {
         let lykta = alert.lykta
         let sound: NotificationReport.Sound = lykta.sound != nil ? .custom : alert.aps.sound == nil ? .none : .default
         try await store.reportNotification(lykta.id, token: lykta.token,
-                                           NotificationReport(style: .communication(lykta.avatar == nil ? .initials : .image), sound: sound),
-                                           now: Int(Date().timeIntervalSince1970))
+                                           NotificationReport(style: .communication(lykta.avatar == nil && lykta.drawing == nil ? .initials : .image), sound: sound),
+                                           avatarFailure: nil, now: Int(Date().timeIntervalSince1970))
     }
 
     private static func report(_ shown: [UUID: ObservedState], install: UUID) -> DeviceReport {

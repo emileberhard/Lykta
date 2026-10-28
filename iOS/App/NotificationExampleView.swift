@@ -49,11 +49,13 @@ struct NotificationExampleView: View {
 
 struct NotificationBanner: View {
     let example: NotificationExample
+    @ScaledMetric(relativeTo: .subheadline) private var avatarSize: CGFloat = 40
 
     var body: some View {
         HStack(spacing: 12) {
-            Picture(data: example.avatar)
-                .clipShape(Circle())
+            NotificationAvatar(avatar: example.avatar)
+                .scaleEffect(avatarSize / AvatarView.size)
+                .frame(width: avatarSize, height: avatarSize)
             VStack(alignment: .leading, spacing: 2) {
                 Text(example.sender)
                     .fontWeight(.semibold)
@@ -67,6 +69,27 @@ struct NotificationBanner: View {
                     .accessibilityHidden(true)
             }
         }
+    }
+}
+
+struct NotificationAvatar: View {
+    let avatar: NotificationExample.Avatar
+
+    var body: some View {
+        Group {
+            switch avatar {
+            case let .drawing(node): AvatarView(node: node)
+            case let .picture(data):
+                if let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+        }
+        .frame(width: AvatarView.size, height: AvatarView.size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 }
 

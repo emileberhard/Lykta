@@ -2,10 +2,13 @@ enum Presentation {
     case activity(String)
     case widget(WidgetLayout.Family)
     case widgetBackground
+    case avatar
 
     init(_ codingPath: [any CodingKey]) {
         let root = codingPath.first?.stringValue ?? ""
-        if let family = WidgetLayout.Family(rawValue: root) {
+        if codingPath.prefix(2).map(\.stringValue) == ["sender", "avatar"] {
+            self = .avatar
+        } else if let family = WidgetLayout.Family(rawValue: root) {
             self = .widget(family)
         } else if root == "background" {
             self = .widgetBackground
@@ -20,6 +23,7 @@ enum Presentation {
         case (_, "accessoryBackground"): "accessoryBackground works only in accessoryCircular and accessoryRectangular"
         case (.widget, "privacySensitive"): nil
         case (_, "privacySensitive"): "privacySensitive works only in a widget's presentations"
+        case (.avatar, _): nil
         case let (.activity(root), _):
             ["lockScreen", "expanded"].contains(root) ? nil : "links, buttons and toggles work only in lockScreen and expanded"
         case (.widget(.accessoryInline), "button"), (.widget(.accessoryInline), "toggle"):

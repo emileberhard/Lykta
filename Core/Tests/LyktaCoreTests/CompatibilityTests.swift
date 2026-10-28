@@ -52,7 +52,7 @@ struct CompatibilityTests {
         #expect(layout.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
         let baseline = try Layout(json: Array(layoutJSON(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
         #expect(baseline.requirement == nil)
-        #expect(Layout.version == Version(0, 14, 0))
+        #expect(Layout.version == Version(0, 17, 0))
     }
 
     @Test func recordsEveryWayAValueIsNamed() throws {

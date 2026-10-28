@@ -42,3 +42,15 @@ extension Double {
         self == rounded() && abs(self) < 1e15 ? String(Int64(self)) : String(self)
     }
 }
+
+extension JSONValue {
+    enum TemplateConstruct { case each, placeholder }
+
+    var templateConstruct: TemplateConstruct? {
+        switch self {
+        case let .object(fields) where fields["each"] != nil: .each
+        case let .string(text) where text.contains("{{"): .placeholder
+        default: nil
+        }
+    }
+}

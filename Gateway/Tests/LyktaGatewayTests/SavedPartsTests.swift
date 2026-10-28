@@ -60,8 +60,8 @@ struct SavedPartsTests {
     @Test(arguments: [
         (JSONValue.object(["symbol": "wifi", "value": .number(2)]), "parts/bad.name.value: expected a value within 0...1 (used at lockScreen)"),
         (JSONValue.object(["text": "{{missing}}"]), #"parts/bad.name.text: data has no value at "missing" (used at lockScreen)"#),
-        (JSONValue.object(["vstack": .array(["ok", ["if": .bool(true), "then": .bool(false)]])]), "parts/bad.name.vstack[1].then: Expected to decode Dictionary<String, Any> but found bool instead. (used at lockScreen.vstack[1].then)"),
-        (JSONValue.object(["vstack": .array([["text": "x", "modifiers": ["bold": .bool(true)]]])]), "parts/bad.name.vstack[0].modifiers: Expected to decode Array<Any> but found a dictionary instead. (used at lockScreen.vstack[0])"),
+        (JSONValue.object(["vstack": .array(["ok", ["if": .bool(true), "then": .bool(false)]])]), "parts/bad.name.vstack[1].then: Expected to decode Dictionary<String, Any> but found bool instead. (used at lockScreen)"),
+        (JSONValue.object(["vstack": .array([["text": "x", "modifiers": ["bold": .bool(true)]]])]), "parts/bad.name.vstack[0].modifiers: Expected to decode Array<Any> but found a dictionary instead. (used at lockScreen)"),
         (JSONValue.object(["accessoryBackground": .bool(true)]), "parts/bad.name.accessoryBackground: accessoryBackground works only in accessoryCircular and accessoryRectangular (used at lockScreen)"),
     ])
     func savesAnyNodeAndNamesTheSavedPartAndItsUseSiteWhenItFails(_ node: JSONValue, _ message: String) async throws {

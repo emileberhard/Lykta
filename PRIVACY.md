@@ -48,6 +48,7 @@ For each notification, for one day:
 
 - the name, the sender's ID and name, the text, whether it plays a sound and
   which uploaded files it uses, as your agents send them
+- an expanded layout node when the sender's avatar is a drawing
 - its delivery state and what the phone reports about how it prepared it,
   such as whether it showed the sender's avatar
 
@@ -109,7 +110,8 @@ app deletes them.
 
 ## Who else handles data
 
-Apple's Push Notification service delivers activity content and notifications
+Apple's Push Notification service delivers activity content and notifications,
+including an inline avatar drawing when one is supplied,
 to the phone, and tells its widgets when to reload; widget content travels
 only between the gateway and the phone. To show a notification as a message from its sender, the app
 shares the sender's name and the text with iOS on the phone, which may suggest

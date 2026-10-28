@@ -13,12 +13,31 @@ public struct PreparedParts: Sendable {
     }
 }
 
+public struct PreparedNode: Sendable {
+    public let value: JSONValue
+    let parts: Parts
+
+    public init(_ value: JSONValue, saved: SavedParts, at root: String) throws(LayoutError) {
+        if case let .object(fields) = value, fields["parts"] != nil {
+            throw LayoutError("\(root): a node cannot define parts; save each part separately")
+        }
+        var parts = try Parts(value, saved: saved)
+        self.value = try parts.expandNode(value, at: root)
+        self.parts = parts
+    }
+}
+
 struct Parts: Sendable {
     private let definitions: [String: JSONValue]?
     private let saved: SavedParts
     private var used: Set<String> = []
     private var nodes = 0
-    private var origins: [String: String] = [:]
+    private struct Origin {
+        let source: String
+        let useSite: String
+    }
+
+    private var origins: [String: Origin] = [:]
 
     init(_ value: JSONValue, saved: SavedParts) throws(LayoutError) {
         self.saved = saved
@@ -52,18 +71,27 @@ struct Parts: Sendable {
     var usesParts: Bool { !used.isEmpty }
 
     func locating(_ error: LayoutError) -> LayoutError {
-        guard let (source, path, rest) = error.origin(in: origins) else { return error }
-        return LayoutError(source + rest + " (used at \(path))")
+        var sites: [String: Origin] = [:]
+        for path in origins.keys.sorted(by: { $0.count < $1.count }) {
+            let origin = origins[path]!
+            let ancestors = sites.keys.filter { path.hasPrefix($0 + ".") || path.hasPrefix($0 + "[") }
+            if let ancestor = ancestors.max(by: { $0.count < $1.count }), origin.source == sites[ancestor]!.source + path.dropFirst(ancestor.count) { continue }
+            sites[path] = origin
+        }
+        guard let (source, path, rest) = error.origin(in: sites.mapValues(\.source)) else { return error }
+        return LayoutError(source + rest + " (used at \(sites[path]!.useSite))")
     }
 
-    mutating func expandNode(_ value: JSONValue) throws(LayoutError) -> JSONValue {
-        try node(value, at: "part", source: "part", stack: [])
+    mutating func expandNode(_ value: JSONValue, at root: String) throws(LayoutError) -> JSONValue {
+        try node(value, at: root, source: root, stack: [])
     }
 
     private mutating func node(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
         var value = value
         var source = source
         var stack = stack
+        let useSite = source
+        let useDepth = stack.count
         var uses: [(source: String, modifiers: [JSONValue], depth: Int)] = []
         while case let .object(fields) = value, let use = fields["use"] {
             guard Set(fields.keys).isSubset(of: ["use", "modifiers"]), case let .string(name) = use else {
@@ -88,10 +116,13 @@ struct Parts: Sendable {
         }
         var expanded: JSONValue
         if case let .object(fields) = value, fields["each"] != nil, fields["do"] != nil {
-            if source != path { origins[path] = source }
+            if source != path { origins[path] = Origin(source: source, useSite: path) }
             expanded = try element(value, as: .node, at: path, source: source, stack: stack)
         } else {
             expanded = try copy(value, at: path, source: source, stack: stack)
+        }
+        if stack.count > useDepth, let origin = origins[path] {
+            origins[path] = Origin(source: origin.source, useSite: useSite)
         }
         for use in uses.reversed() {
             var result: [String: JSONValue]
@@ -109,7 +140,7 @@ struct Parts: Sendable {
             for (index, modifier) in use.modifiers.enumerated() {
                 let target = "\(path).modifiers[\(offset + index)]"
                 let authored = "\(use.source).modifiers[\(index)]"
-                origins[target] = authored
+                origins[target] = Origin(source: authored, useSite: authored)
                 combined.append(try element(modifier, as: .modifier, at: target, source: authored, stack: Array(stack.prefix(use.depth))))
             }
             result["modifiers"] = .array(combined)
@@ -119,7 +150,7 @@ struct Parts: Sendable {
     }
 
     private mutating func copy(_ value: JSONValue, at path: String, source: String, stack: [String]) throws(LayoutError) -> JSONValue {
-        if source != path { origins[path] = source }
+        if source != path { origins[path] = Origin(source: source, useSite: path) }
         if case .null = value { return value }
         nodes += 1
         guard !usesParts || nodes <= Layout.maximumNodes else {
@@ -203,7 +234,7 @@ extension JSONValue {
             throw LayoutError("part: expected a node object or text shorthand")
         }
         var parts = try Parts(self, saved: saved)
-        let expanded = try parts.expandNode(self)
+        let expanded = try parts.expandNode(self, at: "part")
         let bytes = expanded.json.count
         guard bytes <= Layout.maximumBytes else { throw LayoutError("part is \(bytes) bytes; the limit is \(Layout.maximumBytes)") }
         return expanded

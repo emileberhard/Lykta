@@ -173,6 +173,7 @@ extension Layout {
             "Node.Content.Condition.Environment.vibrant",
         ],
         "0.14.0": ["widget.button", "widget.toggle"],
+        "0.17.0": ["notification.avatar.node"],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

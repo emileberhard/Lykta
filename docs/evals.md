@@ -91,7 +91,10 @@ should show something carry the same check, which passes when the phone drew
 an activity the agent sent. The reminder's passes when the agent sent nothing
 now, tests-done's when the phone received a notification and the agent
 started no activity, and chime's when that notification played a sound the
-agent made and uploaded.
+agent made and uploaded. Drawn-avatar seeds `clawd` through an idempotent
+pre-agent environment healthcheck, asks the agent to act as Claude, and checks
+that its received notification has the same `avatarFingerprint` as that saved
+part. It checks gateway records, not what the agent claims it sent.
 
 ## Flow
 

@@ -65,6 +65,7 @@ struct API: Sendable {
         "examples/solar-eclipse.json": PackageResources.solar_eclipse_json,
         "examples/widgets/steps-widget.json": PackageResources.steps_widget_json,
         "examples/widgets/water-widget.json": PackageResources.water_widget_json,
+        "examples/notifications/agent-update.json": PackageResources.agent_update_json,
         "examples/notifications/benchy.jpg": PackageResources.benchy_jpg,
         "examples/notifications/doorbell.json": PackageResources.doorbell_json,
         "examples/notifications/doorbell.wav": PackageResources.doorbell_wav,
@@ -169,7 +170,7 @@ struct API: Sendable {
         case ("GET", "v1/notifications/{name}"):
             return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
         case ("POST", "v1/device/notifications/{id}/report"):
-            try await store.reportNotification(try Self.notification(path[3]), token: try Self.bearer(request), try Self.decode(request.body), now: now)
+            try await store.reportNotification(try Self.notification(path[3]), token: try Self.bearer(request), try Self.decode(request.body), avatarFailure: request.query["avatarFailure"].flatMap(PackedNode.Failure.init(rawValue:)), now: now)
             return .noContent
         case ("GET", "v1/device/notifications/{id}/media/{media}"):
             guard let medium = MediaID(rawValue: path[5]) else { throw APIError(.notFound, "No medium has the id \(path[5]).") }

@@ -79,7 +79,7 @@ private struct Template {
         if path != output { locations[output] = path }
         switch value {
         case let .object(fields):
-            guard fields["each"] == nil else { throw LayoutError("\(path): each must be an item in a list") }
+            guard value.templateConstruct != .each else { throw LayoutError("\(path): each must be an item in a list") }
             var filled: [String: JSONValue] = [:]
             for (key, value) in fields where key != "toggle" {
                 try count(key.utf8.count)
@@ -98,14 +98,14 @@ private struct Template {
         case let .array(items):
             var filled: [JSONValue] = []
             for (index, item) in items.enumerated() {
-                if case let .object(fields) = item, fields["each"] != nil {
+                if case let .object(fields) = item, item.templateConstruct == .each {
                     filled += try repeating(fields, at: "\(path)[\(index)]", output: output, offset: filled.count, in: scope)
                 } else {
                     filled.append(try fill(item, at: "\(path)[\(index)]", output: "\(output)[\(filled.count)]", in: scope))
                 }
             }
             return .array(filled)
-        case let .string(text) where text.contains("{{"):
+        case let .string(text) where value.templateConstruct == .placeholder:
             return try substitute(text, at: path, in: scope)
         case let .string(text):
             try count(text.utf8.count)

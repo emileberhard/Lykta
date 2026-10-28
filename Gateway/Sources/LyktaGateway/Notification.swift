@@ -2,10 +2,46 @@ import Foundation
 import LyktaCore
 
 struct NotificationRequest: Codable, Equatable, Sendable {
+    enum Avatar: Equatable, Sendable {
+        case medium(MediaID)
+        case drawing(JSONValue)
+    }
+
     struct Sender: Codable, Equatable, Sendable {
         let id: Name
         let name: String
-        let avatar: MediaID?
+        let avatar: Avatar?
+
+        init(id: Name, name: String, avatar: Avatar?) {
+            self.id = id
+            self.name = name
+            self.avatar = avatar
+        }
+
+        init(from decoder: any Decoder) throws {
+            let fields = try decoder.container(keyedBy: CodingKeys.self)
+            id = try fields.decode(Name.self, forKey: .id)
+            name = try fields.decode(String.self, forKey: .name)
+            if let drawing = try fields.decodeIfPresent(JSONValue.self, forKey: .drawing) {
+                guard !fields.contains(.avatar) else {
+                    throw DecodingError.dataCorruptedError(forKey: .drawing, in: fields, debugDescription: "a sender has one avatar")
+                }
+                avatar = .drawing(drawing)
+            } else { avatar = try fields.decodeIfPresent(MediaID.self, forKey: .avatar).map(Avatar.medium) }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var fields = encoder.container(keyedBy: CodingKeys.self)
+            try fields.encode(id, forKey: .id)
+            try fields.encode(name, forKey: .name)
+            switch avatar {
+            case let .medium(id)?: try fields.encode(id, forKey: .avatar)
+            case let .drawing(node)?: try fields.encode(node, forKey: .drawing)
+            case nil: break
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey { case id, name, avatar, drawing }
     }
 
     enum Sound: Equatable, Sendable, Codable {
@@ -43,7 +79,7 @@ struct NotificationRequest: Codable, Equatable, Sendable {
 
     var references: [Reference] {
         var references: [Reference] = []
-        if let avatar = sender.avatar { references.append(Reference(path: "sender.avatar", id: avatar, kind: .image)) }
+        if case let .medium(avatar)? = sender.avatar { references.append(Reference(path: "sender.avatar", id: avatar, kind: .image)) }
         if case let .medium(id)? = sound { references.append(Reference(path: "sound", id: id, kind: .sound)) }
         if let image { references.append(Reference(path: "image", id: image, kind: .image)) }
         return references
@@ -72,7 +108,10 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         case let .string(text)? where MediaID(rawValue: text) != nil: sound = .medium(MediaID(rawValue: text)!)
         default: throw invalid("sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence.")
         }
-        return NotificationRequest(sender: Sender(id: senderID, name: name, avatar: try medium(sender["avatar"], at: "sender.avatar")),
+        let avatar: Avatar?
+        if case let .object(node)? = sender["avatar"] { avatar = .drawing(.object(node)) }
+        else { avatar = try medium(sender["avatar"], at: "sender.avatar").map(Avatar.medium) }
+        return NotificationRequest(sender: Sender(id: senderID, name: name, avatar: avatar),
                                    body: body, sound: sound, image: try medium(fields["image"], at: "image"))
     }
 
@@ -82,7 +121,8 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         case let .string(text)?:
             if let id = MediaID(rawValue: text) { return id }
             fallthrough
-        default: throw invalid("\(path) must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef.")
+        default: throw invalid("\(path) must be the id of an image from POST /v1/media, such as m_0123456789abcdef0123456789abcdef."
+                          + (path == "sender.avatar" ? " For a drawn avatar, send a node object such as {\"text\":\"ET\"}." : ""))
         }
     }
 
@@ -95,9 +135,16 @@ struct NotificationRequest: Codable, Equatable, Sendable {
     func payload(id: UUID, token: String) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
+        let avatar: MediaID?
+        let drawing: PackedNode?
+        switch sender.avatar {
+        case let .medium(id)?: avatar = id; drawing = nil
+        case let .drawing(node)?: avatar = nil; drawing = try PackedNode(packing: node)
+        case nil: avatar = nil; drawing = nil
+        }
         return try encoder.encode(Payload(
             aps: .init(alert: .init(title: sender.name, body: body), sound: sound == nil ? nil : "default", threadID: sender.id.rawValue),
-            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token, avatar: sender.avatar, sound: soundMedium, image: image)))
+            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token, avatar: avatar, drawing: drawing, sound: soundMedium, image: image)))
     }
 
     private var soundMedium: MediaID? {
