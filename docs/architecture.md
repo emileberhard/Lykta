@@ -563,14 +563,15 @@ job starts, then reuses CI on that exact commit. Building inside the same job
 before its admission check would expose the later credentials to the earlier
 code. CI and releases use one `.xcode-version` pin and locked package inputs.
 
-**One exact upload per release job.** The serialized TestFlight job selects
-max+1 across processed builds and pending uploads, injects it into every bundle
-and disables export renumbering. Later jobs select that exact number. Each
-version belongs to one immutable tag, so retries reuse the build or processing
-upload Apple holds for that version and skip archiving, signing and uploading.
-GitHub's attempt history fences any earlier attempt that started the separate
-upload step: wait up to 15 minutes for Apple's list to show it, then fail rather
-than upload again. A lost upload acknowledgement must not create a duplicate;
+**One exact upload per release job.** The `numbers` job reserves max+1 across
+processed builds and pending uploads once per run. The serialized TestFlight
+job injects a number at or above it into every bundle and disables export
+renumbering. Later jobs select that exact number. A first attempt always
+uploads, because App Store Connect can hold older builds of the same version
+(it treats 1.0 and 1.0.0 as one version). GitHub's attempt history fences any
+earlier attempt that started the separate upload step: reuse its build at or
+above the reservation and skip archiving, signing and uploading, or wait up to
+15 minutes for Apple's list to show it, then fail rather than upload again. A lost upload acknowledgement must not create a duplicate;
 a failed entitlement check has not started the upload. The selector's command
 substitution propagates a failure before any build-number output is written.
 `entitlements.json` covers every app and extension, replacing the workflow's
