@@ -93,6 +93,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      statuses: read
     env:
       VERSION: ${{ github.ref_name }}
     steps:
