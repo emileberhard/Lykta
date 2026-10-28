@@ -90,6 +90,8 @@ struct Parts: Sendable {
         var value = value
         var source = source
         var stack = stack
+        let useSite = source
+        let useDepth = stack.count
         var uses: [(source: String, modifiers: [JSONValue], depth: Int)] = []
         while case let .object(fields) = value, let use = fields["use"] {
             guard Set(fields.keys).isSubset(of: ["use", "modifiers"]), case let .string(name) = use else {
@@ -118,6 +120,9 @@ struct Parts: Sendable {
             expanded = try element(value, as: .node, at: path, source: source, stack: stack)
         } else {
             expanded = try copy(value, at: path, source: source, stack: stack)
+        }
+        if stack.count > useDepth, let origin = origins[path] {
+            origins[path] = Origin(source: origin.source, useSite: useSite)
         }
         for use in uses.reversed() {
             var result: [String: JSONValue]

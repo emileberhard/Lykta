@@ -112,6 +112,16 @@ struct PartsTests {
         }
     }
 
+    @Test func referencesInsideAppendedModifiersKeepTheAuthoredUseSite() throws {
+        let template = try json(#"""
+        {"parts":{"base":{"text":"Hi","modifiers":[{"bold":true}]},"bad":{"symbol":"wifi","value":2}},
+        "lockScreen":{"use":"base","modifiers":[{"overlay":{"use":"bad"}}]},"compactLeading":"","compactTrailing":"","minimal":""}
+        """#)
+        #expect(throws: LayoutError("parts.bad.value: expected a value within 0...1 (used at lockScreen.modifiers[0].overlay)")) {
+            try template.filled(with: .object([:]), for: .activity)
+        }
+    }
+
     @Test func resolvesLongAliasChainsWithoutRecursiveCopies() throws {
         var parts: [String: JSONValue] = ["p0": .string("leaf")]
         for index in 1...2_000 { parts["p\(index)"] = .object(["use": .string("p\(index - 1)")]) }
