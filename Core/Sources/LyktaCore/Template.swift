@@ -2,17 +2,7 @@ import Foundation
 
 extension JSONValue {
     public func filled(with data: JSONValue, for surface: Surface) throws(LayoutError) -> JSONValue {
-        var template = Template(data: data)
-        var parts = try Parts(self)
-        let expanded = try parts.expand(self, for: surface)
-        let filled: JSONValue
-        do { filled = try template.fill(expanded, at: "", output: "", in: [:]) }
-        catch { throw parts.locating(error) }
-        if case let .object(fields) = self, fields["parts"] != nil {
-            do { try surface.validate(filled.json) }
-            catch { throw parts.locating(template.locating(error)) }
-        }
-        return filled
+        try PreparedParts(self, saved: [:], for: surface).filled(with: data)
     }
 
     public func value(at path: String) throws(LayoutError) -> JSONValue {
@@ -272,5 +262,19 @@ private struct Template {
 
     private static func join(_ path: String, _ key: String) -> String {
         path.isEmpty ? key : "\(path).\(key)"
+    }
+}
+
+extension PreparedParts {
+    public func filled(with data: JSONValue) throws(LayoutError) -> JSONValue {
+        var template = Template(data: data)
+        let filled: JSONValue
+        do { filled = try template.fill(value, at: "", output: "", in: [:]) }
+        catch { throw parts.locating(error) }
+        if parts.usesParts {
+            do { try surface.validate(filled.json) }
+            catch { throw parts.locating(template.locating(error)) }
+        }
+        return filled
     }
 }

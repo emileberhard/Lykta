@@ -104,6 +104,11 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   and bound expansion while copying by `Layout.maximumNodes`. `Parts` expands
   only the node positions `Layout` decodes, so a new node-valued key joins it
   in the same change.
+- Saved parts belong to one phone, with at most 64 names. Saving expands
+  saved references into snapshots, and activity and widget PUTs expand once
+  inside the store transaction before filling, validating and storing the
+  snapshot. Body parts shadow saved parts; only body parts must be used.
+  Data-only updates and taps use stored snapshots without library reads.
 - `Store` commits every state change in one transaction. Ending fences later
   updates, updates coalesce to the latest revision, and starts and ends are
   never dropped.

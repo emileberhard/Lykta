@@ -69,6 +69,12 @@ list, and the [example notifications](Gateway/Sources/LyktaGateway/Skill/example
 range from a CI run to a doorbell with its own chime. The app shows each one
 and sends any of them to your phone to try live.
 
+Agents can also save up to 64 reusable layout parts per phone with
+`lykta put parts/NAME FILE`, list them with `lykta get parts`, and delete them
+with `lykta delete parts/NAME`. Activity and widget layouts reference them as
+`{"use":"NAME"}`. Each save and layout takes an expanded snapshot, so editing
+the library leaves existing content unchanged.
+
 ## Self-host
 
 You need an Apple Developer account, a machine that runs Docker, and an HTTPS

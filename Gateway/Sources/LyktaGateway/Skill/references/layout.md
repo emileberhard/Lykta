@@ -47,11 +47,27 @@ Define a repeated node once in the layout's root `parts` object, then place
 {"layout":{"parts":{"icon":{"symbol":"bolt.fill","modifiers":[{"foreground":"yellow"}]}},"lockScreen":{"hstack":[{"use":"icon"},"Charging"]},"compactLeading":{"use":"icon"},"compactTrailing":"80%","minimal":{"use":"icon","modifiers":[{"font":"caption"}]}}}
 ```
 
-Parts may use other parts, but cycles, unknown names and unused definitions are
-errors. Expansion is bounded by the layout's 256-node budget. It happens before
+Parts may use other parts, but cycles, unknown names and unused body definitions
+are errors. Expansion is bounded by the layout's 256-node budget. It happens before
 placeholders and `each` are filled: a part reads data and `each` variables at
 its use site exactly as copied JSON would, with no parameters or separate scope.
 The gateway stores the expanded template, so parts cost no phone compatibility.
+
+Saved parts belong to one phone, up to 64 names. `lykta put parts/NAME FILE`
+saves a node or template without root `parts` and answers 201 or, replacing
+one, 200 with `{"name","node"}`; a 65th name gets `too_many_parts`.
+`lykta get parts` returns `{"parts":{"NAME":node}}`, and
+`lykta delete parts/NAME` removes one.
+
+`use` resolves body parts first, then saved parts, and an unknown name's error
+lists both. Saving checks only that the part is a node within the byte limit,
+so placeholders, `each` and widget-only nodes are fine. The rest is checked
+where the part is used, with errors such as
+`parts/icon.value: expected a value within 0...1 (used at lockScreen)`.
+
+Saving copies the saved parts a part uses, and a layout stores its parts
+copied, so replacing or deleting a saved part changes neither until you send
+it again.
 
 ## Data
 

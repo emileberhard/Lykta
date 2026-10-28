@@ -79,8 +79,8 @@ depth and modifiers keep rendering bounded.
 root `parts` maps names to nodes, and `use` copies one into any node position.
 Core expands parts before filling, without data, so placeholders and `each`
 variables have copy-paste scope at the use site; use-site modifiers append to
-the copied modifiers. Nested parts are allowed, cycles and unused definitions
-are refused, and expansion counts nodes as it copies, stopping at the layout
+the copied modifiers. Nested parts are allowed, cycles and unused body
+definitions are refused, and expansion counts nodes as it copies, stopping at the layout
 budget before an exponential graph can build its result. This reuses the
 existing template filling and decoder rather than adding parameters or phone
 features. Admission validates the authored template with errors mapped back to
@@ -89,6 +89,31 @@ that stored template, so a 0.7.1 gateway can still read and update it after a
 rollback; neither `parts` nor `use` needs a `Layout.introduced` row. The trade-off
 is unchanged stored and push size: this saves agent output tokens, while
 Deflate already compresses repeated nodes on the wire.
+
+**Saved parts are snapshots in the template.** Each phone owns at most 64
+named node templates in the gateway's `parts` table. Agent PUT, GET and DELETE
+use the phone's agent token. Saving checks only that the value is a node within
+the byte limit, because a template binds no data and picks no presentation;
+the node budget, decoding and every path-bearing error stay at the use site,
+where errors name the saved part as `parts/NAME`. Saving expands other saved
+references, and activity and widget
+admission expands body-first, then saved parts, once inside its transaction.
+That prepared value feeds filling, validation, payload sizing and storage.
+Only body definitions must be used. Data-only updates and taps use the stored
+snapshot, so library edits never silently change existing content.
+
+Core takes `SavedParts` (`[Name: JSONValue]`) by value and lists external
+references without I/O: every `{"use": name}` object anywhere in the JSON,
+so only `Parts` knows node positions and a stray match costs one missed key
+lookup. Store reads only referenced nodes by the composite
+primary key in one query, and skips it when there are none. Unknown-reference
+failures additionally read just the library's names for the diagnostic; no
+unreferenced node is loaded. Events `part.put` and `part.delete` contain the
+name and fingerprint only. The additive STRICT table cascades with its phone,
+so schema version 1 and rollback readers remain compatible. Copy-paste
+snapshots reuse the existing expansion and template machinery instead of
+introducing live dependencies or invalidation. Refreshing a saved outer part
+or an existing layout requires explicitly sending it again.
 
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`
@@ -656,6 +681,9 @@ limit bounds.
   saved scripts use, and the `wait` and `now` request fields. The installed
   `lykta` paths, the `lykta-skill` header and the line that ends each file
   `lykta` installs, which installed copies of `lykta` compare.
+- The `/v1/parts` routes, the `{"parts":{…}}` listing, the 64-part limit
+  with `too_many_parts`, and the snapshot rule, which agents' saved scripts
+  and layouts rely on.
 - The `/v1/notifications` and `/v1/media` contracts, their states, lifetimes,
   limits and error codes, the `lykta` payload object with its media IDs, and
   the report and media routes, which installed extensions use, and the

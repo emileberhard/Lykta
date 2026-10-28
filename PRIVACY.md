@@ -24,6 +24,10 @@ For each registered phone:
   hash of the key's public part and proves the registration came from a genuine
   copy of the app
 
+For each saved part, until your agents delete it:
+
+- the name and expanded layout template, stored per phone, up to 64 parts
+
 For each Live Activity:
 
 - the name, title, layout, data and alert text your agents send
@@ -53,7 +57,7 @@ or use:
 - the file, its type, its length or size, and a hash that finds a repeated
   upload
 
-Your agents supply all activity, widget and notification content, including sounds and
+Your agents supply all saved parts, activity, widget and notification content, including sounds and
 images, apart from the fixed examples you send from the app's gallery and the fixed
 hello that `lykta setup` sends. Do not send content that you do not
 want stored on the gateway.
@@ -74,7 +78,7 @@ gateway a log of what it observes:
 - errors, and Apple's MetricKit crash, hang and performance reports
 
 The gateway logs what it did with each request and push. These logs contain no
-tokens, no activity, widget or notification text and no uploaded files. Your agents can read your phone's log with the
+tokens, no saved part, activity, widget or notification text and no uploaded files. Your agents can read your phone's log with the
 agent token. The gateway's operator can read every phone's log. A refused
 request's message names layout paths and byte counts, never layout values.
 
@@ -83,7 +87,7 @@ request's message names layout paths and byte counts, never layout values.
 The gateway deletes ended activities about 7 days after they end,
 notifications a day after they arrive, uploaded sounds and images a day after
 their last upload or use, and diagnostics after 14 days. Reset in the app ends
-every activity and deletes the phone's registration, activities, widgets,
+every activity and deletes the phone's registration, activities, widgets, saved parts,
 notifications, uploaded files and diagnostics from the gateway. If you delete
 the app without Reset, the registration stays; the gateway forgets its push
 tokens once Apple rejects them.
