@@ -107,7 +107,7 @@ struct PartsTests {
         {"parts":{"base":{"text":"Hi","modifiers":[{"bold":true}]},"alias":{"use":"base","modifiers":[{"italic":true}]}},
         "lockScreen":{"use":"alias","modifiers":[{"frame":{"width":-1}}]},"compactLeading":"","compactTrailing":"","minimal":""}
         """#)
-        #expect(throws: LayoutError("lockScreen.modifiers[0].frame.width: must not be negative (used at lockScreen.modifiers[2])")) {
+        #expect(throws: LayoutError("lockScreen.modifiers[0].frame.width: must not be negative (used at lockScreen.modifiers[0])")) {
             try template.filled(with: .object([:]), for: .activity)
         }
     }

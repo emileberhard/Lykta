@@ -100,7 +100,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   to the other environment. An activity's updates go to its channel's
   environment.
 - Stored layout templates are expanded: `parts` and node `use` never reach
-  database layouts or the phone. Expand before filling, with copy-paste scope,
+  database layouts or the phone. Expand before filling, with copy-paste scope and errors at authored use sites,
   and bound expansion while copying by `Layout.maximumNodes`. `Parts` expands
   only the node positions `Layout` decodes, so a new node-valued key joins it
   in the same change.
