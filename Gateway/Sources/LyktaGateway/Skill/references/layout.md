@@ -47,11 +47,31 @@ Define a repeated node once in the layout's root `parts` object, then place
 {"layout":{"parts":{"icon":{"symbol":"bolt.fill","modifiers":[{"foreground":"yellow"}]}},"lockScreen":{"hstack":[{"use":"icon"},"Charging"]},"compactLeading":{"use":"icon"},"compactTrailing":"80%","minimal":{"use":"icon","modifiers":[{"font":"caption"}]}}}
 ```
 
-Parts may use other parts, but cycles, unknown names and unused definitions are
-errors. Expansion is bounded by the layout's 256-node budget. It happens before
+Parts may use other parts, but cycles, unknown names and unused body definitions
+are errors. Expansion is bounded by the layout's 256-node budget. It happens before
 placeholders and `each` are filled: a part reads data and `each` variables at
 its use site exactly as copied JSON would, with no parameters or separate scope.
 The gateway stores the expanded template, so parts cost no phone compatibility.
+
+Saved parts belong to one phone. `lykta put parts/NAME FILE` saves a node or
+template directly (object or text shorthand, without root `parts`).
+`lykta get parts` returns `{"parts":{"NAME":node}}` sorted by name;
+`lykta delete parts/NAME` removes one. Names use 1 to 64 lowercase letters,
+digits, `-`, `_` or `.`. PUT returns 201 (new) or 200 (replacement) with
+`{"name":"NAME","node":node}`; DELETE returns 204 or 404 `not_found`.
+The clients' `wait` query is ignored. A 65th name gets `too_many_parts`;
+replacement is allowed at the limit.
+
+`use` resolves body parts first, then saved parts, even without root `parts`.
+Unused saved parts are allowed. Unknown names list both sets; errors name the
+saved part and its use site. Saving checks shape, bytes, nodes, depth and
+modifiers only. Placeholders, `each` and widget-only nodes are allowed; full
+validation happens at use, for that presentation.
+
+Both boundaries take snapshots: saving expands other saved references, and
+activity and widget layouts store expanded templates. Replacing or deleting a
+part changes neither snapshot. Data updates and taps refill without library
+reads. Resend the outer part or layout to refresh it.
 
 ## Data
 

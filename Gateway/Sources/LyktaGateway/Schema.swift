@@ -61,6 +61,11 @@ enum Schema {
           app_version TEXT NOT NULL,
           created_at INTEGER NOT NULL
         ) STRICT;
+        CREATE TABLE IF NOT EXISTS parts (
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          name TEXT NOT NULL, node TEXT NOT NULL,
+          PRIMARY KEY (device_id, name)
+        ) STRICT;
         CREATE TABLE IF NOT EXISTS widgets (
           id TEXT PRIMARY KEY,
           device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,

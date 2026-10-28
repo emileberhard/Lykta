@@ -51,6 +51,20 @@ because `lykta` passes it on through cmd. Without a shell, send the same
 requests over HTTP with the token as `Authorization: Bearer <token>`, `wait=10`
 in each PUT's query, and media as the body of `POST /v1/media`.
 
+## Saved parts
+
+Save a reusable node or template with `lykta put parts/NAME FILE`, list this
+phone's library with `lykta get parts`, and remove one with
+`lykta delete parts/NAME`. Use `{"use":"NAME"}` in any activity or widget node
+position, even without root `parts`. Body parts shadow saved parts.
+Placeholders and `each` use the activity's or widget's data. Each phone can
+save 64 parts; delete one before adding another at the limit.
+
+A saved part snapshots any other saved parts it uses when saved. An activity
+or widget snapshots its parts when its layout is sent. Replacing or deleting a
+saved part changes neither snapshot; send the layout again to refresh it.
+Saving checks shape and structural budgets; full validation happens at use.
+
 ## Choose the form
 
 Pick the form from what the user asked for:

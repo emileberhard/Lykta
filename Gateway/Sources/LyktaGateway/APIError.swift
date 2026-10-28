@@ -11,6 +11,7 @@ struct APIError: Error, Encodable, Sendable {
         case conflict
         case deviceNotReady = "device_not_ready"
         case tooManyActivities = "too_many_activities"
+        case tooManyParts = "too_many_parts"
         case tooManyWidgets = "too_many_widgets"
         case widgetDeleted = "widget_deleted"
         case payloadTooLarge = "payload_too_large"
@@ -28,7 +29,7 @@ struct APIError: Error, Encodable, Sendable {
             case .registrationClosed, .registrationRefused: 403
             case .notFound: 404
             case .widgetDeleted: 410
-            case .tooManyWidgets, .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired, .notificationsNotAllowed, .notificationsNotSetUp: 409
+            case .tooManyParts, .tooManyWidgets, .deviceNotReady, .tooManyActivities, .conflict, .appUpdateRequired, .notificationsNotAllowed, .notificationsNotSetUp: 409
             case .payloadTooLarge: 413
             case .unsupportedMedia: 415
             case .tooManyNotifications: 429

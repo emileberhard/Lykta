@@ -217,6 +217,14 @@ struct API: Sendable {
         case ("DELETE", "v1/widgets/{name}"):
             try await store.deleteWidget(try await agent(request), name: try Self.name(path[2]))
             return .noContent
+        case ("PUT", "v1/parts/{name}"):
+            let result = try await store.putPart(try await agent(request), name: try Self.name(path[2]), node: try Self.decode(request.body))
+            return Self.json(result.created ? 201 : 200, result.part)
+        case ("GET", "v1/parts"):
+            return Self.json(200, ["parts": try await store.parts(try await agent(request))])
+        case ("DELETE", "v1/parts/{name}"):
+            try await store.deletePart(try await agent(request), name: try Self.name(path[2]))
+            return .noContent
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -245,7 +253,7 @@ struct API: Sendable {
 
     private static func route(_ path: [String]) -> String {
         switch path.count {
-        case 3 where path[0] == "v1" && ["activities", "notifications", "widgets"].contains(path[1]): "v1/\(path[1])/{name}"
+        case 3 where path[0] == "v1" && ["activities", "notifications", "widgets", "parts"].contains(path[1]): "v1/\(path[1])/{name}"
         case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "activities": "v1/device/activities/{id}"
         case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "widgets" && path[3] != "credential": "v1/device/widgets/{id}"
         case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"

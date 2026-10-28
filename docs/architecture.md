@@ -90,6 +90,27 @@ rollback; neither `parts` nor `use` needs a `Layout.introduced` row. The trade-o
 is unchanged stored and push size: this saves agent output tokens, while
 Deflate already compresses repeated nodes on the wire.
 
+**Saved parts are snapshots in the template.** Each phone owns at most 64
+named node templates in the gateway's `parts` table. Agent PUT, GET and DELETE
+use the phone's agent token. Saving checks JSON shape and Core's structural
+budgets without binding data or selecting a presentation; full decoding stays
+at the use site. Saving expands other saved references, and activity and widget
+admission expands body-first, then saved parts, once inside its transaction.
+That prepared value feeds filling, validation, payload sizing and storage.
+Only body definitions must be used. Data-only updates and taps use the stored
+snapshot, so library edits never silently change existing content.
+
+Core takes `SavedParts` (`[Name: JSONValue]`) by value and lists external
+references without I/O. Store reads only referenced nodes by the composite
+primary key in one query, and skips it when there are none. Unknown-reference
+failures additionally read just the library's names for the diagnostic; no
+unreferenced node is loaded. Events `part.put` and `part.delete` contain the
+name and fingerprint only. The additive STRICT table cascades with its phone,
+so schema version 1 and rollback readers remain compatible. Copy-paste
+snapshots reuse the existing expansion and template machinery instead of
+introducing live dependencies or invalidation. Refreshing a saved outer part
+or an existing layout requires explicitly sending it again.
+
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`
 records every feature a layout uses (node kinds, keys, enum cases and value

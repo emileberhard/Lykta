@@ -2,9 +2,11 @@ import Foundation
 
 public struct LayoutError: Error, Equatable, Sendable, CustomStringConvertible {
     public let description: String
+    public let undefinedPart: String?
 
     public init(_ description: String) {
         self.description = description
+        undefinedPart = nil
     }
 
     public init(_ error: DecodingError) {
@@ -16,6 +18,16 @@ public struct LayoutError: Error, Equatable, Sendable, CustomStringConvertible {
         }
         let path = Self.path(context.codingPath)
         description = path.isEmpty ? detail : "\(path): \(detail)"
+        undefinedPart = nil
+    }
+
+    init(undefinedPart: String, at path: String, defined: [String]) {
+        description = "\(path): unknown part \"\(undefinedPart)\"; defined parts: \(defined.sorted().joined(separator: ", "))"
+        self.undefinedPart = undefinedPart
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.description == rhs.description
     }
 
     static func path(_ codingPath: [any CodingKey]) -> String {

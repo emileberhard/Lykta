@@ -208,6 +208,75 @@ actor Store {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
     }
 
+    struct SavedPart: Encodable {
+        let name: Name
+        let node: JSONValue
+    }
+
+    func putPart(_ device: Device, name: Name, node: JSONValue) throws -> (part: SavedPart, created: Bool) {
+        try db.transaction {
+            let exists = try !db.query("SELECT 1 FROM parts WHERE device_id = ? AND name = ?", device.id, name).isEmpty
+            if !exists, try count(db.query("SELECT count(*) AS n FROM parts WHERE device_id = ?", device.id)) >= 64 {
+                throw APIError(.tooManyParts, "Delete a saved part before saving another; the limit is 64.")
+            }
+            let expanded: JSONValue
+            do { expanded = try node.expandingPart(saved: savedParts(node.savedPartReferences(), on: device)) }
+            catch let error as LayoutError { throw try partError(error, on: device) }
+            try db.run("""
+                INSERT INTO parts (device_id, name, node) VALUES (?, ?, ?)
+                  ON CONFLICT(device_id, name) DO UPDATE SET node = excluded.node
+                """, device.id, name, Self.text(expanded))
+            try record("part.put", device: device.id, activity: nil,
+                       ["name": .string(name.rawValue), "fingerprint": .string(fingerprint(expanded.json))])
+            return (SavedPart(name: name, node: expanded), !exists)
+        }
+    }
+
+    func parts(_ device: Device) throws -> JSONValue {
+        var parts: [String: JSONValue] = [:]
+        for row in try db.query("SELECT name, node FROM parts WHERE device_id = ? ORDER BY name", device.id) {
+            let name = try row.text("name", as: Name.init(rawValue:))
+            parts[name.rawValue] = try decode(row.string("node"))
+        }
+        return .object(parts)
+    }
+
+    func deletePart(_ device: Device, name: Name) throws {
+        try db.transaction {
+            guard let row = try db.query("SELECT node FROM parts WHERE device_id = ? AND name = ?", device.id, name).first else {
+                throw APIError(.notFound, "No saved part has the name \(name).")
+            }
+            let node = try decode(row.string("node"))
+            try db.run("DELETE FROM parts WHERE device_id = ? AND name = ?", device.id, name)
+            try record("part.delete", device: device.id, activity: nil,
+                       ["name": .string(name.rawValue), "fingerprint": .string(fingerprint(node.json))])
+        }
+    }
+
+    private func savedParts(_ names: Set<Name>, on device: Device) throws -> SavedParts {
+        guard !names.isEmpty else { return [:] }
+        let requested = JSONValue.array(names.map { .string($0.rawValue) })
+        var saved: SavedParts = [:]
+        for row in try db.query("SELECT name, node FROM parts WHERE device_id = ? AND name IN (SELECT value FROM json_each(?))", device.id, Self.text(requested)) {
+            saved[try row.text("name", as: Name.init(rawValue:))] = try decode(row.string("node"))
+        }
+        return saved
+    }
+
+    private func prepare(_ layout: JSONValue, for surface: Surface, on device: Device) throws -> PreparedParts {
+        do {
+            return try PreparedParts(layout, saved: savedParts(layout.savedPartReferences(for: surface), on: device), for: surface)
+        } catch let error as LayoutError { throw try partError(error, on: device) }
+    }
+
+    private func partError(_ error: LayoutError, on device: Device) throws -> APIError {
+        guard error.undefinedPart != nil else { return APIError(.invalidLayout, error.description) }
+        let names = try db.query("SELECT name FROM parts WHERE device_id = ? ORDER BY name", device.id)
+            .map { try $0.text("name", as: Name.init(rawValue:)).rawValue }
+        let suffix = names.isEmpty ? "" : "; saved parts: " + names.joined(separator: ", ")
+        return APIError(.invalidLayout, error.description + suffix)
+    }
+
     func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
         try db.transaction {
             let current = try liveActivity(device, name: name)
@@ -222,10 +291,14 @@ actor Store {
                 do { data = try data.setting(path, to: .number(Double(now) + offset)) }
                 catch { throw APIError(.invalidRequest, "now: \(error)") }
             }
-            let state = try Self.content(title: title, layout: layout, data: data)
-            let expandedLayout: JSONValue
-            do { expandedLayout = try layout.expandingParts(for: .activity) }
-            catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+            let prepared = try prepare(layout, for: .activity, on: device)
+            let expandedLayout = prepared.value
+            let state: LyktaActivity.ContentState
+            let filled: JSONValue
+            do {
+                filled = try prepared.filled(with: data)
+                state = try LyktaActivity.ContentState(title: title, layout: filled.json)
+            } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
             try Self.admit(state, on: device)
             let content = try Self.encoded(state)
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
@@ -261,7 +334,7 @@ actor Store {
                     """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
             }
             let activity = try self.activity(id)
-            let size = try Self.measure(activity, contentState: stored, on: device, now: now)
+            let size = try Self.measure(activity, contentState: stored, filled: filled, on: device, now: now)
             try record("activity.put", device: device.id, activity: id, [
                 "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
                 "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
@@ -573,13 +646,14 @@ actor Store {
             }
             if changed != data {
                 let template = try decode(activity.layout)
+                let filled = try Self.pressing { () throws(LayoutError) in try template.filled(with: changed, for: .activity) }
                 let state = try Self.pressing { () throws(LayoutError) in
-                    try LyktaActivity.ContentState(title: activity.title, layout: template.filled(with: changed, for: .activity).json)
+                    try LyktaActivity.ContentState(title: activity.title, layout: filled.json)
                 }
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
                            Self.text(changed), Self.encoded(state), now, activity.id)
-                _ = try Self.measure(self.activity(activity.id), contentState: state, on: device, now: now)
+                _ = try Self.measure(self.activity(activity.id), contentState: state, filled: filled, on: device, now: now)
             }
             detail["revision"] = .number(Double(try self.activity(activity.id).revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -891,14 +965,6 @@ actor Store {
         }
     }
 
-    private static func content(title: String, layout: JSONValue, data: JSONValue) throws -> LyktaActivity.ContentState {
-        do {
-            return try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data, for: .activity).json)
-        } catch let error as LayoutError {
-            throw APIError(.invalidLayout, error.description)
-        }
-    }
-
     private static func pressing<T>(_ change: () throws(LayoutError) -> T) throws(APIError) -> T {
         do {
             return try change()
@@ -917,7 +983,7 @@ actor Store {
                        + "Ask the user to update Lykta and open it once, or send the layout without it.")
     }
 
-    private static func measure(_ activity: Activity, contentState: LyktaActivity.ContentState, on device: Device, now: Int) throws -> Int {
+    private static func measure(_ activity: Activity, contentState: LyktaActivity.ContentState, filled: JSONValue, on device: Device, now: Int) throws -> Int {
         let (size, stored) = try activity.admissionBytes(contentState: contentState, now: now, layoutVersion: device.layoutVersion)
         let limit = maximumPayloadBytes
         let exceeded = if size > limit {
@@ -928,9 +994,7 @@ actor Store {
             String?.none
         }
         guard let exceeded else { return size }
-        let layout = try JSONDecoder().decode(JSONValue.self, from: Data(activity.layout.utf8))
-        let data = try JSONDecoder().decode(JSONValue.self, from: Data(activity.data.utf8))
-        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(layout.filled(with: data, for: .activity), for: device.layoutVersion)))
+        throw APIError(.payloadTooLarge, "\(exceeded) " + (try LayoutCost.describe(filled, for: device.layoutVersion)))
     }
 
     private func end(_ activity: Activity, dismissAt: Int?, now: Int, _ detail: [String: JSONValue]) throws -> Activity {
@@ -1099,7 +1163,8 @@ extension Store {
                 do { data = try data.setting(path, to: .number(Double(now) + offset)) }
                 catch { throw APIError(.invalidRequest, "$.now: \(error)") }
             }
-            let (layout, content, requirement) = try Self.admitWidget(template, data: data, on: device)
+            let prepared = try prepare(template, for: .widget, on: device)
+            let (layout, content, requirement) = try Self.admitWidget(prepared, data: data, on: device)
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
             let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || request.staleAfter != nil
@@ -1121,15 +1186,15 @@ extension Store {
         }
     }
 
-    private static func admitWidget(_ template: JSONValue, data: JSONValue, on device: Device) throws -> (JSONValue, JSONValue, Layout.Requirement) {
+    private static func admitWidget(_ prepared: PreparedParts, data: JSONValue, on device: Device) throws -> (JSONValue, JSONValue, Layout.Requirement) {
         let layout: JSONValue
         let content: JSONValue
         let admitted: WidgetLayout
         do {
-            layout = try template.expandingParts(for: .widget)
-            content = try template.filled(with: data, for: .widget)
+            layout = prepared.value
+            content = try prepared.filled(with: data)
             admitted = try WidgetLayout(json: content.json)
-        } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+        } catch { throw APIError(.invalidLayout, error.description) }
         guard let requirement = admitted.requirement else { preconditionFailure("Every widget records its presentation's required version") }
         if let draws = Self.draws(requirement.version, on: device) {
             throw APIError(.appUpdateRequired, "\(requirement.path) uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). "
@@ -1163,7 +1228,7 @@ extension Store {
         if changed != widget.data {
             let content: JSONValue
             let requirement: Layout.Requirement
-            do { (_, content, requirement) = try Self.admitWidget(widget.layout, data: changed, on: device) }
+            do { (_, content, requirement) = try Self.admitWidget(PreparedParts(widget.layout, saved: [:], for: .widget), data: changed, on: device) }
             catch let error as APIError where error.code == .invalidLayout { throw APIError(.conflict, error.message) }
             try db.run("UPDATE widgets SET data = ?, content = ?, requires = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
                        Self.text(changed), Self.text(content), requirement.version.description, now, id)
