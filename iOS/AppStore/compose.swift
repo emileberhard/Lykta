@@ -484,37 +484,24 @@ struct Cover: View {
 }
 
 struct Wall: View {
-    enum Item: Hashable {
-        case notification(String)
+    enum Tile: Hashable {
         case activity(String)
+        case notification(String)
+        case widgets([String])
     }
 
     static let spacing: CGFloat = 24
-
-    let notifications: [String]
-    let activities: [String]
-
-    private var stacks: [[Item]] {
-        let cards = activities.reduce(into: Array(repeating: [String](), count: 3)) { stacks, name in
-            let heights = stacks.map { $0.reduce(0) { $0 + capture("\($1).lock").size.height + Self.spacing } }
-            stacks[heights.indices.min { heights[$0] < heights[$1] }!].append(name)
-        }
-        return cards.indices.map { column in
-            notifications.indices.filter { $0 % cards.count == column }.map { Item.notification(notifications[$0]) }
-                + cards[column].map(Item.activity)
-        }
-    }
+    static let columns: [[Tile]] = [
+        [.activity("app-review"), .notification("tests-passed"), .widgets(["plant-shelf"]), .activity("homelab")],
+        [.widgets(["tooth-stars", "grandma-cup"]), .notification("print-finished"), .activity("printer"), .notification("doorbell")],
+        [.activity("movie-night"), .widgets(["partner-sky"]), .activity("recipe-steps")],
+    ]
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            ForEach(stacks, id: \.self) { stack in
+            ForEach(Self.columns, id: \.self) { column in
                 VStack(spacing: Self.spacing) {
-                    ForEach(stack, id: \.self) { item in
-                        switch item {
-                        case let .notification(name): Banner(example: name)
-                        case let .activity(name): Card(name: name)
-                        }
-                    }
+                    ForEach(column, id: \.self, content: tile)
                 }
             }
         }
@@ -523,11 +510,29 @@ struct Wall: View {
         .background {
             Night(glows: [
                 Glow(light: .pink, x: 1130, y: 70, size: 730, opacity: 0.7),
-                Glow(light: .blue, x: 100, y: 900, size: 800, opacity: 0.7),
-                Glow(light: .amber, x: 670, y: 520, size: 600, opacity: 0.5),
+                Glow(light: .blue, x: 100, y: 650, size: 800, opacity: 0.7),
+                Glow(light: .amber, x: 670, y: 420, size: 600, opacity: 0.5),
             ])
         }
         .overlay { Grain().blendMode(.overlay) }
+    }
+
+    @ViewBuilder
+    private func tile(_ tile: Tile) -> some View {
+        switch tile {
+        case let .activity(name): Card(name: name)
+        case let .notification(name): Banner(example: name)
+        case let .widgets(names):
+            HStack(spacing: Self.spacing) {
+                ForEach(names, id: \.self) { name in
+                    Image(nsImage: image(readme.appending(path: "widgets/\(name).png")))
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                }
+            }
+            .frame(width: 370)
+        }
     }
 }
 
@@ -548,19 +553,10 @@ func save(_ view: some View, scale: CGFloat, to url: URL) {
     guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
 }
 
-func names(in directory: URL, ending suffix: String) -> [String] {
-    try! FileManager.default.contentsOfDirectory(atPath: directory.path)
-        .filter { $0.hasSuffix(suffix) }
-        .map { String($0.dropLast(suffix.count)) }
-        .sorted()
-}
-
 MainActor.assumeIsolated {
     for (name, slide) in slides {
         save(slide, scale: 1, to: output.appending(path: "\(name).png"))
     }
     save(Cover(), scale: 2, to: readme.appending(path: "cover.jpg"))
-    save(Wall(notifications: names(in: examples.appending(path: "notifications"), ending: ".json"),
-              activities: names(in: captures, ending: ".lock.png")),
-         scale: 1.5, to: readme.appending(path: "examples.jpg"))
+    save(Wall(), scale: 1.5, to: readme.appending(path: "examples.jpg"))
 }

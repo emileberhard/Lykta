@@ -21,11 +21,10 @@ report back to the agent.
 - **Notifications** that arrive like a message from a person, with the
   sender's name and picture, a sound of the agent's choosing and an image.
 
-<a href="Gateway/Sources/LyktaGateway/Skill/examples"><img src="docs/readme/examples.jpg" alt="Notifications and Lock Screen cards drawn from Lykta's examples, from a doorbell and a passing test run to an agent's question with buttons, a pull request inbox, a recipe step and a shared shopping list."></a>
+<a href="Gateway/Sources/LyktaGateway/Skill/examples"><img src="docs/readme/examples.jpg" alt="Five Live Activities, four widgets and three notifications drawn by Lykta: an App Review tracker, a home server, a movie night, a 3D print and a recipe step; a tooth-brushing chart, a grandmother's morning kettle, two cities' skies and a plant shelf; and notifications from CI, a printer and the front door."></a>
 
-Everything above is one of the [examples](Gateway/Sources/LyktaGateway/Skill/examples),
-which an agent sends as JSON. A minimal activity and a notification look like
-this:
+Agents draw all of these from JSON. Browse the [examples](Gateway/Sources/LyktaGateway/Skill/examples)
+for more, or start from a minimal activity and a notification:
 
 ```sh
 lykta put activities/build <<'EOF'
