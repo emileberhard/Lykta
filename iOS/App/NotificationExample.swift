@@ -45,7 +45,10 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
         id = file.deletingPathExtension().lastPathComponent
         self.sender = sender
         self.body = body
-        avatar = media["sender.avatar"] ?? Initials.avatar(of: sender, sender: senderID)
+        if case let .object(node)? = try? fields.value(at: "sender.avatar") {
+            let drawing = try PackedNode.admitting(.object(node)).drawing
+            avatar = try DrawnAvatar.png(drawing.node(limit: Layout.maximumBytes))
+        } else { avatar = media["sender.avatar"] ?? Initials.avatar(of: sender, sender: senderID) }
         image = media["image"]
         self.media = media
         self.fields = fields

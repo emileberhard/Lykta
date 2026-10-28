@@ -407,6 +407,7 @@ actor Store {
         try db.transaction {
             try expireNotifications(now: now)
             try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ? AND in_flight = 0", device.id, name, now)
+            let request = try prepareNotification(request, on: device)
             let canonical = request.canonical
             if let row = try db.query("SELECT * FROM notifications WHERE device_id = ? AND name = ?", device.id, name).first {
                 guard try row.string("request") == canonical else {
@@ -438,7 +439,12 @@ actor Store {
             let id = UUID()
             let size = try request.payload(id: id, token: Self.token("lykta_fetch_")).count
             guard size <= Self.maximumPayloadBytes else {
-                throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). Shorten the body.")
+                let advice: String
+                if case let .drawing(node)? = request.sender.avatar,
+                   let bytes = try PackedNode.admitting(node).drawing.compressedBytes, bytes > request.body.utf8.count {
+                    advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
+                } else { advice = "Shorten the body." }
+                throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). \(advice)")
             }
             try db.run("""
                 INSERT INTO notifications (id, device_id, name, request, state, created_at, expires_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)
@@ -451,14 +457,37 @@ actor Store {
             case .default?: "default"
             case let .medium(id)?: id.rawValue
             }
+            let avatar: JSONValue = switch request.sender.avatar {
+            case let .medium(id)?: .string(id.rawValue)
+            case .drawing?: .string("drawing")
+            case nil: .null
+            }
+            let drawingFingerprint: [String: JSONValue]
+            if case let .drawing(node)? = request.sender.avatar { drawingFingerprint = ["avatarFingerprint": .string(fingerprint(node.json))] }
+            else { drawingFingerprint = [:] }
             try record("notification.put", device: device.id, activity: nil, [
                 "notification": .string(id.uuidString), "name": .string(name.rawValue), "sender": .string(request.sender.id.rawValue),
-                "avatar": request.sender.avatar.map { .string($0.rawValue) } ?? .null, "sound": .string(sound),
+                "avatar": avatar, "sound": .string(sound),
                 "image": request.image.map { .string($0.rawValue) } ?? .null, "fingerprint": .string(fingerprint(canonical.utf8)),
                 "payloadBytes": .number(Double(size)),
-            ])
+            ].merging(drawingFingerprint) { $1 })
             return true
         }
+    }
+
+    private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> NotificationRequest {
+        guard case let .drawing(template)? = request.sender.avatar else { return request }
+        let node: JSONValue
+        let requirement: Layout.Requirement
+        do {
+            node = try template.expandingPart(saved: savedParts(template.savedPartReferences(), on: device))
+            requirement = try PackedNode.admitting(node).requirement
+        } catch let error as LayoutError { throw try partError(error, on: device) }
+        if let draws = Self.draws(requirement.version, on: device) {
+            throw APIError(.appUpdateRequired, "sender.avatar uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). Ask the user to update Lykta and open it once.")
+        }
+        return NotificationRequest(sender: .init(id: request.sender.id, name: request.sender.name, avatar: .drawing(node)),
+                                   body: request.body, sound: request.sound, image: request.image)
     }
 
     func notificationAttempted(_ device: Device, name: Name, now: Int) throws -> Bool {
@@ -522,7 +551,7 @@ actor Store {
         }
     }
 
-    func reportNotification(_ id: UUID, token: String, _ report: NotificationReport, now: Int) throws {
+    func reportNotification(_ id: UUID, token: String, _ report: NotificationReport, avatarFailure: PackedNode.Failure?, now: Int) throws {
         try db.transaction {
             guard let row = try db.query("SELECT device_id, name, phone FROM notifications WHERE id = ? AND token_hash = ? AND expires_at > ?",
                                          id, Self.hash(token), now).first else {
@@ -534,7 +563,7 @@ actor Store {
             try record("notification.received", source: "app", device: try row.text("device_id", as: UUID.init(uuidString:)), activity: nil,
                        try JSONDecoder().decode([String: JSONValue].self, from: json).merging([
                            "notification": .string(id.uuidString), "name": .string(try row.string("name")),
-                       ]) { $1 })
+                       ].merging(avatarFailure.map { ["avatarFailure": JSONValue.string($0.rawValue)] } ?? [:]) { $1 }) { $1 })
         }
     }
 

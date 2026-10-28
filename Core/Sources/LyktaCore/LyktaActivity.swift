@@ -14,7 +14,6 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
 
     public struct ContentState: Codable, Hashable, Sendable {
         public static let compactSince = Version(0, 8, 0)
-        private static let compactPrefix = "~1"
 
         private enum Form: Hashable, Sendable {
             case legacy, compact
@@ -65,13 +64,13 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
         public init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
             title = try fields.decode(String.self, forKey: .title)
-            if let text = try? fields.decode(String.self, forKey: .layout), text.hasPrefix(Self.compactPrefix) {
-                guard let bytes = Base92.decode(text.dropFirst(Self.compactPrefix.count)), bytes.count > 8 else {
+            if let text = try? fields.decode(String.self, forKey: .layout), text.hasPrefix(CompactFrame.prefix) {
+                guard let frame = CompactFrame(text) else {
                     throw DecodingError.dataCorruptedError(forKey: .layout, in: fields, debugDescription: "invalid compact layout")
                 }
-                packed = Data(bytes.dropFirst(8))
+                packed = Data(frame.packed)
                 form = .compact
-                hash = bytes.prefix(8).reduce(0) { $0 << 8 | UInt64($1) }
+                hash = frame.hash
             } else {
                 packed = try fields.decode(Data.self, forKey: .layout)
                 form = .legacy
@@ -88,8 +87,7 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
             case .legacy:
                 try fields.encode(packed, forKey: .layout)
             case .compact:
-                let header = (0..<8).reversed().map { UInt8(truncatingIfNeeded: hash >> ($0 * 8)) }
-                try fields.encode(Self.compactPrefix + Base92.encode(header + Array(packed)), forKey: .layout)
+                try fields.encode(CompactFrame(hash: hash, packed: Array(packed)).text, forKey: .layout)
             }
         }
 

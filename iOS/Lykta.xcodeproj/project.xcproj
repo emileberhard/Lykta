@@ -17,7 +17,7 @@
     { "kind": "folder", "path": "App", "target-membership": [ "Lykta" ] },
     { "kind": "folder", "path": "Widgets", "target-membership": [ "LyktaWidgets" ] },
     { "kind": "folder", "path": "Notifications", "target-membership": [ "LyktaNotifications" ] },
-    { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets" ] },
+    { "kind": "folder", "path": "Rendering", "target-membership": [ "Lykta", "LyktaWidgets", "LyktaNotifications" ] },
     { "kind": "folder", "path": "Avatars", "target-membership": [ "Lykta", "LyktaNotifications" ] },
     { "kind": "folder", "path": "Gateway", "target-membership": [ "Lykta", "LyktaWidgets" ] },
     { "path": "../Gateway/Sources/LyktaGateway/Skill/examples", "type": "folder", "target-membership": [ "Lykta/resources" ] },

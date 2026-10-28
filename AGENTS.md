@@ -11,12 +11,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | --- | --- |
 | `Core` | Layout language, templates, `ContentState` wire format and device API types; no dependencies |
 | `iOS` | The Xcode project, its `Config` and everything only the iPhone app ships |
-| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; both the app and the widget extension compile it, and `LYKTA_APP` marks the app's variants |
+| `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; the app, widget extension and notification extension compile it, and `LYKTA_APP` marks the app's variants |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations, and the Lykta widget: its timeline provider, the states it draws and its push handler |
 | `iOS/Gateway` | The phone's link to its gateway, compiled into the app and the widget extension: `GatewayClient`, the Keychain items, among them the widget credential, the widget's `WidgetSelection` intent with its entity query, and `WidgetCache` |
 | `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the first-launch introduction that waits for the agent's hello, the in-app Lock Screen cards with their headers and details sheet, and the example gallery with its hint to lock the phone after each start |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
-| `iOS/Avatars` | The initials avatar for a sender without a picture, drawn by both the extension and the app's gallery |
+| `iOS/Avatars` | The fixed-viewport drawn avatar and independent Core Graphics initials, shared by the notification extension and app gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
 | `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
@@ -139,6 +139,18 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   over a challenge this gateway signed, or with a one-time invite an operator
   created. Never add a registration path without such proof.
 - Tokens are stored only as hashes. Never log tokens, push tokens or payloads.
+- Drawn notification avatars store expanded nodes under `sender.drawing`,
+  never the media-id key `sender.avatar`. Their push uses `drawing`, a
+  `PackedNode` with the frozen `~1` frame shared with compact activity content.
+  Report bodies and stored phone reports retain `image` and `initials`;
+  `avatarFailure` travels only in the report query and the received event.
+  Core admits still nodes with an exhaustive walk of typed content and
+  modifiers, without changing the decoder's existing presentation rules.
+- The notification extension draws a node once in a 64 × 64 pt viewport at
+  scale 4, with a two-second main-actor deadline and no measuring render.
+  One lock owns the completion handler and best content; expiry delivers
+  that content once and late results cannot deliver it again. Every media,
+  rendering, donation and reporting wait is bounded. Initials stay independent.
 - The notification extension talks only to its own gateway, with the fetch
   token its push carries, and follows no redirect. A fetch token is created
   when a notification is claimed for sending and authorizes only that
@@ -205,7 +217,10 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   credentials on a 401.
 - The notification extension is `nonisolated` and prepares each notification
   on the thread iOS calls it on, because its content handler is not `Sendable`
-  and cannot move into a task. Every wait there, the media downloads, the
+  and cannot move into a task. The extension instance owns its pending content
+  and handler under a lock shared with `serviceExtensionTimeWillExpire`, takes
+  the handler out before calling it exactly once, and never renders under that
+  lock. Every wait there, the media downloads, the
   donation and the report, is bounded so the notification arrives within
   iOS's budget.
 - A tap intent may run right after the system launches the app in the

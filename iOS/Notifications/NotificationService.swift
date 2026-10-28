@@ -5,10 +5,20 @@ import Synchronization
 import UserNotifications
 
 nonisolated final class NotificationService: UNNotificationServiceExtension {
+    private enum Delivery {
+        case idle
+        case pending(UNNotificationContent, (UNNotificationContent) -> Void)
+        case finished
+    }
+
+    private let deliveryLock = NSLock()
+    private var delivery = Delivery.idle
+
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let original = request.content
+        deliveryLock.withLock { delivery = .pending(original, contentHandler) }
         guard let payload = Self.payload(of: original), let host = Self.host, let content = original.mutableCopy() as? UNMutableNotificationContent else {
-            return contentHandler(original)
+            return finish()
         }
         let loader = MediaLoader(payload: payload, host: host, cache: .shared)
         defer { loader.release() }
@@ -25,14 +35,42 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
                 try? FileManager.default.removeItem(at: image)
             }
         }
-        let intent = Self.intent(content, sender: payload.sender, avatar: media.avatar)
-        if Self.donate(intent, within: 3), let communication = try? content.updating(from: intent) {
-            Self.report(NotificationReport(style: .communication(media.avatar == nil ? .initials : .image), sound: sound), for: payload, to: host)
-            contentHandler(communication)
-        } else {
-            Self.report(NotificationReport(style: .plain, sound: sound), for: payload, to: host)
-            contentHandler(content)
+        guard keep(content) else { return }
+        var avatar = media.avatar
+        var failure: PackedNode.Failure?
+        if avatar == nil, let drawing = payload.drawing {
+            do { avatar = try DrawnAvatar.png(drawing.node(limit: Layout.maximumBytes)) }
+            catch { failure = error }
         }
+        guard keep(content) else { return }
+        let intent = Self.intent(content, sender: payload.sender, avatar: avatar)
+        if Self.donate(intent, within: 3), let communication = try? content.updating(from: intent) {
+            guard keep(communication) else { return }
+            Self.report(NotificationReport(style: .communication(avatar == nil ? .initials : .image), sound: sound), failure: failure, for: payload, to: host)
+            finish()
+        } else {
+            Self.report(NotificationReport(style: .plain, sound: sound), failure: failure, for: payload, to: host)
+            finish()
+        }
+    }
+
+    override func serviceExtensionTimeWillExpire() { finish() }
+
+    private func keep(_ content: UNNotificationContent) -> Bool {
+        deliveryLock.withLock {
+            guard case let .pending(_, handler) = delivery else { return false }
+            delivery = .pending(content.copy() as! UNNotificationContent, handler)
+            return true
+        }
+    }
+
+    private func finish() {
+        let ready = deliveryLock.withLock {
+            let ready = delivery
+            delivery = .finished
+            return ready
+        }
+        if case let .pending(content, handler) = ready { handler(content) }
     }
 
     private static var host: String? {
@@ -62,10 +100,12 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
         return donation.succeeded(within: seconds)
     }
 
-    private static func report(_ report: NotificationReport, for payload: NotificationPayload, to host: String) {
+    private static func report(_ report: NotificationReport, failure: PackedNode.Failure?, for payload: NotificationPayload, to host: String) {
         guard let url = URL(string: "https://\(host)/v1/device/notifications/\(payload.id.uuidString)/report"),
               let body = try? JSONEncoder().encode(report) else { return }
-        var request = URLRequest(url: url)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        components.queryItems = failure.map { [URLQueryItem(name: "avatarFailure", value: $0.rawValue)] }
+        var request = URLRequest(url: components.url!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(payload.token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

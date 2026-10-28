@@ -356,14 +356,16 @@ public struct NotificationPayload: Codable, Sendable {
     public let sender: String
     public let token: String
     public let avatar: MediaID?
+    public let drawing: PackedNode?
     public let sound: MediaID?
     public let image: MediaID?
 
-    public init(id: UUID, sender: String, token: String, avatar: MediaID?, sound: MediaID?, image: MediaID?) {
+    public init(id: UUID, sender: String, token: String, avatar: MediaID?, drawing: PackedNode?, sound: MediaID?, image: MediaID?) {
         self.id = id
         self.sender = sender
         self.token = token
         self.avatar = avatar
+        self.drawing = drawing
         self.sound = sound
         self.image = image
     }

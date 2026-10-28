@@ -115,6 +115,44 @@ snapshots reuse the existing expansion and template machinery instead of
 introducing live dependencies or invalidation. Refreshing a saved outer part
 or an existing layout requires explicitly sending it again.
 
+**Avatars are 64 pt viewports drawn by the extension.** A notification's
+`sender.avatar` is either an uploaded media id string or a node object. The
+gateway expands saved parts inside admission, then Core decodes the expanded
+node with its existing date strategy and feature log, recording
+`notification.avatar.node` at 0.17.0. Placeholders and `each` have no data and
+are refused before decoding. A pure exhaustive walk over decoded nodes and
+modifiers refuses interaction, interval progress, timers, relative dates and
+environment conditions with their paths; fixed values remain available. This
+keeps decoding shared and makes a new typed case demand a stillness decision.
+
+The stored request uses `sender.drawing` for the expanded node and preserves
+`sender.avatar` for media ids. Previous gateways ignore the new storage key,
+so rollback can still send a notification without its drawing. Idempotency
+compares expanded canonical requests; changing a referenced part conflicts,
+and deleting it produces an unknown-part error. Neither changes queued content.
+`notification.put` records `avatar: drawing` and `avatarFingerprint`, never the
+node. The real APNs payload is measured with its complete packed drawing; an
+oversize error names the drawing and compressed bytes when it is largest.
+
+`PackedNode` carries the frozen `~1` frame (eight-byte fingerprint, dictionary
+Deflate, Base92). `CompactFrame` owns that framing for both activity content
+and nodes; existing activity fingerprints, dictionaries and bytes do not
+change. The notification envelope retains an invalid drawing for separate
+bounded decoding, so it still delivers with initials. The extension prefers a
+photo, then a drawing, then the independent Core Graphics initials. It draws
+`NodeView` inside 64 × 64 pt at scale 4 exactly once, with no measuring pass,
+background lifting or render cache. The gallery uses the same main-actor path.
+Art, padding, then background gives ordinary composition in that viewport.
+
+A pending render has a two-second deadline; queued expired work is skipped
+and late results are discarded. One lock owns the extension's completion
+handler and best content, so system expiry and normal completion cannot both
+deliver. Media, donation and report waits remain bounded. Drawings report the
+old `image` avatar value; fallback reports `initials`. Only the report URL's
+`avatarFailure` query carries `frame`, `inflate`, `decode`, `deadline` or
+`render`, and only the received event stores it. Stored phone reports retain
+the 0.16 shape for rollback.
+
 **Older phones get what they can draw.** The gateway deploys before each app
 release, so it often runs a newer decoder than a phone. While decoding, `Core`
 records every feature a layout uses (node kinds, keys, enum cases and value
@@ -663,6 +701,10 @@ limit bounds.
   8 MiB JSON-detail budget per phone; row metadata and indexes take additional space.
 
 ## Expensive to change
+
+- Notification `drawing` payload key, its `PackedNode` frame, and the stored
+  `sender.drawing` and media-only `sender.avatar` keys. The old report shape
+  and the diagnostic `avatarFailure` query must remain rollback-readable.
 
 - The `ContentState` encoding and the `LyktaActivity` type name, which
   installed apps and pushes depend on.

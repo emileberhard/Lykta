@@ -122,3 +122,27 @@ file the phone fetched, `notification.received` when the phone prepared it,
 and `notification.unknown` or `notification.expired`. The phone's `device.sync`
 event shows its notification `authorization`, `alertStyle` and whether it has
 a notification `token`.
+
+## Drawn avatars
+
+`sender.avatar` takes an uploaded image id string or a node object, such as
+`{"symbol":"hammer.fill"}` or `{"use":"clawd"}`. A string always means a
+media id; write text as `{"text":"ET"}`. With Lykta 0.17.0 or later, the phone
+draws the node once on arrival in a fixed 64 × 64 pt viewport at scale 4;
+iOS crops it into a circle. Compose the art, then `padding`, then `background`.
+Use initials or a symbol rather than words that become unreadable at this size.
+
+An avatar has no data: placeholders and `each` are refused. Controls, links,
+timers, interval progress, relative dates and environment conditions are also
+refused because the result is drawn once. Fixed numeric progress, absolute
+dates and ordinary SVG remain available. If drawing fails, independent initials
+still identify the sender.
+
+Speak as yourself. Check `lykta get parts` for a saved part that represents you
+and use it explicitly as your avatar when one exists. The gateway snapshots
+that part in the notification. If a retry gets `conflict` after a part changed,
+or an unknown-part error after it was deleted, read the existing notification
+with `lykta get notifications/NAME`; never resend it under a new name.
+
+`examples/notifications/agent-update.json` shows a neutral build bot drawn in
+SVG with padding and a background.
