@@ -25,20 +25,17 @@ class GatewayGateTests(unittest.TestCase):
             nonlocal elapsed
             elapsed += seconds
 
-        def version(*args, **kwargs):
-            nonlocal running
-            running = next(versions, running)
-            return io.BytesIO(json.dumps({"version": running}).encode())
-
-        def receipt(*args, **kwargs):
-            nonlocal state
+        def response(command, **kwargs):
+            nonlocal running, state
+            if command[0] == "curl":
+                running = next(versions, running)
+                return json.dumps({"version": running})
             state = next(states, state)
             return json.dumps(None if state is None else {"state": state, "description": "host deploy result"})
 
         with patch.object(gate.time, "monotonic", side_effect=lambda: elapsed), \
              patch.object(gate.time, "sleep", side_effect=sleep), \
-             patch.object(gate.urllib.request, "urlopen", side_effect=version), \
-             patch.object(gate.subprocess, "check_output", side_effect=receipt), \
+             patch.object(gate.subprocess, "check_output", side_effect=response), \
              contextlib.redirect_stdout(io.StringIO()):
             try:
                 gate.wait("0.16.0", "gateway.example", "owner/repo", "a" * 40)

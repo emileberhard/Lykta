@@ -4,8 +4,6 @@ import os
 import re
 import subprocess
 import time
-import urllib.error
-import urllib.request
 
 
 def version_number(value):
@@ -21,9 +19,12 @@ def wait(version, host, repository, commit):
     started = time.monotonic()
     while time.monotonic() - started < 1800:
         try:
-            with urllib.request.urlopen(f"https://{host}/v1/version", timeout=10) as response:
-                running = json.load(response).get("version")
-        except (OSError, ValueError):
+            output = subprocess.check_output([
+                "curl", "--fail", "--silent", "--show-error", "--max-time", "10",
+                f"https://{host}/v1/version",
+            ], text=True, stderr=subprocess.DEVNULL, timeout=15)
+            running = json.loads(output).get("version")
+        except (subprocess.SubprocessError, ValueError):
             running = None
         number = version_number(running)
         if number is not None and number >= expected:
