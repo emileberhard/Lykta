@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE = Path.home() / "Library" / "Caches" / "lykta" / "captures"
 CRASHES = Path.home() / "Library" / "Logs" / "DiagnosticReports"
 OUTPUT = ROOT / ".local" / "screenshots"
+README = ROOT / "docs" / "readme"
 BUILD = ROOT / ".local" / "build"
 COMPOSER = "iOS/AppStore/compose.swift"
 EXAMPLES = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill" / "examples"
@@ -124,8 +125,10 @@ def main():
     source = captures()
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
-    run("xcrun", "swift", ROOT / COMPOSER, source, EXAMPLES, OUTPUT)
-    print(json.dumps({"captures": str(source), "slides": sorted(str(path) for path in OUTPUT.glob("*.png"))}, indent=2))
+    README.mkdir(parents=True, exist_ok=True)
+    run("xcrun", "swift", ROOT / COMPOSER, source, EXAMPLES, OUTPUT, README)
+    print(json.dumps({"captures": str(source), "slides": sorted(str(path) for path in OUTPUT.glob("*.png")),
+                      "readme": sorted(str(path) for path in README.glob("*.jpg"))}, indent=2))
 
 
 if __name__ == "__main__":

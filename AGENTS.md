@@ -22,7 +22,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, the `hello.json` activity its setup starts, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
-| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples, the home screen and the Connect step of the introduction |
+| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides and the README's images in `docs/readme`: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the images, the composer, and the capture mode, which renders the bundled examples, the home screen and the Connect step of the introduction |
 | `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots and build, short of App Review |
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
@@ -239,6 +239,13 @@ platform-specific modules behind `#if canImport`, as `APNs.swift` does for
 `CryptoKit` and `FoundationNetworking`. Use Swift 6 language mode, Swift
 Testing, and no code comments.
 
+Dependabot updates Docker images and GitHub Actions. Maintainers review Apple's
+Swift package releases, update the exact versions in `Gateway/Package.swift`,
+resolve with the project's Swift toolchain and commit `Gateway/Package.resolved`
+after `just test` passes. Dependabot's Swift updater currently runs Swift 6.3.1
+and cannot parse this project's Swift 6.4 manifests. Re-enable `/Gateway` when
+Dependabot supports Swift 6.4; keep the project's tools requirement unchanged.
+
 ## Documentation
 
 The Markdown files are as much a part of Lykta as the code. Update the README,
@@ -257,7 +264,7 @@ maintainer, because the App Store privacy label must match.
 | `just image` | Build the gateway container |
 | `just evals <options>` | Run the fresh agents in `evals/job.yaml`, twice each, on every task in `evals/tasks` against a simulated phone and check each trial; options go to `harbor run` and override the job, such as `--include-task-name train` or `--agent codex --model gpt-6.1-sol`, and `~/.config/lykta/evals.env` sets endpoints and keys. Transcripts, rewards and the gateway's events land in `.local/evals`, and the run ends with each agent's tokens and timings from `scripts/eval-metrics`; read the trials with `harbor view .local/evals` |
 | `just render <inputs>` | Render activity or widget request bodies or bare layouts (files, directories, inline JSON or `-`) through Xcode's previews: every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. Needs Xcode 27 with its MCP server enabled; leaves the project open in Xcode so later renders take about a second each. `--only lock,expanded,small,circular` and `--dark` narrow it. Lock Screen widgets render on the simulator's Lock Screen in their vibrant mode; Xcode's previews cannot draw the tinted Home Screen, so check `accented` on a phone. Close the project in Xcode before removing a worktree that rendered. |
-| `just screenshots` | Compose the App Store slides into `.local/screenshots`. Captures of the app are cached in `~/Library/Caches/lykta/captures`, shared by every checkout and keyed by the sources that draw them, Xcode and the simulator, so only a change to what they show builds and launches the app again |
+| `just screenshots` | Compose the App Store slides into `.local/screenshots` and the README's images into `docs/readme`. Captures of the app are cached in `~/Library/Caches/lykta/captures`, shared by every checkout and keyed by the sources that draw them, Xcode and the simulator, so only a change to what they show builds and launches the app again |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a
 run on an iPhone; compiling proves neither.
@@ -347,7 +354,14 @@ Connect step as PNGs, in US
 English with the clock at 9:41 like the composed Lock Screen, and exits;
 `iOS/AppStore/compose.swift` holds the captions and arranges the captures into
 opaque slides, as App Store Connect requires. Look at the slides after a change
-to the app's UI or the examples, because the release uploads them.
+to the app's UI or the examples, because the release uploads them. The same
+run redraws the README's images: `cover.jpg`, which is also the repository's
+social preview, uploaded by hand under Settings because GitHub has no API for
+it, and `examples.jpg`, a wall of five bundled activities' Lock Screen cards,
+the three bundled notifications and four widgets. Capture mode draws no
+widgets, so their tiles in `docs/readme/widgets` are `just render` output.
+Commit the images with the change that altered them, and upload the cover again
+when it changes.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own

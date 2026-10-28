@@ -1,25 +1,44 @@
-# Lykta
+<p align="center">
+  <img src="docs/readme/cover.jpg" alt="Lykta: your agents on the Lock Screen. The Dynamic Island counts down a spacecraft's return, and a Lock Screen card asks what to do about a failed migration, with Retry, Roll back and Stop buttons.">
+</p>
 
-[![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/kDAjDvfD)
+<p align="center">
+  <a href="https://testflight.apple.com/join/kDAjDvfD"><img alt="Join the TestFlight beta" src="https://img.shields.io/badge/TestFlight-Join_the_beta-2F7BFF?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/emileberhard/Lykta?style=for-the-badge&label=release&color=FF4F8B"></a>
+  <a href="LICENSE"><img alt="License: PolyForm Shield 1.0.0" src="https://img.shields.io/badge/license-PolyForm_Shield-FFB020?style=for-the-badge"></a>
+</p>
 
-Lykta lets AI agents put native Live Activities and widgets on your iPhone
-and send you notifications. An agent sends a JSON layout to your Lykta gateway, and the
-phone shows it on the Lock Screen and in the Dynamic Island, rendered with
-SwiftUI and kept current as the agent sends updates. Any layout works without
-an app update, including buttons, toggles and links that report back to the
-agent. For status with no end, such as today's steps, the same layout
-language draws a Home Screen widget that the agent keeps current. For a
-single moment, such as a finished job, the agent sends a
-notification that arrives like a message from a person, with the sender's
-name and picture, a sound of the agent's choosing and an image.
+Lykta lets AI agents put native Live Activities, widgets and notifications on
+your iPhone. An agent sends a JSON layout to your Lykta gateway, and the phone
+draws it with SwiftUI and keeps it current as the agent sends updates. Any
+layout works without an app update, including buttons, toggles and links that
+report back to the agent.
+
+- **Live Activities** on the Lock Screen and in the Dynamic Island, for
+  anything with an end, such as a build, a 3D print or a flight.
+- **Widgets** on the Home Screen and Lock Screen, for status with no end, such
+  as today's steps.
+- **Notifications** that arrive like a message from a person, with the
+  sender's name and picture, a sound of the agent's choosing and an image.
+
+<a href="Gateway/Sources/LyktaGateway/Skill/examples"><img src="docs/readme/examples.jpg" alt="Five Live Activities, four widgets and three notifications drawn by Lykta: an App Review tracker, a home server, a movie night, a 3D print and a recipe step; a tooth-brushing chart, a grandmother's morning kettle, two cities' skies and a plant shelf; and notifications from CI, a printer and the front door."></a>
+
+Agents draw all of these from JSON. Browse the [examples](Gateway/Sources/LyktaGateway/Skill/examples)
+for more, or start from a minimal activity and a notification:
 
 ```sh
 lykta put activities/build <<'EOF'
 {
   "title": "Build",
   "layout": {
-    "lockScreen": {"hstack": ["Build", {"spacer": true}, {"progress": "{{done}}", "style": "circular"}],
-                   "modifiers": [{"padding": 16}]},
+    "lockScreen": {
+      "hstack": [
+        "Build",
+        {"spacer": true},
+        {"progress": "{{done}}", "style": "circular"}
+      ],
+      "modifiers": [{"padding": 16}]
+    },
     "compactLeading": {"symbol": "hammer.fill"},
     "compactTrailing": "{{percent}}%",
     "minimal": {"progress": "{{done}}", "style": "circular"}
@@ -29,7 +48,11 @@ lykta put activities/build <<'EOF'
 EOF
 
 lykta put notifications/print-42-done <<'EOF'
-{"sender": {"id": "printer", "name": "Printer"}, "body": "Benchy finished in 42 min. Come get it!", "sound": true}
+{
+  "sender": {"id": "printer", "name": "Printer"},
+  "body": "Benchy finished in 42 min. Come get it!",
+  "sound": true
+}
 EOF
 ```
 
@@ -63,11 +86,9 @@ spend their output on the activity rather than on HTTP plumbing. The skill
 covers the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node, modifier and reusable layout part, its [widgets reference](Gateway/Sources/LyktaGateway/Skill/references/widgets.md)
 covers Home Screen and Lock Screen widgets and their buttons and toggles, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)
-covers senders, sounds and images. The [example activities](Gateway/Sources/LyktaGateway/Skill/examples)
-show what an agent can build, from an App Review tracker to a shared shopping
-list, and the [example notifications](Gateway/Sources/LyktaGateway/Skill/examples/notifications)
-range from a CI run to a doorbell with its own chime. The app shows each one
-and sends any of them to your phone to try live.
+covers senders, sounds and images. The [example notifications](Gateway/Sources/LyktaGateway/Skill/examples/notifications)
+range from a CI run to a doorbell with its own chime, and the app shows every
+example and sends any of them to your phone to try live.
 
 ## Self-host
 
@@ -92,15 +113,6 @@ resolutions. `python3 -m unittest discover -s scripts/tests -v` checks the
 release tools without credentials.
 See [AGENTS.md](AGENTS.md) for ownership and invariants and the
 [architecture record](docs/architecture.md) for the design decisions.
-
-## Dependency updates
-
-Dependabot updates Docker images and GitHub Actions. Maintainers review Apple's
-Swift package releases, update the exact versions in `Gateway/Package.swift`,
-resolve with the project's Swift toolchain and commit `Gateway/Package.resolved`
-after `just test` passes. Dependabot's Swift updater currently runs Swift 6.3.1
-and cannot parse this project's Swift 6.4 manifests. Re-enable `/Gateway` when
-Dependabot supports Swift 6.4; keep the project's tools requirement unchanged.
 
 ## License and security
 

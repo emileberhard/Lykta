@@ -7,6 +7,7 @@ let canvas = CGSize(width: 1206, height: 2622)
 let captures = URL(filePath: CommandLine.arguments[1])
 let examples = URL(filePath: CommandLine.arguments[2])
 let output = URL(filePath: CommandLine.arguments[3])
+let readme = URL(filePath: CommandLine.arguments[4])
 
 func image(_ url: URL) -> NSImage {
     guard let image = NSImage(contentsOf: url) else { fatalError("missing \(url.path)") }
@@ -446,19 +447,116 @@ let slides: [(String, AnyView)] = [
     })),
 ]
 
+struct Cover: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Night(glows: [
+                Glow(light: .pink, x: 725, y: 30, size: 450, opacity: 0.8),
+                Glow(light: .blue, x: 60, y: 410, size: 500, opacity: 0.75),
+                Glow(light: .amber, x: 525, y: 430, size: 350, opacity: 0.55),
+            ])
+            Group {
+                Island(name: "orion-return", presentation: "expanded")
+                    .rotationEffect(.degrees(2))
+                    .offset(x: 395, y: 30)
+                Card(name: "agent-question")
+                    .rotationEffect(.degrees(-2.5))
+                    .offset(x: 370, y: 215)
+            }
+            .shadow(color: .black.opacity(0.65), radius: 30, y: 17)
+            VStack(alignment: .leading, spacing: 0) {
+                Image(nsImage: capture("lights")).resizable().scaledToFit().frame(height: 85)
+                Text("Lykta")
+                    .font(.system(size: 75, weight: .bold))
+                    .tracking(-1.5)
+                    .padding(.top, 15)
+                Text("Your agents on\nthe Lock Screen")
+                    .font(.system(size: 27))
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+            .foregroundStyle(.white)
+            .offset(x: 56, y: 75)
+            Grain().blendMode(.overlay)
+        }
+        .frame(width: 800, height: 400)
+        .clipped()
+    }
+}
+
+struct Wall: View {
+    enum Tile: Hashable {
+        case activity(String)
+        case notification(String)
+        case widgets([String])
+    }
+
+    static let spacing: CGFloat = 24
+    static let columns: [[Tile]] = [
+        [.activity("app-review"), .notification("tests-passed"), .widgets(["plant-shelf"]), .activity("homelab")],
+        [.widgets(["tooth-stars", "grandma-cup"]), .notification("print-finished"), .activity("printer"), .notification("doorbell")],
+        [.activity("movie-night"), .widgets(["partner-sky"]), .activity("recipe-steps")],
+    ]
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            ForEach(Self.columns, id: \.self) { column in
+                VStack(spacing: Self.spacing) {
+                    ForEach(column, id: \.self, content: tile)
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.65), radius: 40, y: 23)
+        .padding(48)
+        .background {
+            Night(glows: [
+                Glow(light: .pink, x: 1130, y: 70, size: 730, opacity: 0.7),
+                Glow(light: .blue, x: 100, y: 650, size: 800, opacity: 0.7),
+                Glow(light: .amber, x: 670, y: 420, size: 600, opacity: 0.5),
+            ])
+        }
+        .overlay { Grain().blendMode(.overlay) }
+    }
+
+    @ViewBuilder
+    private func tile(_ tile: Tile) -> some View {
+        switch tile {
+        case let .activity(name): Card(name: name)
+        case let .notification(name): Banner(example: name)
+        case let .widgets(names):
+            HStack(spacing: Self.spacing) {
+                ForEach(names, id: \.self) { name in
+                    Image(nsImage: image(readme.appending(path: "widgets/\(name).png")))
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                }
+            }
+            .frame(width: 370)
+        }
+    }
+}
+
+@MainActor
+func save(_ view: some View, scale: CGFloat, to url: URL) {
+    let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+    renderer.scale = scale
+    guard let rendered = renderer.cgImage,
+          let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+          let type = UTType(filenameExtension: url.pathExtension)
+    else { fatalError("could not render \(url.lastPathComponent)") }
+    context.draw(rendered, in: CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height))
+    guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil) else {
+        fatalError("could not create \(url.path)")
+    }
+    CGImageDestinationAddImage(destination, context.makeImage()!, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
+}
+
 MainActor.assumeIsolated {
     for (name, slide) in slides {
-        let renderer = ImageRenderer(content: slide.environment(\.colorScheme, .dark))
-        guard let rendered = renderer.cgImage,
-              let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { fatalError("could not render \(name)") }
-        context.draw(rendered, in: CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height))
-        let url = output.appending(path: "\(name).png")
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            fatalError("could not create \(url.path)")
-        }
-        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-        guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
+        save(slide, scale: 1, to: output.appending(path: "\(name).png"))
     }
+    save(Cover(), scale: 2, to: readme.appending(path: "cover.jpg"))
+    save(Wall(), scale: 1.5, to: readme.appending(path: "examples.jpg"))
 }

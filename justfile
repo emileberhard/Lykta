@@ -16,7 +16,7 @@ gateway:
 render *args:
     @scripts/render "$@"
 
-# Compose the App Store screenshots into .local/screenshots, capturing the app only when its UI changed
+# Compose the App Store screenshots into .local/screenshots and the README's images into docs/readme, capturing the app only when its UI changed
 screenshots:
     @scripts/screenshots
 
