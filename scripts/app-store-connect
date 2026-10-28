@@ -167,17 +167,15 @@ def uploaded_build_numbers(app, version):
                                                            if u["attributes"]["state"]["state"] in {"PROCESSING", "COMPLETE"}]
 
 
-def reserve_build(app, version, fenced):
-    deadline = time.monotonic() + (15 * 60 if fenced else 0)
-    while not (numbers := uploaded_build_numbers(app, version)):
+def reserve_build(app, version, reserved, fenced):
+    if not fenced:
+        return max(next_build_number(app), int(reserved)), False
+    deadline = time.monotonic() + 15 * 60
+    while not (numbers := [int(number) for number in uploaded_build_numbers(app, version) if int(number) >= int(reserved)]):
         if time.monotonic() >= deadline:
-            break
+            sys.exit(f"An earlier attempt started uploading {version}, but App Store Connect shows no build for it after 15 minutes. Inspect App Store Connect; do not upload again blindly.")
         time.sleep(20)
-    if numbers:
-        return max(int(number) for number in numbers), True
-    if fenced:
-        sys.exit(f"An earlier attempt started uploading {version}, but App Store Connect shows no build for it after 15 minutes. Inspect App Store Connect; do not upload again blindly.")
-    return next_build_number(app), False
+    return max(numbers), True
 
 
 def next_build_number(app):
@@ -292,8 +290,16 @@ def main(command, *arguments):
     apps = api("GET", "apps", **{"filter[bundleId]": os.environ["LYKTA_BUNDLE_ID"]})
     if not apps:
         sys.exit(f"No app has the bundle ID {os.environ['LYKTA_BUNDLE_ID']}.")
+    if command == "next-build-number":
+        print(next_build_number(apps[0]["id"]))
+        return
     if command == "build-number":
-        number, uploaded = reserve_build(apps[0]["id"], arguments[0], arguments[1] == "fenced")
+        version, reserved, fence = arguments
+        if fence not in {"fenced", "open"}:
+            sys.exit("The upload fence must be fenced or open.")
+        if not reserved.isdigit():
+            sys.exit("The reserved build number must be an integer.")
+        number, uploaded = reserve_build(apps[0]["id"], version, reserved, fence == "fenced")
         print(number, "uploaded" if uploaded else "new")
         return
     version, number, *paths = arguments
@@ -305,9 +311,9 @@ def main(command, *arguments):
 
 
 if __name__ == "__main__":
-    counts = {"build-number": 4, "testflight": 5, "app-store": 6}
+    counts = {"next-build-number": 2, "build-number": 5, "testflight": 5, "app-store": 6}
     if len(sys.argv) != counts.get(sys.argv[1] if len(sys.argv) > 1 else "", 0):
-        sys.exit("Usage: scripts/app-store-connect build-number VERSION fenced|open\n       scripts/app-store-connect testflight VERSION BUILD NOTES\n       scripts/app-store-connect app-store VERSION BUILD SCREENSHOTS NOTES")
+        sys.exit("Usage: scripts/app-store-connect next-build-number\n       scripts/app-store-connect build-number VERSION RESERVED fenced|open\n       scripts/app-store-connect testflight VERSION BUILD NOTES\n       scripts/app-store-connect app-store VERSION BUILD SCREENSHOTS NOTES")
     try:
         main(*sys.argv[1:])
     except RequestFailed as failure:

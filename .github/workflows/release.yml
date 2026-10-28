@@ -53,8 +53,37 @@ jobs:
             sleep 10
           done
 
-  testflight:
+  numbers:
     needs: admit
+    runs-on: ubuntu-24.04
+    environment: testflight
+    timeout-minutes: 10
+    outputs:
+      build: ${{ steps.reserve.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reserve the next global build number
+        id: reserve
+        env:
+          LYKTA_BUNDLE_ID: ${{ vars.LYKTA_BUNDLE_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: |
+          umask 077
+          printf '%s' "$APP_STORE_CONNECT_KEY" > "$APP_STORE_CONNECT_KEY_PATH"
+          echo "build=$(scripts/app-store-connect next-build-number)" >> "$GITHUB_OUTPUT"
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+  testflight:
+    needs: [admit, numbers]
     runs-on: xcode-27
     environment: testflight
     concurrency: testflight
@@ -110,8 +139,9 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           FENCED: ${{ steps.fence.outputs.fenced }}
+          RESERVED: ${{ needs.numbers.outputs.build }}
         run: |
-          result=$(scripts/app-store-connect build-number "$VERSION" "$([[ $FENCED == true ]] && echo fenced || echo open)")
+          result=$(scripts/app-store-connect build-number "$VERSION" "$RESERVED" "$([[ $FENCED == true ]] && echo fenced || echo open)")
           read -r number state <<< "$result"
           echo "number=$number" >> "$GITHUB_OUTPUT"
           echo "uploaded=$([[ $state == uploaded ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"

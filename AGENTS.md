@@ -282,12 +282,12 @@ does the rest, gateway first:
    equal the tag, which must then be `X.Y.0`) and waits for `main`'s CI run on
    the same commit, without running the tests again. Missing CI fails after
    two minutes; running CI has a 35-minute bound.
-2. After admission, the serialized `testflight` job reuses the build or
-   processing upload App Store Connect holds for the tag's version, or selects
-   a build number higher than every build and pending upload. If an earlier
+2. After admission, `numbers` reserves a build number higher than every build
+   and pending upload, and the serialized `testflight` job uploads a new build
+   at or above it, beside any older build of the same version. If an earlier
    attempt started the separate `Upload to TestFlight` step, it waits up to
-   15 minutes for that upload to appear, then fails rather than upload again.
-   An existing build skips archiving, signing and uploading. A new one builds
+   15 minutes for that attempt's build at or above the reservation, then fails
+   rather than upload again; that build skips archiving, signing and uploading. A new one builds
    an archive with the tag as its version and that exact build number on a
    hosted runner without certificates. `scripts/sign-bundles` signs embedded
    frameworks deepest first, then every bundle ad hoc with the entitlements
