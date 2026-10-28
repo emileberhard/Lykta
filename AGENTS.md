@@ -295,8 +295,16 @@ does the rest, gateway first:
    because the export keeps only the capabilities the archive's signatures
    request. The map must cover exactly the app and both extensions.
 3. The production gateway's host polls for admitted tags and deploys them
-   itself, with a database backup and an automatic rollback.
-4. Once `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag, `testflight`
+   itself, with a database backup and an automatic rollback. It reports its
+   result on the admitted commit as `lykta-gateway/<version>`: pending while
+   building, failure when blocked by memory pressure or when deployment fails,
+   and success only after the public version check. The host retains its
+   memory-pressure guard; a blocked deploy is visible instead of silently deferred.
+4. `scripts/wait-for-gateway` checks both that result and the public endpoint.
+   A reported failure stops immediately; a missing receipt or a completed
+   deploy without a compatible public version fails after about a minute.
+   A pending deploy has a 30-minute bound. Only once
+   `https://$LYKTA_GATEWAY_HOST/v1/version` reports the tag or newer, `testflight`
    exports the archive through Xcode's cloud signing with the `testflight`
    environment's App Store Connect key without renumbering, fails unless every
    mapped bundle claims its entitlements file with the production push
