@@ -106,7 +106,7 @@ struct SimulatedPhoneTests {
         repeat {
             try await Task.sleep(for: .milliseconds(100))
             detail = try await store.widgetDetail(device, name: Name(rawValue: "water")!, now: now)
-        } while detail.status.delivery != .fetched && ContinuousClock.now < deadline
+        } while (detail.status.revision < 3 || detail.status.delivery != .fetched) && ContinuousClock.now < deadline
         #expect(detail.data == ["count": .number(1), "done": .bool(true)])
         #expect(detail.status.revision == 3)
         #expect(try await store.actions(device, after: 0, limit: 10).count == 2)
