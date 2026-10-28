@@ -239,6 +239,13 @@ platform-specific modules behind `#if canImport`, as `APNs.swift` does for
 `CryptoKit` and `FoundationNetworking`. Use Swift 6 language mode, Swift
 Testing, and no code comments.
 
+Dependabot updates Docker images and GitHub Actions. Maintainers review Apple's
+Swift package releases, update the exact versions in `Gateway/Package.swift`,
+resolve with the project's Swift toolchain and commit `Gateway/Package.resolved`
+after `just test` passes. Dependabot's Swift updater currently runs Swift 6.3.1
+and cannot parse this project's Swift 6.4 manifests. Re-enable `/Gateway` when
+Dependabot supports Swift 6.4; keep the project's tools requirement unchanged.
+
 ## Documentation
 
 The Markdown files are as much a part of Lykta as the code. Update the README,
