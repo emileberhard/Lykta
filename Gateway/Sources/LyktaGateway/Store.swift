@@ -477,12 +477,10 @@ actor Store {
 
     private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> NotificationRequest {
         guard case let .drawing(template)? = request.sender.avatar else { return request }
-        let node: JSONValue
-        let requirement: Layout.Requirement
-        do {
-            node = try template.expandingPart(saved: savedParts(template.savedPartReferences(), on: device))
-            requirement = try PackedNode.admitting(node).requirement
-        } catch let error as LayoutError { throw try partError(error, on: device) }
+        let (node, requirement) = try expanding(template, on: device) { saved throws(LayoutError) in
+            let node = try template.expandingPart(saved: saved)
+            return (node, try PackedNode.admitting(node).requirement)
+        }
         if let draws = Self.draws(requirement.version, on: device) {
             throw APIError(.appUpdateRequired, "sender.avatar uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). Ask the user to update Lykta and open it once.")
         }
