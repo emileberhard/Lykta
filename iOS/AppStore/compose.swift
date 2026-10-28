@@ -7,6 +7,7 @@ let canvas = CGSize(width: 1206, height: 2622)
 let captures = URL(filePath: CommandLine.arguments[1])
 let examples = URL(filePath: CommandLine.arguments[2])
 let output = URL(filePath: CommandLine.arguments[3])
+let readme = URL(filePath: CommandLine.arguments[4])
 
 func image(_ url: URL) -> NSImage {
     guard let image = NSImage(contentsOf: url) else { fatalError("missing \(url.path)") }
@@ -446,19 +447,105 @@ let slides: [(String, AnyView)] = [
     })),
 ]
 
+struct Cover: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Night(glows: [
+                Glow(light: .pink, x: 1450, y: 60, size: 900, opacity: 0.8),
+                Glow(light: .blue, x: 120, y: 820, size: 1000, opacity: 0.75),
+                Glow(light: .amber, x: 1050, y: 860, size: 700, opacity: 0.55),
+            ])
+            Island(name: "orion-return", presentation: "expanded")
+                .scaled(2, from: capture("orion-return.expanded").size)
+                .rotationEffect(.degrees(2))
+                .lifted()
+                .offset(x: 790, y: 60)
+            Card(name: "agent-question")
+                .scaled(2, from: capture("agent-question.lock").size)
+                .rotationEffect(.degrees(-2.5))
+                .lifted()
+                .offset(x: 740, y: 430)
+            VStack(alignment: .leading, spacing: 0) {
+                Image(nsImage: capture("lights")).resizable().scaledToFit().frame(height: 170)
+                Text("Lykta")
+                    .font(.system(size: 150, weight: .bold))
+                    .tracking(-3)
+                    .padding(.top, 30)
+                Text("Your agents on\nthe Lock Screen")
+                    .font(.system(size: 54))
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+            .foregroundStyle(.white)
+            .offset(x: 112, y: 150)
+            Grain().blendMode(.overlay)
+        }
+        .frame(width: 1600, height: 800)
+        .clipped()
+    }
+}
+
+struct Wall: View {
+    static let scale: CGFloat = 1.5
+    static let spacing: CGFloat = 36
+
+    let names: [String]
+
+    private var stacks: [[String]] {
+        names.reduce(into: Array(repeating: [String](), count: 3)) { stacks, name in
+            let heights = stacks.map { $0.reduce(0) { $0 + capture("\($1).lock").size.height + Self.spacing } }
+            stacks[heights.indices.min { heights[$0] < heights[$1] }!].append(name)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            ForEach(stacks, id: \.self) { stack in
+                VStack(spacing: Self.spacing) {
+                    ForEach(stack, id: \.self) { name in
+                        Card(name: name)
+                            .scaled(Self.scale, from: capture("\(name).lock").size)
+                            .lifted()
+                    }
+                }
+            }
+        }
+        .padding(72)
+        .background {
+            Night(glows: [
+                Glow(light: .pink, x: 1700, y: 100, size: 1100, opacity: 0.7),
+                Glow(light: .blue, x: 150, y: 1200, size: 1200, opacity: 0.7),
+                Glow(light: .amber, x: 1000, y: 700, size: 900, opacity: 0.5),
+            ])
+        }
+        .overlay { Grain().blendMode(.overlay) }
+    }
+}
+
+@MainActor
+func save(_ view: some View, to url: URL) {
+    let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+    guard let rendered = renderer.cgImage,
+          let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+          let type = UTType(filenameExtension: url.pathExtension)
+    else { fatalError("could not render \(url.lastPathComponent)") }
+    context.draw(rendered, in: CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height))
+    guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil) else {
+        fatalError("could not create \(url.path)")
+    }
+    CGImageDestinationAddImage(destination, context.makeImage()!, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
+}
+
+let shown = try! FileManager.default.contentsOfDirectory(atPath: captures.path)
+    .filter { $0.hasSuffix(".lock.png") }
+    .map { String($0.dropLast(".lock.png".count)) }
+    .sorted()
+
 MainActor.assumeIsolated {
     for (name, slide) in slides {
-        let renderer = ImageRenderer(content: slide.environment(\.colorScheme, .dark))
-        guard let rendered = renderer.cgImage,
-              let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { fatalError("could not render \(name)") }
-        context.draw(rendered, in: CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height))
-        let url = output.appending(path: "\(name).png")
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            fatalError("could not create \(url.path)")
-        }
-        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-        guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
+        save(slide, to: output.appending(path: "\(name).png"))
     }
+    save(Cover(), to: readme.appending(path: "cover.jpg"))
+    save(Wall(names: shown), to: readme.appending(path: "examples.jpg"))
 }
