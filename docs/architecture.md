@@ -576,7 +576,14 @@ a failed entitlement check has not started the upload. The selector's command
 substitution propagates a failure before any build-number output is written.
 `entitlements.json` covers every app and extension, replacing the workflow's
 inline bundle list; the export must retain their claims. The gateway still
-deploys first and the phone upload waits for its reported version. A separate
+deploys first and the phone upload waits for its reported version.
+The host owns deploy outcomes and publishes `lykta-gateway/<version>` on the
+exact admitted commit. The app gate reads that receipt to distinguish an active
+build from a blocked or failed deploy; a receipt alone never admits an upload.
+A pending build can take up to 30 minutes, while a missing result or a successful
+result without a compatible public gateway fails after about a minute.
+This preserves the host's resource and rollback guards without making the app
+workflow infer deployment progress from an unchanged version endpoint. A separate
 upload path would need to coordinate build-number selection with this owner.
 
 **Nested frameworks are signed before app bundles.** Sign embedded frameworks

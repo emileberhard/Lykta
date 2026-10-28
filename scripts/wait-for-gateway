@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import subprocess
+import time
+import urllib.error
+import urllib.request
+
+
+def version_number(value):
+    if isinstance(value, str) and re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", value):
+        return tuple(map(int, value.split(".")))
+    return None
+
+
+def wait(version, host, repository, commit):
+    expected = version_number(version)
+    if expected is None:
+        raise SystemExit("Expected a plain MAJOR.MINOR.PATCH gateway version.")
+    started = time.monotonic()
+    while time.monotonic() - started < 1800:
+        try:
+            with urllib.request.urlopen(f"https://{host}/v1/version", timeout=10) as response:
+                running = json.load(response).get("version")
+        except (OSError, ValueError):
+            running = None
+        number = version_number(running)
+        if number is not None and number >= expected:
+            print(f"Public gateway runs {running}, compatible with {version}.")
+            return
+        try:
+            output = subprocess.check_output([
+                "gh", "api", "--paginate", "--slurp",
+                f"repos/{repository}/commits/{commit}/statuses?per_page=100",
+                "--jq", f'[.[][] | select(.context == "lykta-gateway/{version}")][0] // null',
+            ], text=True, timeout=15)
+            receipt = json.loads(output)
+        except (subprocess.SubprocessError, ValueError) as error:
+            if time.monotonic() - started >= 60:
+                raise SystemExit(f"Cannot read the gateway deploy result: {error}") from error
+            receipt = None
+        if receipt is not None:
+            state = receipt["state"]
+            if state in {"error", "failure"}:
+                raise SystemExit(f"Gateway deploy {state}: {receipt['description']}")
+            if state not in {"pending", "success"}:
+                raise SystemExit(f"Unknown gateway deploy state: {state}")
+        else:
+            state = "missing"
+        if state != "pending" and time.monotonic() - started >= 60:
+            raise SystemExit(f"Gateway runs {running}; deploy result is {state}. No compatible public gateway after 60 seconds.")
+        print(f"Gateway runs {running}; deploy is {state}; waiting for {version} or newer.", flush=True)
+        time.sleep(10)
+    raise SystemExit(f"Gateway deploy did not make {version} publicly healthy within 30 minutes.")
+
+
+if __name__ == "__main__":
+    wait(os.environ["VERSION"], os.environ["LYKTA_GATEWAY_HOST"], os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"])
