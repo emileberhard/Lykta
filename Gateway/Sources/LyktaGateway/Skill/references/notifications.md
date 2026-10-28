@@ -135,13 +135,14 @@ bodies and notification status keep the same `image` or `initials` avatar values
 `{"symbol":"hammer.fill"}` or `{"use":"clawd"}`. A string always means a
 media id; write text as `{"text":"ET"}`. With Lykta 0.17.0 or later, the phone
 draws the node once on arrival in a fixed 64 × 64 pt viewport at scale 4;
-iOS crops it into a circle. Compose the art, then `padding`, then `background`.
+The viewport uses light colors and default text size; iOS crops it into a circle. Compose the art, then `padding`, then `background`.
 Use initials or a symbol rather than words that become unreadable at this size.
 
 An avatar has no data: placeholders and `each` are refused. Controls, links,
 timers, interval progress, relative dates and environment conditions are also
 refused because the result is drawn once. Fixed numeric progress, absolute
-dates and ordinary SVG remain available. If drawing fails, independent initials
+dates and ordinary SVG remain available. Widget-only `accessoryBackground` and
+`privacySensitive` are refused. If drawing fails, independent initials
 still identify the sender.
 
 Speak as yourself. Check `lykta get parts` for a saved part that represents you

@@ -54,7 +54,7 @@ struct NotificationBanner: View {
     var body: some View {
         HStack(spacing: 12) {
             NotificationAvatar(avatar: example.avatar)
-                .scaleEffect(avatarSize / 64)
+                .scaleEffect(avatarSize / AvatarView.size)
                 .frame(width: avatarSize, height: avatarSize)
             VStack(alignment: .leading, spacing: 2) {
                 Text(example.sender)
@@ -78,7 +78,7 @@ struct NotificationAvatar: View {
     var body: some View {
         Group {
             switch avatar {
-            case let .drawing(node): NodeView(node)
+            case let .drawing(node): AvatarView(node: node)
             case let .picture(data):
                 if let image = UIImage(data: data) {
                     Image(uiImage: image)
@@ -87,7 +87,7 @@ struct NotificationAvatar: View {
                 }
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: AvatarView.size, height: AvatarView.size)
         .clipShape(Circle())
         .accessibilityHidden(true)
     }

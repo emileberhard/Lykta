@@ -132,8 +132,9 @@ so rollback can still send a notification without its drawing. Idempotency
 compares expanded canonical requests; changing a referenced part conflicts,
 and deleting it produces an unknown-part error. Neither changes queued content.
 `notification.put` records `avatar: drawing` and `avatarFingerprint`, never the
-node. Admission returns the packed drawing once for payload measurement;
-delivery only packs the stored snapshot, without decoding or validation, so a
+node. Admission returns the packed drawing and requirement once. PUT measures
+the same payload builder as delivery, which packs the stored snapshot without
+decoding or validation, so a
 rollback can still send nodes a newer writer accepted. The real APNs payload
 is measured with its complete packed drawing; an
 oversize error names the drawing and compressed bytes when its encoded payload
@@ -145,9 +146,10 @@ and nodes; existing activity fingerprints, dictionaries and bytes do not
 change. The notification envelope retains an invalid drawing for separate
 bounded decoding, so it still delivers with initials. The extension prefers a
 photo, then a drawing, then the independent Core Graphics initials. It draws
-`NodeView` inside 64 × 64 pt at scale 4 exactly once, with no measuring pass,
+`AvatarView`, the shared 64 × 64 pt viewport with light color scheme, body
+font and default Dynamic Type size, at scale 4 exactly once, with no measuring pass,
 background lifting or render cache. The gallery retains a decoded node and
-draws its 64 pt view directly on the
+draws the same viewport directly on the
 main actor, without a deadline or PNG round trip.
 Art, padding, then background gives ordinary composition in that viewport.
 
@@ -712,7 +714,9 @@ limit bounds.
 
 - Notification `drawing` payload key, its `PackedNode` frame, and the stored
   `sender.drawing` and media-only `sender.avatar` keys. The old report shape
-  and the diagnostic `avatarFailure` query must remain rollback-readable.
+  and the diagnostic `avatarFailure` query must remain rollback-readable. A
+  stored request never holds both `sender.avatar` and `sender.drawing`: older
+  gateways refuse a row with both keys.
 
 - The `ContentState` encoding and the `LyktaActivity` type name, which
   installed apps and pushes depend on.

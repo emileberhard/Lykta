@@ -17,7 +17,7 @@ nonisolated enum DrawnAvatar {
     }
 
     @MainActor private static func render(_ node: Node) throws(PackedNode.Failure) -> Data {
-        let renderer = ImageRenderer(content: NodeView(node).frame(width: 64, height: 64))
+        let renderer = ImageRenderer(content: AvatarView(node: node))
         renderer.scale = 4
         guard let data = renderer.uiImage?.pngData() else { throw .render }
         return data

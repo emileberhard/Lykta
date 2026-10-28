@@ -132,14 +132,15 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         return String(decoding: try! encoder.encode(self), as: UTF8.self)
     }
 
-    func payload(id: UUID, token: String, drawing: PackedNode?) throws -> Data {
+    func payload(id: UUID, token: String) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.withoutEscapingSlashes]
         let avatar: MediaID?
+        let drawing: PackedNode?
         switch sender.avatar {
-        case let .medium(id)?: avatar = id
-        case .drawing?: avatar = nil
-        case nil: avatar = nil
+        case let .medium(id)?: avatar = id; drawing = nil
+        case let .drawing(node)?: avatar = nil; drawing = try PackedNode(packing: node)
+        case nil: avatar = nil; drawing = nil
         }
         return try encoder.encode(Payload(
             aps: .init(alert: .init(title: sender.name, body: body), sound: sound == nil ? nil : "default", threadID: sender.id.rawValue),

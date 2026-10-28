@@ -151,6 +151,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   a newer gateway survives rollback.
 - The notification extension draws a node once in a 64 × 64 pt viewport at
   scale 4, with a two-second main-actor deadline and no measuring render.
+  `AvatarView` owns the viewport and pins light color scheme, body font and
+  default text size for both extension rendering and the gallery.
   One lock owns the completion handler and best content; expiry delivers
   that content once and late results cannot deliver it again. Every media,
   rendering, donation and reporting wait is bounded. Initials stay independent.

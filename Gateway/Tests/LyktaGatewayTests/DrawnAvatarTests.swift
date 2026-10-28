@@ -64,6 +64,8 @@ struct DrawnAvatarTests {
         (#"{"text":"X","modifiers":[{"overlay":{"timer":[0,100]}}]}"#, "sender.avatar.modifiers[0].overlay", "timers and interval progress change with time, and an avatar is drawn once; use a fixed value"),
         (#"{"vstack":["Hi",{"button":"go","label":"Go"}]}"#, "sender.avatar.vstack[1]", "controls and links need interaction, and an avatar is drawn once; use a fixed node"),
         (#"{"progress":2}"#, "sender.avatar.progress", "expected a value within 0...1"),
+        (#"{"accessoryBackground":true}"#, "sender.avatar.accessoryBackground", "accessoryBackground works only in accessoryCircular and accessoryRectangular"),
+        (#"{"text":"X","modifiers":[{"privacySensitive":true}]}"#, "sender.avatar.modifiers[0].privacySensitive", "privacySensitive works only in a widget's presentations"),
     ], [false, true])
     func nonStillFamiliesAreRefusedWithTheirAuthoredPath(_ input: (String, String, String), _ saved: Bool) async throws {
         let (source, path, reason) = input
@@ -168,6 +170,16 @@ struct DrawnAvatarTests {
             Issue.record("The queued notification must keep its drawing")
             return
         }
+    }
+
+    @Test(arguments: ["frame", "inflate", "decode", "deadline", "render"])
+    func avatarFailureWireNamesAreRecordedLiterally(_ failure: String) async throws {
+        _ = await send("PUT", "/v1/notifications/done", request(["text": "ET"]))
+        try await deliver()
+        let payload = try pushed()
+        #expect(await receive(payload, avatar: .initials, failure: failure).status == 204)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.first { $0.name == "notification.received" }?.detail["avatarFailure"] == .string(failure))
     }
 
     @Test(arguments: [("deadline", Optional("deadline")), ("memory", nil)])

@@ -27,7 +27,7 @@ public struct PackedNode: Codable, Sendable {
         text = CompactFrame(hash: fnv1a(json), packed: packed).text
     }
 
-    public static func admitting(_ value: JSONValue) throws(LayoutError) -> (drawing: Self, requirement: Layout.Requirement) {
+    static func admitting(_ value: JSONValue) throws(LayoutError) -> (drawing: Self, requirement: Layout.Requirement) {
         let decoded = try value.decodedAvatar()
         return (try Self(packing: value), decoded.requirement)
     }

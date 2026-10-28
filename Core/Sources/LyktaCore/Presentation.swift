@@ -19,11 +19,11 @@ enum Presentation {
 
     func refusal(of feature: String) -> String? {
         switch (self, feature) {
-        case (.avatar, _): nil
         case (.widget(.accessoryCircular), "accessoryBackground"), (.widget(.accessoryRectangular), "accessoryBackground"): nil
         case (_, "accessoryBackground"): "accessoryBackground works only in accessoryCircular and accessoryRectangular"
         case (.widget, "privacySensitive"): nil
         case (_, "privacySensitive"): "privacySensitive works only in a widget's presentations"
+        case (.avatar, _): nil
         case let (.activity(root), _):
             ["lockScreen", "expanded"].contains(root) ? nil : "links, buttons and toggles work only in lockScreen and expanded"
         case (.widget(.accessoryInline), "button"), (.widget(.accessoryInline), "toggle"):

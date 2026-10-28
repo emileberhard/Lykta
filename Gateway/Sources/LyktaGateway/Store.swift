@@ -437,7 +437,7 @@ actor Store {
                 throw error
             }
             let id = UUID()
-            let size = try request.payload(id: id, token: Self.token("lykta_fetch_"), drawing: drawing).count
+            let size = try request.payload(id: id, token: Self.token("lykta_fetch_")).count
             guard size <= Self.maximumPayloadBytes else {
                 let advice: String
                 let encoder = JSONEncoder()
