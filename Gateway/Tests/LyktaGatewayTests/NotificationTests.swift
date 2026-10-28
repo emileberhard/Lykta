@@ -294,8 +294,8 @@ struct NotificationTests {
     }
 
     @Test func aNotificationAndItsNameLastADay() async throws {
-        _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
         let device = try #require(try await store.device(agentToken: credentials.agentToken))
+        #expect(try await store.putNotification(device, name: Name(rawValue: "done")!, request: NotificationRequest.decode(Self.printer), now: now))
         let later = now + Store.notificationLifetime
         await #expect(throws: APIError.self) { try await store.notification(device, name: Name(rawValue: "done")!, now: later) }
         let request = try NotificationRequest.decode(["sender": ["id": "printer", "name": "Printer"], "body": "Another day"])
@@ -304,7 +304,8 @@ struct NotificationTests {
 
     @Test func aQueuedNotificationThatExpiresFails() async throws {
         push.fail("notify", .rejected(status: 503, reason: "ServiceUnavailable"))
-        _ = try await send("PUT", "/v1/notifications/done", body: Self.printer)
+        let device = try #require(try await store.device(agentToken: credentials.agentToken))
+        #expect(try await store.putNotification(device, name: Name(rawValue: "done")!, request: NotificationRequest.decode(Self.printer), now: now))
         try await deliver(at: now)
         try await store.housekeep(now: now + Store.notificationLifetime)
         try await deliver(at: now + Store.notificationLifetime)
