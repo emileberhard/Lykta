@@ -14,7 +14,7 @@ loader.exec_module(gate)
 
 
 class GatewayGateTests(unittest.TestCase):
-    def run_gate(self, versions, states):
+    def run_gate(self, versions, states, context="lykta-gateway/0.16.0"):
         elapsed = 0
         versions = iter(versions)
         states = iter(states)
@@ -31,7 +31,7 @@ class GatewayGateTests(unittest.TestCase):
                 running = next(versions, running)
                 return json.dumps({"version": running})
             state = next(states, state)
-            return json.dumps(None if state is None else {"state": state, "description": "host deploy result"})
+            return json.dumps([[]] if state is None else [[{"context": context, "state": state, "description": "host deploy result"}]])
 
         with patch.object(gate.time, "monotonic", side_effect=lambda: elapsed), \
              patch.object(gate.time, "sleep", side_effect=sleep), \
@@ -69,3 +69,8 @@ class GatewayGateTests(unittest.TestCase):
         error, elapsed = self.run_gate(["0.15.0"], ["pending"])
         self.assertIn("within 30 minutes", error)
         self.assertEqual(1800, elapsed)
+
+    def test_another_versions_receipt_cannot_decide_this_release(self):
+        error, elapsed = self.run_gate(["0.15.0"], ["failure"], context="lykta-gateway/0.15.0")
+        self.assertIn("deploy result is missing", error)
+        self.assertEqual(60, elapsed)

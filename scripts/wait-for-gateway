@@ -34,9 +34,9 @@ def wait(version, host, repository, commit):
             output = subprocess.check_output([
                 "gh", "api", "--paginate", "--slurp",
                 f"repos/{repository}/commits/{commit}/statuses?per_page=100",
-                "--jq", f'[.[][] | select(.context == "lykta-gateway/{version}")][0] // null',
             ], text=True, timeout=15)
-            receipt = json.loads(output)
+            receipt = next((status for page in json.loads(output) for status in page
+                            if status["context"] == f"lykta-gateway/{version}"), None)
         except (subprocess.SubprocessError, ValueError) as error:
             if time.monotonic() - started >= 60:
                 raise SystemExit(f"Cannot read the gateway deploy result: {error}") from error
