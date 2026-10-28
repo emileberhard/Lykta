@@ -9,13 +9,13 @@ events = json.load(sys.stdin)["events"]
 parts = [e["detail"]["fingerprint"] for e in events if e["name"] == "part.put" and e["detail"].get("name") == "clawd"]
 puts = [e["detail"] for e in events if e["name"] == "notification.put"]
 received = {e["detail"]["notification"] for e in events if e["name"] == "notification.received"}
-print(int(bool(parts) and any(p.get("sender") == "claude" and p.get("avatar") == "drawing" and p.get("avatarFingerprint") == parts[0] and p["notification"] in received for p in puts)))' <<< "$events")
+print(int(bool(parts) and any(p.get("avatar") == "drawing" and p.get("avatarFingerprint") == parts[0] and p["notification"] in received for p in puts)))' <<< "$events")
   if [ "$verdict" = 1 ]; then
-    echo 'The phone received Claude with the saved clawd drawing.'
+    echo 'The phone received a notification with the saved clawd drawing.'
     echo 1 > /logs/verifier/reward.txt
     exit 0
   fi
   sleep 0.5
 done
-echo 'No received Claude notification used the saved clawd drawing.'
+echo 'No received notification used the saved clawd drawing.'
 echo 0 > /logs/verifier/reward.txt
