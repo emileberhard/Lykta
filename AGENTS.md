@@ -23,7 +23,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, the `hello.json` activity its setup starts, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
 | `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples, the home screen and the Connect step of the introduction |
-| `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots and build, short of App Review |
+| `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots, build and App Review submission |
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
 | `scripts/render`, `iOS/Widgets/RenderPreviews.swift` | The render tool and the activity and widget previews it drives, which show the layouts staged in `.local/render` |
@@ -350,21 +350,22 @@ does the rest, gateway first:
    Without an external group it stops after setting What to Test.
    When App Store Connect rejects the upload, it fails with Apple's errors.
 7. Alongside it, `app-store` composes the screenshots and runs
-   `scripts/app-store-connect app-store`. It renames the App Store version
-   that is still editable to the tag or creates one, with manual release, sets
-   What's New to the tag message from the second release on, replaces the
-   iPhone screenshots, deletes only the unplaced images this release displaced
-   or reserved, except those App Review has seen, which Apple keeps, and
-   attaches the build. While a version waits for App Review or release, this
-   job succeeds with a notice and leaves that version alone.
+   `scripts/app-store-connect app-store`. Once the build is processed, it
+   removes an older version waiting for or in App Review from review, renames
+   the App Store version that is still editable to the tag or creates one,
+   released automatically after approval, sets What's New to the tag message,
+   replaces the iPhone screenshots, deletes only the unplaced images this
+   release displaced or reserved, except those App Review has seen, which
+   Apple keeps, attaches the build and submits the version for App Review,
+   resolving its rejected item. A rerun resumes a draft that already carries
+   the tag and build. When the tag's own version is already in review, or a
+   version waits for release, this job succeeds with a notice and leaves that
+   version alone.
 
 CI and releases select the Xcode pinned in `.xcode-version`; builds use only
 committed package resolutions. CI also checks the release tools on Linux.
 Rerun a transiently failed job from the tag's own run only while it is still
 the newest version. A code fix ships as the next patch, never by moving a tag.
-
-Submitting to App Review stays manual, and App Store versions use manual
-release, so the maintainer decides when an approved version goes live.
 
 The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size, drawn by `just screenshots`. In capture mode, which
