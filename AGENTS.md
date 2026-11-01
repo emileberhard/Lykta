@@ -357,9 +357,10 @@ does the rest, gateway first:
    replaces the iPhone screenshots, deletes only the unplaced images this
    release displaced or reserved, except those App Review has seen, which
    Apple keeps, attaches the build and submits the version for App Review,
-   resolving a rejected submission's items. When the tag's own version is
-   already in review, or a version waits for release, this job succeeds with
-   a notice and leaves that version alone.
+   resolving its rejected item. A rerun resumes a draft that already carries
+   the tag and build. When the tag's own version is already in review, or a
+   version waits for release, this job succeeds with a notice and leaves that
+   version alone.
 
 CI and releases select the Xcode pinned in `.xcode-version`; builds use only
 committed package resolutions. CI also checks the release tools on Linux.

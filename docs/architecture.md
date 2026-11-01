@@ -671,8 +671,17 @@ entitlements. Checking only entitlements can miss an invalid framework signature
 **App Store preparation owns only its screenshots.** Upload reservations are
 recorded before transfer, workers finish before cleanup, and cleanup touches
 only the release's unplaced reservations and displaced images. A whole-library
-sweep could delete another release's work. A version in review is left alone
-with a notice; it does not fail the TestFlight release or withdraw that review.
+sweep could delete another release's work.
+
+**The newest tag goes to App Review.** Each release submits its App Store
+version for review, released automatically on approval. An older version still
+in review is withdrawn only after the new build has processed, so a failed
+build never empties the queue, and only that version's own review submission
+is canceled or emptied. App Review locks screenshots once a version is ready
+for review, so a rerun resumes a draft that already carries its tag and build
+instead of preparing it again, and waits for a cancellation already underway.
+Withdrawing restarts Apple's review, which a burst of releases repeats until
+the last one is reviewed.
 
 **Credentials.** Each phone gets a device secret and an agent token, both 256
 random bits stored as SHA-256 hashes. Registration needs proof, so a script

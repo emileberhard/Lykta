@@ -14,8 +14,9 @@ import urllib.request
 from pathlib import Path
 
 API = "https://api.appstoreconnect.apple.com/v1/"
-EDITABLE = {"PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
+EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"}
 IN_REVIEW = {"WAITING_FOR_REVIEW", "IN_REVIEW"}
+OPEN_SUBMISSIONS = "READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES,CANCELING"
 RELEASED = {"READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"}
 IN_BETA = {"WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "READY_FOR_BETA_TESTING", "IN_BETA_TESTING"}
 SCREENSHOTS = {"placementType": "APP_SCREENSHOT", "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"}
@@ -88,58 +89,75 @@ def parse(version):
     return tuple(int(part) for part in version.split("."))
 
 
-def draft_version(app, version):
+def draft_version(app, version, build):
     versions = api("GET", f"apps/{app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 200})
     unreleased = [v for v in versions if v["attributes"]["appVersionState"] not in RELEASED]
     if not unreleased:
         return api("POST", "appStoreVersions", {"type": "appStoreVersions",
                    "attributes": {"platform": "IOS", "versionString": version, "releaseType": "AFTER_APPROVAL"},
-                   "relationships": {"app": link("apps", app)}})["id"]
+                   "relationships": {"app": link("apps", app)}})["id"], False
     draft = unreleased[0]
     state, name = draft["attributes"]["appVersionState"], draft["attributes"]["versionString"]
     if parse(name) > parse(version):
         sys.exit(f"App Store version {name} is newer than {version}.")
     if state in IN_REVIEW and name == version:
         print(f"::notice::App Store version {version} is already {state}.", file=sys.stderr)
-        return None
-    if state in IN_REVIEW:
+        return None, False
+    if state == "READY_FOR_REVIEW" and name == version and (api("GET", f"appStoreVersions/{draft['id']}/build") or {}).get("id") == build:
+        return draft["id"], True
+    if state in IN_REVIEW | {"READY_FOR_REVIEW"}:
         withdraw(app, draft["id"], name)
     elif state not in EDITABLE:
         print(f"::notice::App Store version {name} is {state}; preparation of {version} is pending until it is released.", file=sys.stderr)
-        return None
+        return None, False
     updated = api("PATCH", f"appStoreVersions/{draft['id']}", {"type": "appStoreVersions", "id": draft["id"],
                   "attributes": {"releaseType": "AFTER_APPROVAL"} | ({"versionString": version} if name != version else {})})
     if (updated["attributes"]["versionString"], updated["attributes"]["releaseType"]) != (version, "AFTER_APPROVAL"):
         sys.exit(f"App Store Connect kept {name} as {updated['attributes']['versionString']} with release type {updated['attributes']['releaseType']}.")
-    return draft["id"]
+    return draft["id"], False
 
 
-def review_submissions(app, *states):
-    return api("GET", "reviewSubmissions", limit=200, **{"filter[app]": app, "filter[platform]": "IOS", "filter[state]": ",".join(states)})
+def submission_for(app, version_id):
+    submissions = [s for s in api("GET", "reviewSubmissions", limit=200, include="appStoreVersionForReview",
+                                  **{"filter[app]": app, "filter[platform]": "IOS", "filter[state]": OPEN_SUBMISSIONS})
+                   if (s["relationships"]["appStoreVersionForReview"].get("data") or {}).get("id") == version_id]
+    if len(submissions) > 1:
+        sys.exit(f"App Store Connect shows {len(submissions)} open review submissions for one App Store version; inspect App Review.")
+    return submissions[0] if submissions else None
+
+
+def version_items(submission, version_id):
+    return [item for item in api("GET", f"reviewSubmissions/{submission}/items", limit=200, include="appStoreVersion")
+            if (item["relationships"]["appStoreVersion"].get("data") or {}).get("id") == version_id]
 
 
 def withdraw(app, version_id, name):
-    submissions = review_submissions(app, *IN_REVIEW)
-    if not submissions:
-        sys.exit(f"App Store version {name} is in review, but App Store Connect shows no review submission to withdraw.")
-    for submission in submissions:
+    submission = submission_for(app, version_id)
+    state = submission and submission["attributes"]["state"]
+    if state == "READY_FOR_REVIEW":
+        for item in version_items(submission["id"], version_id):
+            api("PATCH", f"reviewSubmissionItems/{item['id']}", {"type": "reviewSubmissionItems", "id": item["id"], "attributes": {"removed": True}})
+    elif state in IN_REVIEW:
         api("PATCH", f"reviewSubmissions/{submission['id']}", {"type": "reviewSubmissions", "id": submission["id"], "attributes": {"canceled": True}})
-    print(f"Removed App Store version {name} from review.", file=sys.stderr)
+    elif state != "CANCELING":
+        sys.exit(f"App Store version {name} is in review, but its review submission is {state or 'missing'}; inspect App Review.")
     wait(f"Removing {name} from review", lambda: api("GET", f"appStoreVersions/{version_id}")["attributes"]["appVersionState"] in EDITABLE or None)
+    print(f"Removed App Store version {name} from review.", file=sys.stderr)
 
 
 def submit_for_review(app, version_id, version):
-    submissions = review_submissions(app, "READY_FOR_REVIEW", "UNRESOLVED_ISSUES")
-    submission = submissions[0]["id"] if submissions else api("POST", "reviewSubmissions", {"type": "reviewSubmissions",
-        "attributes": {"platform": "IOS"}, "relationships": {"app": link("apps", app)}})["id"]
-    items = api("GET", f"reviewSubmissions/{submission}/items", limit=200, include="appStoreVersion")
-    if not any((item["relationships"]["appStoreVersion"].get("data") or {}).get("id") == version_id for item in items):
+    submission = submission_for(app, version_id)
+    if submission:
+        for item in version_items(submission["id"], version_id):
+            if item["attributes"]["state"] == "REJECTED":
+                api("PATCH", f"reviewSubmissionItems/{item['id']}", {"type": "reviewSubmissionItems", "id": item["id"], "attributes": {"resolved": True}})
+    else:
+        drafts = api("GET", "reviewSubmissions", limit=1, **{"filter[app]": app, "filter[platform]": "IOS", "filter[state]": "READY_FOR_REVIEW"})
+        submission = drafts[0] if drafts else api("POST", "reviewSubmissions", {"type": "reviewSubmissions",
+            "attributes": {"platform": "IOS"}, "relationships": {"app": link("apps", app)}})
         api("POST", "reviewSubmissionItems", {"type": "reviewSubmissionItems", "relationships": {
-            "reviewSubmission": link("reviewSubmissions", submission), "appStoreVersion": link("appStoreVersions", version_id)}})
-    for item in items:
-        if item["attributes"]["state"] == "REJECTED":
-            api("PATCH", f"reviewSubmissionItems/{item['id']}", {"type": "reviewSubmissionItems", "id": item["id"], "attributes": {"resolved": True}})
-    api("PATCH", f"reviewSubmissions/{submission}", {"type": "reviewSubmissions", "id": submission, "attributes": {"submitted": True}})
+            "reviewSubmission": link("reviewSubmissions", submission["id"]), "appStoreVersion": link("appStoreVersions", version_id)}})
+    api("PATCH", f"reviewSubmissions/{submission['id']}", {"type": "reviewSubmissions", "id": submission["id"], "attributes": {"submitted": True}})
     print(f"Submitted App Store version {version} for App Review; it is released when Apple approves it.", file=sys.stderr)
 
 
@@ -282,9 +300,15 @@ def app_store(app, version, number, screenshots, notes):
     if not 1 <= len(slides) <= 10:
         sys.exit("Provide 1–10 PNG screenshots.")
     build = wait(f"The {version} build", lambda: processed_build(app, version, number))
-    version_id = draft_version(app, version)
+    version_id, prepared = draft_version(app, version, build)
     if version_id is None:
         return
+    if not prepared:
+        prepare(app, version_id, build, slides, notes)
+    submit_for_review(app, version_id, version)
+
+
+def prepare(app, version_id, build, slides, notes):
     library = api("GET", f"apps/{app}/assetLibrary")["id"]
     created = queue.SimpleQueue()
     placements, displaced = [], set()
@@ -310,7 +334,6 @@ def app_store(app, version, number, screenshots, notes):
     delete_unplaced(displaced)
     api("PATCH", f"appStoreVersions/{version_id}/relationships/build", {"type": "builds", "id": build})
     wait("The screenshots", lambda: processed_screenshots(placements))
-    submit_for_review(app, version_id, version)
 
 
 def main(command, *arguments):
