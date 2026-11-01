@@ -136,7 +136,7 @@ def withdraw(app, version_id, name):
     state = submission and submission["attributes"]["state"]
     if state == "READY_FOR_REVIEW":
         for item in version_items(submission["id"], version_id):
-            api("PATCH", f"reviewSubmissionItems/{item['id']}", {"type": "reviewSubmissionItems", "id": item["id"], "attributes": {"removed": True}})
+            api("DELETE", f"reviewSubmissionItems/{item['id']}")
     elif state in IN_REVIEW:
         api("PATCH", f"reviewSubmissions/{submission['id']}", {"type": "reviewSubmissions", "id": submission["id"], "attributes": {"canceled": True}})
     elif state != "CANCELING":

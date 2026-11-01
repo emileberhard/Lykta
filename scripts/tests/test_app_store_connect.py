@@ -110,6 +110,23 @@ class ReviewPolicyTests(unittest.TestCase):
                                                   "attributes": {"releaseType": "AFTER_APPROVAL", "versionString": "0.14.3"}}),
         ], writes)
 
+    def test_a_newer_tag_deletes_its_versions_item_from_an_unsubmitted_draft(self):
+        writes = []
+
+        def api(method, path, data=None, **params):
+            if method != "GET":
+                writes.append((method, path))
+            if path == "reviewSubmissions":
+                return [submission("draft", "review", "READY_FOR_REVIEW")]
+            if path == "reviewSubmissions/draft/items":
+                return [item("event", "other", "READY_FOR_REVIEW"), item("ours", "review", "READY_FOR_REVIEW")]
+            if path == "appStoreVersions/review":
+                return {"attributes": {"appVersionState": "PREPARE_FOR_SUBMISSION"}}
+
+        with patch.object(asc, "api", side_effect=api):
+            asc.withdraw("app", "review", "0.10.0")
+        self.assertEqual([("DELETE", "reviewSubmissionItems/ours")], writes)
+
     def test_a_rerun_waits_for_a_cancellation_already_underway(self):
         states = iter(["IN_REVIEW", "DEVELOPER_REJECTED"])
         writes = []
