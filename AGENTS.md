@@ -393,8 +393,11 @@ example's Lock Screen card and islands, its home screen and the introduction's
 Connect step as PNGs, in US
 English with the clock at 9:41 like the composed Lock Screen, and exits;
 `iOS/AppStore/compose.swift` holds the captions and arranges the captures into
-opaque slides, as App Store Connect requires. Look at the slides after a change
-to the app's UI or the examples, because the release uploads them.
+opaque slides, as App Store Connect requires. An empty `ImageRenderer` result
+comes out transparent or as the previous slide's pixels, so the composer stops
+on a slide with a transparent pixel or an earlier slide's exact pixels instead
+of writing it. Look at the slides after a change to the app's UI or the
+examples, because the release uploads them.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own

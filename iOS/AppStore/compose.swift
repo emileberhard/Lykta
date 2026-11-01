@@ -447,13 +447,24 @@ let slides: [(String, AnyView)] = [
 ]
 
 MainActor.assumeIsolated {
+    var drawn = Set<Data>()
     for (name, slide) in slides {
         let renderer = ImageRenderer(content: slide.environment(\.colorScheme, .dark))
         guard let rendered = renderer.cgImage,
+              let rgba = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: rendered.width * 4,
+                                   space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
         else { fatalError("could not render \(name)") }
-        context.draw(rendered, in: CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height))
+        let bounds = CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height)
+        rgba.clear(bounds)
+        rgba.draw(rendered, in: bounds)
+        let pixels = UnsafeBufferPointer(start: rgba.data!.assumingMemoryBound(to: UInt8.self), count: rendered.width * rendered.height * 4)
+        guard !stride(from: 3, to: pixels.count, by: 4).contains(where: { pixels[$0] != 255 }) else {
+            fatalError("\(name) rendered with transparent pixels instead of covering its canvas")
+        }
+        guard drawn.insert(Data(pixels)).inserted else { fatalError("\(name) rendered the same pixels as an earlier slide") }
+        context.draw(rendered, in: bounds)
         let url = output.appending(path: "\(name).png")
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
             fatalError("could not create \(url.path)")
