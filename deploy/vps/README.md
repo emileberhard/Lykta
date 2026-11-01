@@ -1,8 +1,7 @@
 # VPS gateway
 
 This deployment runs the gateway on the existing HostUp VPS independently of
-llm-router. During the initial migration the Mini remains the production host
-until the cutover below is complete. The VPS has limited memory, so
+llm-router. The VPS has limited memory, so
 GitHub-hosted runners build releases; it pulls only the highest plain version
 with both the binary and Sigstore bundle. It
 verifies the asset SHA-256 and the GitHub-hosted release workflow identity at
