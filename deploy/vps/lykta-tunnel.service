@@ -6,8 +6,9 @@ After=network-online.target lykta-gateway.service
 [Service]
 DynamicUser=true
 LoadCredential=tunnel.json:/etc/lykta/tunnel.json
+LoadCredential=cloudflared.yml:/etc/lykta/cloudflared.yml
 Environment=TUNNEL_CRED_FILE=%d/tunnel.json
-ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/lykta/cloudflared.yml tunnel run
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config %d/cloudflared.yml tunnel run
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
