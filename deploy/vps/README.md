@@ -27,6 +27,38 @@ sources are the Mini's APNs and tunnel stores. The Lykta account reads only its
 own APNs credentials through systemd credentials. Never share the llm-router
 process or credentials.
 
+The `esmadil.se` Cloudflare configuration rule disables Browser Integrity
+Check for `lykta.esmadil.se`. Without it, Python's default `urllib` client can
+receive Cloudflare error 1010 before reaching the gateway.
+
+The unit sets `LYKTA_MAX_DEVICES=1000`. At up to roughly 8 MB of events per
+device, that permits around 8 GB of event storage. Devices leave through Reset
+in the app. Before raising the cap to resolve `registration_closed`, check disk
+headroom for both Lykta and llm-router on their shared VPS.
+
+## Phone diagnostics and simulator invites
+
+On the VPS, `systemctl status lykta-gateway.service` shows the service state.
+Read the newest events or one device's history as the gateway user:
+
+```sh
+runuser -u lykta -- env LYKTA_DATABASE=/var/lib/lykta/lykta.sqlite /opt/lykta/current/lykta-gateway events --limit 50
+runuser -u lykta -- env LYKTA_DATABASE=/var/lib/lykta/lykta.sqlite /opt/lykta/current/lykta-gateway events --device <device-uuid> --limit 500
+```
+
+Development `push.*` events can include a `uniqueID` for Apple's Push
+Notifications Console. Treat event output as private.
+
+A simulator needs a one-time invite, valid for one hour. Create it on the VPS
+without printing the invite into logs:
+
+```sh
+umask 077
+runuser -u lykta -- env LYKTA_DATABASE=/var/lib/lykta/lykta.sqlite /opt/lykta/current/lykta-gateway invite > /root/lykta-simulator-invite
+```
+
+Remove that private file after use.
+
 Only one real gateway may hold the APNs keys. To migrate, fence the Mini's
 automatic deployer, drain and stop its gateway and tunnel, take a `VACUUM INTO`
 copy after the writer stops, verify its integrity and copy digest, then start
