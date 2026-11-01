@@ -301,7 +301,8 @@ release that adds a layout feature is therefore at least a minor.
 Push an annotated version tag, such as `0.2.0`, with nonempty release notes on
 a commit that was pushed to `main`; `.github/workflows/release.yml` runs on
 every tag and rejects invalid ones before credentials become available. It
-does the rest, gateway first:
+does the rest, gateway first. During the initial VPS migration, do not tag a
+release until the VPS cutover and updater timer have been verified:
 
 1. `admit` checks that the tag is annotated plain SemVer, has release notes,
    is the newest version and is on `main`, runs
@@ -310,7 +311,8 @@ does the rest, gateway first:
    the same commit, without running the tests again. Missing CI fails after
    two minutes; running CI has a 35-minute bound.
 2. After admission, `numbers` reserves a build number higher than every build
-   and pending upload. After the gateway job succeeds, the serialized `testflight` job uploads a new build
+   and pending upload. After the gateway job succeeds, the serialized
+   `testflight` job uploads a new build
    at or above it, beside any older build of the same version. If an earlier
    attempt started the separate `Upload to TestFlight` step, it waits up to
    15 minutes for that attempt's build at or above the reservation, then fails
@@ -369,9 +371,11 @@ the newest version. A code fix ships as the next patch, never by moving a tag.
 
 ## VPS gateway and host watchdog
 
-The production gateway and its dedicated tunnel run on `llm-router-hostup` as
-separate systemd services, accounts and credentials from llm-router. The
-repository's `deploy/vps` owns their installation and attested release pull.
+The VPS deployment places the production gateway and its dedicated tunnel on
+`llm-router-hostup` as separate systemd services, accounts and credentials
+from llm-router. During the initial migration the Mini remains the production
+host until its writer and connector are fenced and the VPS cutover is verified.
+The repository's `deploy/vps` owns installation and attested release pull.
 Its backup destination must preserve the 14-day deletion promise in `PRIVACY.md`;
 the indefinitely locked service-state repository cannot do so. Never run another
 gateway with these APNs keys, including a candidate or rollback copy. Fence and
