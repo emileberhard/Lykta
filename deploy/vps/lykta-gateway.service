@@ -1,0 +1,31 @@
+[Unit]
+Description=Lykta gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=lykta
+Group=lykta
+WorkingDirectory=/var/lib/lykta
+Environment=LYKTA_HOST=127.0.0.1 LYKTA_PORT=8450
+Environment=LYKTA_DATABASE=/var/lib/lykta/lykta.sqlite
+Environment=LYKTA_BUNDLE_ID=emileberhard.Lykta LYKTA_TEAM_ID=NNP2B278S6
+Environment=LYKTA_DEVELOPMENT_KEY_ID=TU5Z6GJYGH LYKTA_PRODUCTION_KEY_ID=XGSDFVZ2V6
+Environment=LYKTA_MAX_DEVICES=1000
+EnvironmentFile=/opt/lykta/current/version.env
+LoadCredential=development.p8:/etc/lykta/apns-development.p8
+LoadCredential=production.p8:/etc/lykta/apns-production.p8
+Environment=LYKTA_DEVELOPMENT_KEY_FILE=%d/development.p8
+Environment=LYKTA_PRODUCTION_KEY_FILE=%d/production.p8
+ExecStart=/opt/lykta/current/lykta-gateway
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/lykta
+
+[Install]
+WantedBy=multi-user.target

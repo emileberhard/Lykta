@@ -1,0 +1,10 @@
+[Unit]
+Description=Look for admitted Lykta releases
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+Unit=lykta-update.service
+
+[Install]
+WantedBy=timers.target

@@ -50,3 +50,4 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s scripts/tests -v
+      - run: python3 -m unittest deploy/vps/test_update.py deploy/vps/test_backup.py -v

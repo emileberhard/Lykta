@@ -653,14 +653,16 @@ substitution propagates a failure before any build-number output is written.
 `entitlements.json` covers every app and extension, replacing the workflow's
 inline bundle list; the export must retain their claims. The gateway still
 deploys first and the phone upload waits for its reported version.
-The host owns deploy outcomes and publishes `lykta-gateway/<version>` on the
-exact admitted commit. The app gate reads that receipt to distinguish an active
-build from a blocked or failed deploy; a receipt alone never admits an upload.
+The hosted gateway job publishes a prerelease with the gateway binary and its
+attestation, then reports `lykta-gateway/<version>` on the exact admitted commit.
+The VPS pulls it and verifies the tagged workflow identity and digest before
+installing. The app gate reads that receipt and the public gateway version; a
+receipt alone never admits an upload. TestFlight success promotes the GitHub
+prerelease to a full release.
 A pending build can take up to 30 minutes, while a missing result or a successful
 result without a compatible public gateway fails after about a minute.
-This preserves the host's resource and rollback guards without making the app
-workflow infer deployment progress from an unchanged version endpoint. A separate
-upload path would need to coordinate build-number selection with this owner.
+The VPS retains the previous binary and backs up SQLite before a deploy; it
+never restores old state over writes the new gateway accepted.
 
 **Nested frameworks are signed before app bundles.** Sign embedded frameworks
 deepest first before sealing app bundles, including code inside extensions.

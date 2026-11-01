@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from contextlib import closing
+from pathlib import Path
+
+ROOT = Path('/opt/lykta')
+STATE = Path('/var/lib/lykta-deploy')
+DATABASE = Path('/var/lib/lykta/lykta.sqlite')
+ASSET = 'lykta-gateway-linux-amd64'
+RELEASES = 'https://api.github.com/repos/emileberhard/Lykta/releases?per_page=100'
+
+
+def version(value):
+    if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', value):
+        raise ValueError('Invalid release version')
+    return tuple(int(part) for part in value.split('.'))
+
+
+def fetch(url, destination, limit):
+    request = urllib.request.Request(url, headers={'User-Agent': 'lykta-vps-updater'})
+    with urllib.request.urlopen(request, timeout=30) as response, destination.open('wb') as output:
+        size = 0
+        while block := response.read(1024 * 1024):
+            size += len(block)
+            if size > limit:
+                raise ValueError('Release asset exceeds its size limit')
+            output.write(block)
+
+
+def latest():
+    request = urllib.request.Request(RELEASES, headers={'User-Agent': 'lykta-vps-updater'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        releases = json.load(response)
+    if len(releases) == 100:
+        raise RuntimeError('Release list may be incomplete')
+    choices = []
+    for release in releases:
+        try:
+            number = version(release['tag_name'])
+        except ValueError:
+            continue
+        assets = {asset['name']: asset for asset in release['assets']}
+        if not release['draft'] and ASSET in assets and ASSET + '.sigstore.json' in assets:
+            choices.append((number, release['tag_name'], assets))
+    return max(choices, default=None, key=lambda entry: entry[0])
+
+
+def schema():
+    with closing(sqlite3.connect(f'file:{DATABASE}?mode=ro', uri=True)) as connection:
+        return connection.execute('PRAGMA user_version').fetchone()[0]
+
+
+def healthy(expected, url):
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return json.load(response).get('version') == expected
+    except (OSError, ValueError):
+        return False
+
+
+def wait_for(expected, public):
+    for _ in range(30):
+        local = healthy(expected, 'http://127.0.0.1:8450/v1/version')
+        if local and (not public or healthy(expected, 'https://lykta.esmadil.se/v1/version')):
+            return True
+        time.sleep(2)
+    return False
+
+
+def switch(target):
+    next_link = ROOT / 'current.next'
+    next_link.unlink(missing_ok=True)
+    next_link.symlink_to(target)
+    os.replace(next_link, ROOT / 'current')
+
+
+def preflight(binary, tag):
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        port = listener.getsockname()[1]
+    environment = {'LYKTA_HOST': '127.0.0.1', 'LYKTA_PORT': str(port), 'LYKTA_VERSION': tag}
+    process = subprocess.Popen([str(binary), 'simulate'], user='lykta', group='lykta', extra_groups=[],
+                               cwd='/var/lib/lykta', env=environment,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(30):
+            if healthy(tag, f'http://127.0.0.1:{port}/v1/version'):
+                return
+            if process.poll() is not None:
+                break
+            time.sleep(1)
+        raise RuntimeError('Gateway simulation did not become healthy')
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
+def journal(value):
+    pending = STATE / 'pending.next'
+    with pending.open('w', encoding='utf-8') as output:
+        json.dump(value, output)
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(pending, STATE / 'pending.json')
+    descriptor = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def prune_backups():
+    backups = STATE / 'backups'
+    if not backups.exists():
+        return
+    entries = sorted(backups.glob('before-*.sqlite'), key=lambda path: path.stat().st_mtime, reverse=True)
+    for index, path in enumerate(entries):
+        if index >= 3 or time.time() - path.stat().st_mtime > 14 * 86400:
+            path.unlink()
+
+
+def recover():
+    pending = STATE / 'pending.json'
+    if not pending.exists():
+        return
+    record = json.loads(pending.read_text(encoding='utf-8'))
+    old, new = record['previous'], record['candidate']
+    if healthy(new, 'http://127.0.0.1:8450/v1/version'):
+        if not healthy(new, 'https://lykta.esmadil.se/v1/version'):
+            raise RuntimeError('New gateway is healthy locally but public ingress is unavailable')
+    else:
+        if schema() != record['schema']:
+            raise RuntimeError('Gateway schema changed; automatic rollback is unsafe')
+        switch(ROOT / 'releases' / old)
+        if not healthy(old, 'http://127.0.0.1:8450/v1/version'):
+            subprocess.run(['systemctl', 'restart', 'lykta-gateway.service'], check=True, timeout=45)
+        if not wait_for(old, public=True):
+            raise RuntimeError('Recovered gateway did not pass public health')
+        (STATE / f'failed-{new}').touch()
+    pending.unlink()
+
+
+def install(number, tag, assets):
+    current = (ROOT / 'current').resolve(strict=True)
+    running = current.name
+    if number <= version(running):
+        return
+    if (STATE / f'failed-{tag}').exists():
+        raise RuntimeError(f'Release {tag} needs operator attention after rollback')
+    binary = assets[ASSET]
+    digest = binary.get('digest')
+    if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+        raise ValueError('Release does not have a SHA-256 asset digest')
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=STATE) as temporary:
+        directory = Path(temporary)
+        artifact, bundle = directory / ASSET, directory / (ASSET + '.sigstore.json')
+        base = f'https://github.com/emileberhard/Lykta/releases/download/{tag}/'
+        fetch(base + ASSET, artifact, 512 * 1024 * 1024)
+        fetch(base + ASSET + '.sigstore.json', bundle, 2 * 1024 * 1024)
+        subprocess.run(['/usr/local/lib/lykta/verify', str(artifact), str(bundle), tag, digest], check=True, timeout=120)
+        release = ROOT / 'releases' / tag
+        if not release.exists():
+            release.mkdir(mode=0o755)
+            release.chmod(0o755)
+            try:
+                shutil.copyfile(artifact, release / 'lykta-gateway')
+                os.chmod(release / 'lykta-gateway', 0o755)
+                (release / 'version.env').write_text(f'LYKTA_VERSION={tag}\n', encoding='utf-8')
+            except Exception:
+                shutil.rmtree(release)
+                raise
+        with (release / 'lykta-gateway').open('rb') as copied:
+            if 'sha256:' + hashlib.file_digest(copied, 'sha256').hexdigest() != digest:
+                raise RuntimeError('Installed gateway digest changed after verification')
+        if (release / 'version.env').read_text(encoding='utf-8') != f'LYKTA_VERSION={tag}\n':
+            raise RuntimeError('Installed gateway version does not match the release')
+        try:
+            preflight(release / 'lykta-gateway', tag)
+        except Exception:
+            shutil.rmtree(release)
+            raise
+        before = schema()
+        backups = STATE / 'backups'
+        backups.mkdir(mode=0o700, exist_ok=True)
+        backup = backups / f'before-{tag}.sqlite'
+        next_backup = backups / f'before-{tag}.sqlite.next'
+        next_backup.unlink(missing_ok=True)
+        try:
+            environment = os.environ.copy()
+            environment['LYKTA_DATABASE'] = str(DATABASE)
+            subprocess.run([str(current / 'lykta-gateway'), 'backup', str(next_backup)], env=environment, check=True, timeout=120)
+            with closing(sqlite3.connect(f'file:{next_backup}?mode=ro', uri=True)) as connection:
+                if connection.execute('PRAGMA integrity_check').fetchone() != ('ok',):
+                    raise RuntimeError('Pre-deploy backup failed integrity_check')
+            os.replace(next_backup, backup)
+        finally:
+            next_backup.unlink(missing_ok=True)
+        prune_backups()
+        journal({'previous': running, 'candidate': tag, 'schema': before})
+        switch(release)
+        try:
+            subprocess.run(['systemctl', 'restart', 'lykta-gateway.service'], check=True, timeout=45)
+            if not wait_for(tag, public=True):
+                raise RuntimeError('New gateway did not become healthy through public ingress')
+        except Exception:
+            subprocess.run(['systemctl', 'stop', 'lykta-gateway.service'], check=True, timeout=45)
+            if schema() == before:
+                switch(current)
+                subprocess.run(['systemctl', 'start', 'lykta-gateway.service'], check=True, timeout=45)
+                if not wait_for(running, public=True):
+                    raise RuntimeError('Rollback did not pass public health')
+                (STATE / f'failed-{tag}').touch()
+                (STATE / 'pending.json').unlink()
+            raise
+        (STATE / 'pending.json').unlink()
+        for old in (ROOT / 'releases').iterdir():
+            if old.is_dir() and old not in {current, release}:
+                shutil.rmtree(old)
+        print(f'Gateway {tag} is healthy through public ingress')
+
+
+def main():
+    os.umask(0o077)
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (STATE / 'update.lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        recover()
+        prune_backups()
+        candidate = latest()
+        if candidate is not None:
+            install(*candidate)
+
+
+def run():
+    try:
+        main()
+        return 0
+    except Exception as error:
+        print(f'Lykta update failed: {type(error).__name__}: {error}', file=sys.stderr)
+        day = time.strftime('%Y%m%d', time.gmtime())
+        subprocess.run(['/usr/local/lib/host-watchdog/notify', f'lykta-update-failed-{day}',
+                        'Lykta gateway update failed; the current gateway needs inspection.',
+                        '--sender-id', 'lykta-update', '--sender-name', 'Lykta updater'],
+                       check=False, timeout=150)
+        return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(run())

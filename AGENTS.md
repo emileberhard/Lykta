@@ -310,7 +310,7 @@ does the rest, gateway first:
    the same commit, without running the tests again. Missing CI fails after
    two minutes; running CI has a 35-minute bound.
 2. After admission, `numbers` reserves a build number higher than every build
-   and pending upload, and the serialized `testflight` job uploads a new build
+   and pending upload. After the gateway job succeeds, the serialized `testflight` job uploads a new build
    at or above it, beside any older build of the same version. If an earlier
    attempt started the separate `Upload to TestFlight` step, it waits up to
    15 minutes for that attempt's build at or above the reservation, then fails
@@ -321,12 +321,11 @@ does the rest, gateway first:
    in `iOS/Config/entitlements.json`,
    because the export keeps only the capabilities the archive's signatures
    request. The map must cover exactly the app and both extensions.
-3. The production gateway's host polls for admitted tags and deploys them
-   itself, with a database backup and an automatic rollback. It reports its
-   result on the admitted commit as `lykta-gateway/<version>`: pending while
-   building, failure when blocked by memory pressure or when deployment fails,
-   and success only after the public version check. The host retains its
-   memory-pressure guard; a blocked deploy is visible instead of silently deferred.
+3. The GitHub-hosted `gateway` job builds the admitted tag, attests its binary,
+   and publishes both in a GitHub prerelease. The VPS pulls the highest release
+   with both assets, verifies the exact tagged workflow identity and digest,
+   and deploys with a database backup and schema-safe rollback. The job reports
+   `lykta-gateway/<version>` on the admitted commit and waits for public health.
 4. `scripts/wait-for-gateway` checks both that result and the public endpoint.
    A reported failure stops immediately; a missing receipt or a completed
    deploy without a compatible public version fails after about a minute.
@@ -338,7 +337,8 @@ does the rest, gateway first:
    environment and every framework has an Apple Distribution signature, then
    uploads it. Both following App Store Connect jobs
    receive that build number and select only that upload, including on retries.
-5. The GitHub release is titled with the bare version, and its notes are the
+5. After TestFlight succeeds the GitHub prerelease becomes a full release,
+   titled with the bare version, and its notes are the
    annotated tag's message verbatim: a Markdown list of user-visible changes
    since the previous version, one short sentence per item, with no heading or
    intro line. It is marked Latest only while its tag is the newest version.
@@ -366,6 +366,23 @@ CI and releases select the Xcode pinned in `.xcode-version`; builds use only
 committed package resolutions. CI also checks the release tools on Linux.
 Rerun a transiently failed job from the tag's own run only while it is still
 the newest version. A code fix ships as the next patch, never by moving a tag.
+
+## VPS gateway and host watchdog
+
+The production gateway and its dedicated tunnel run on `llm-router-hostup` as
+separate systemd services, accounts and credentials from llm-router. The
+repository's `deploy/vps` owns their installation and attested release pull.
+Its backup destination must preserve the 14-day deletion promise in `PRIVACY.md`;
+the indefinitely locked service-state repository cannot do so. Never run another
+gateway with these APNs keys, including a candidate or rollback copy. Fence and
+drain the writer before moving its state, and copy newer state back before a
+rollback to another host.
+
+`~/configs/services/host-watchdog` owns the VPS watchdog and the independent
+Mini and Linux heartbeats. It uses the local gateway to alert when a host goes
+silent. A Lykta or VPS outage silences alerts; this is an accepted risk. APNs
+keys, the tunnel credential, backup credentials and the watchdog's Lykta token
+are untracked and have recovery sources outside the VPS.
 
 The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
 iPhone size, drawn by `just screenshots`. In capture mode, which

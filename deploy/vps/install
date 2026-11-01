@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $(id -u) == 0 ]]
+here=$(cd "$(dirname "$0")" && pwd)
+temporary=$(mktemp -d)
+trap 'rm -rf "$temporary"' EXIT
+curl -fsSL https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_amd64.tar.gz -o "$temporary/gh.tar.gz"
+printf '%s  %s\n' 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d "$temporary/gh.tar.gz" | sha256sum -c -
+tar -xf "$temporary/gh.tar.gz" -C "$temporary" gh_2.103.3_linux_amd64/bin/gh
+apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends age=1.2.1-1+b5 python3-boto3=1.37.9-1
+id lykta >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /var/lib/lykta --shell /usr/sbin/nologin lykta
+install -d -o root -g root -m 0755 /opt/lykta /opt/lykta/releases /usr/local/lib/lykta
+install -d -o lykta -g lykta -m 0700 /var/lib/lykta
+install -d -o root -g root -m 0700 /var/lib/lykta-deploy /etc/lykta /etc/lykta-backup
+install -o root -g root -m 0755 "$temporary/gh_2.103.3_linux_amd64/bin/gh" /usr/local/lib/lykta/gh
+for script in update verify backup backup-alert; do
+    install -o root -g root -m 0755 "$here/$script" "/usr/local/lib/lykta/$script"
+done
+install -o root -g root -m 0644 "$here/cloudflared.yml" /etc/lykta/cloudflared.yml
+for unit in lykta-gateway.service lykta-tunnel.service lykta-update.service lykta-update.timer lykta-backup.service lykta-backup.timer lykta-backup-alert.service; do
+    install -o root -g root -m 0644 "$here/$unit" "/etc/systemd/system/$unit"
+done
+systemctl daemon-reload

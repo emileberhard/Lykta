@@ -53,6 +53,65 @@ jobs:
             sleep 10
           done
 
+  gateway:
+    needs: admit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+      statuses: write
+    env:
+      VERSION: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      LYKTA_GATEWAY_HOST: ${{ vars.LYKTA_GATEWAY_HOST }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Mark gateway deployment pending
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=pending -f context="lykta-gateway/$VERSION" -f description='Building the gateway release'
+      - name: Build the Linux gateway
+        run: |
+          docker build --target build --build-arg JOBS=4 -t lykta-gateway-release .
+          container=$(docker create lykta-gateway-release)
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/local/bin/lykta-gateway" "$RUNNER_TEMP/lykta-gateway-linux-amd64"
+      - name: Attest the gateway binary
+        id: attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/lykta-gateway-linux-amd64
+      - name: Publish the gateway and release notes
+        run: |
+          cp '${{ steps.attestation.outputs.bundle-path }}' "$RUNNER_TEMP/lykta-gateway-linux-amd64.sigstore.json"
+          if ! gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
+            gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
+            [[ -s "$RUNNER_TEMP/notes.md" ]]
+            gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+          for name in lykta-gateway-linux-amd64 lykta-gateway-linux-amd64.sigstore.json; do
+            artifact="$RUNNER_TEMP/$name"
+            expected="sha256:$(sha256sum "$artifact" | cut -d ' ' -f 1)"
+            existing=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION" --jq ".assets[] | select(.name == \"$name\") | .digest")
+            if [[ -z "$existing" ]]; then
+              gh release upload "$VERSION" "$artifact" --repo "$GITHUB_REPOSITORY"
+            elif [[ "$name" != *.sigstore.json ]]; then
+              [[ "$existing" == "$expected" ]] || { echo 'Existing gateway asset has a different digest.' >&2; exit 1; }
+            fi
+          done
+      - name: Wait for the public gateway
+        timeout-minutes: 31
+        run: scripts/wait-for-gateway
+      - name: Record the gateway result
+        if: always()
+        run: |
+          state=failure
+          [[ '${{ job.status }}' == success ]] && state=success
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f "state=$state" -f context="lykta-gateway/$VERSION" -f description="Gateway deploy $state"
+
   numbers:
     needs: admit
     runs-on: ubuntu-24.04
@@ -83,7 +142,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
 
   testflight:
-    needs: [admit, numbers]
+    needs: [admit, numbers, gateway]
     runs-on: xcode-27
     environment: testflight
     concurrency: testflight
@@ -256,24 +315,19 @@ jobs:
           scripts/app-store-connect app-store "$VERSION" "$BUILD_NUMBER" .local/screenshots "$RUNNER_TEMP/notes.md"
 
   github-release:
-    needs: [admit, testflight]
+    needs: [admit, testflight, gateway]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
       VERSION: ${{ github.ref_name }}
     steps:
-      - name: Publish the tag message as the release notes
-        shell: bash
+      - name: Promote the gateway prerelease
         run: |
-          tag=$(gh api "repos/$GH_REPO/git/ref/tags/$VERSION" --jq .object.sha)
-          gh api "repos/$GH_REPO/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
-          [[ -s $RUNNER_TEMP/notes.md ]] || { echo "::error::The $VERSION tag has no message to publish."; exit 1; }
-          newest=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags" --jq '.[].ref | ltrimstr("refs/tags/")' \
+          newest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags" --jq '.[].ref | ltrimstr("refs/tags/")' \
             | grep -E '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1)
           latest=()
-          [[ $VERSION == "$newest" ]] || latest=(--latest=false)
-          gh release create "$VERSION" --verify-tag --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${latest[@]}"
+          [[ "$VERSION" == "$newest" ]] || latest=(--latest=false)
+          gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --prerelease=false "${latest[@]}"

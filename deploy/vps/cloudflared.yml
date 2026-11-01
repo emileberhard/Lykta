@@ -1,0 +1,6 @@
+tunnel: 90d58049-e9e9-4f24-b1b6-55840a18891a
+protocol: http2
+ingress:
+  - hostname: lykta.esmadil.se
+    service: http://127.0.0.1:8450
+  - service: http_status:404

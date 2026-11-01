@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare tunnel for Lykta
+Wants=network-online.target
+After=network-online.target lykta-gateway.service
+
+[Service]
+DynamicUser=true
+LoadCredential=tunnel.json:/etc/lykta/tunnel.json
+Environment=TUNNEL_CRED_FILE=%d/tunnel.json
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/lykta/cloudflared.yml tunnel run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

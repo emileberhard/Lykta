@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+event="lykta-backup-failed-$(date -u +%Y%m%d)"
+exec /usr/local/lib/host-watchdog/notify "$event" 'Lykta backup failed on the VPS.' \
+  --sender-id lykta-backup --sender-name 'Lykta backup'

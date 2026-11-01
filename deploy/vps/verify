@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+artifact=${1:?artifact is required}
+bundle=${2:?bundle is required}
+version=${3:?version is required}
+digest=${4:?digest is required}
+[[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+[[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+[[ "sha256:$(sha256sum "$artifact" | cut -d ' ' -f 1)" == "$digest" ]]
+[[ -s "$bundle" ]]
+env -u GH_TOKEN -u GITHUB_TOKEN /usr/local/lib/lykta/gh attestation verify "$artifact" \
+  --repo emileberhard/Lykta --bundle "$bundle" --deny-self-hosted-runners \
+  --cert-identity "https://github.com/emileberhard/Lykta/.github/workflows/release.yml@refs/tags/$version" \
+  --source-ref "refs/tags/$version"

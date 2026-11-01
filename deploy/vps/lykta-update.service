@@ -1,0 +1,10 @@
+[Unit]
+Description=Install an attested Lykta gateway release
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=15min
+Environment=HOME=/var/lib/host-watchdog
+ExecStart=/usr/local/lib/lykta/update

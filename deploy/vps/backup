@@ -1,0 +1,96 @@
+#!/usr/bin/python3
+import datetime
+import hashlib
+import json
+import os
+import sqlite3
+import subprocess
+import tarfile
+import tempfile
+import time
+import uuid
+from contextlib import closing
+from pathlib import Path
+
+import boto3
+
+DATABASE = Path(os.environ.get('LYKTA_DATABASE', '/var/lib/lykta/lykta.sqlite'))
+RECIPIENT = Path('/etc/lykta-backup/recipient')
+STATE = Path('/var/lib/lykta-deploy/backup')
+PREFIX = 'backups/'
+
+
+def counts(connection):
+    tables = connection.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()
+    return {name: connection.execute('SELECT count(*) FROM "' + name.replace('"', '""') + '"').fetchone()[0] for (name,) in tables}
+
+
+def snapshot(destination):
+    with closing(sqlite3.connect(f'file:{DATABASE}?mode=ro', uri=True)) as source:
+        for _ in range(5):
+            destination.unlink(missing_ok=True)
+            before = source.execute('PRAGMA data_version').fetchone()[0]
+            source.execute('VACUUM INTO ?', (str(destination),))
+            source_counts = counts(source)
+            after = source.execute('PRAGMA data_version').fetchone()[0]
+            if before == after:
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('Database changed throughout all snapshot attempts')
+    with closing(sqlite3.connect(f'file:{destination}?mode=ro', uri=True)) as backup:
+        if backup.execute('PRAGMA integrity_check').fetchone() != ('ok',):
+            raise RuntimeError('Snapshot failed integrity_check')
+        if counts(backup) != source_counts:
+            raise RuntimeError('Snapshot row counts differ from the source')
+    with destination.open('rb') as content:
+        digest = hashlib.file_digest(content, 'sha256').hexdigest()
+    return {'sha256': digest, 'row_counts': source_counts}
+
+
+def prune(client, bucket):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    objects = []
+    for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix=PREFIX):
+        objects.extend(page.get('Contents', []))
+    overdue = False
+    for item in objects:
+        age = now - item['LastModified']
+        if age >= datetime.timedelta(days=12):
+            overdue |= age >= datetime.timedelta(days=13)
+            client.delete_object(Bucket=bucket, Key=item['Key'])
+            print('Deleted expired backup', item['Key'], flush=True)
+    if overdue:
+        raise RuntimeError('A Lykta backup exceeded 13 days before deletion')
+
+
+def main():
+    os.umask(0o077)
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    client = boto3.client('s3', endpoint_url=os.environ['R2_ENDPOINT'], region_name='auto',
+                          aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
+                          aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'])
+    bucket = os.environ['R2_BUCKET']
+    with tempfile.TemporaryDirectory(prefix='lykta-backup-', dir='/run') as directory:
+        root = Path(directory)
+        database = root / 'lykta.sqlite'
+        manifest = snapshot(database)
+        (root / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True) + '\n', encoding='utf-8')
+        archive = root / 'backup.tar.gz'
+        with tarfile.open(archive, mode='w:gz') as output:
+            output.add(database, arcname='lykta.sqlite')
+            output.add(root / 'manifest.json', arcname='manifest.json')
+        encrypted = root / 'backup.tar.gz.age'
+        subprocess.run(['/usr/bin/age', '-R', str(RECIPIENT), '-o', str(encrypted), str(archive)], check=True, timeout=120)
+        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        key = f'{PREFIX}{timestamp}-{uuid.uuid4().hex}.tar.gz.age'
+        with encrypted.open('rb') as content:
+            client.put_object(Bucket=bucket, Key=key, Body=content)
+        client.head_object(Bucket=bucket, Key=key)
+        prune(client, bucket)
+        (STATE / 'last-success').touch()
+        print('Uploaded Lykta backup', key, flush=True)
+
+
+if __name__ == '__main__':
+    main()

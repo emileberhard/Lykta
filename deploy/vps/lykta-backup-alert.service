@@ -1,0 +1,7 @@
+[Unit]
+Description=Report a failed Lykta backup
+
+[Service]
+Type=oneshot
+Environment=HOME=/var/lib/host-watchdog
+ExecStart=/usr/local/lib/lykta/backup-alert

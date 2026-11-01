@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Lykta every six hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:15:00 Europe/Stockholm
+Persistent=true
+Unit=lykta-backup.service
+
+[Install]
+WantedBy=timers.target
