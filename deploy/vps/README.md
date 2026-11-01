@@ -40,8 +40,9 @@ Backups use the separate EU `lykta-backups` R2 bucket, not the indefinitely
 locked service-state repository. Every six hours the gateway creates a
 consistent SQLite snapshot, verifies its integrity and row counts against the
 unchanged source, compresses and encrypts it as one object to the recipient at
-`/etc/lykta-backup/recipient`. The age identity is root-only on emils-linux and
-also in the Mini login keychain. The bucket-only writer credentials are in
+`/etc/lykta-backup/recipient`. The age identity is root-only on emils-linux;
+the Mini login-keychain recovery copy is being repaired and must be verified
+before relying on it. The bucket-only writer credentials are in
 `/etc/lykta-backup/r2.env`; Emil's Cloudflare account can replace them.
 
 The bucket locks each object for 11 days. Each backup run deletes objects at
