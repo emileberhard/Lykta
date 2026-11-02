@@ -7,13 +7,16 @@ let canvas = CGSize(width: 1206, height: 2622)
 let captures = URL(filePath: CommandLine.arguments[1])
 let output = URL(filePath: CommandLine.arguments[2])
 
-func image(_ url: URL) -> NSImage {
+func capture(_ name: String) -> NSImage {
+    let url = captures.appending(path: "\(name).png")
     guard let image = NSImage(contentsOf: url) else { fatalError("missing \(url.path)") }
     return image
 }
 
-func capture(_ name: String) -> NSImage {
-    image(captures.appending(path: "\(name).png"))
+extension Color {
+    init(hex: UInt32) {
+        self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
 }
 
 let paper = [Color(red: 0.969, green: 0.949, blue: 0.914), Color(red: 0.929, green: 0.902, blue: 0.86)]
@@ -111,9 +114,57 @@ struct Phone<Content: View>: View {
     }
 }
 
+struct Fold: Shape {
+    let top: CGPoint
+    let control1: CGPoint
+    let control2: CGPoint
+    let bottom: CGPoint
+
+    var edge: Path {
+        Path { path in
+            path.move(to: top)
+            path.addCurve(to: bottom, control1: control1, control2: control2)
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = edge
+        path.addLine(to: CGPoint(x: rect.maxX + 40, y: bottom.y))
+        path.addLine(to: CGPoint(x: rect.maxX + 40, y: -40))
+        path.addLine(to: CGPoint(x: top.x, y: -40))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct Sheet: View {
+    let fold: Fold
+    let colors: [Color]
+
+    var body: some View {
+        ZStack {
+            fold.fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(fold.fill(LinearGradient(colors: [.white.opacity(0.18), .clear, .black.opacity(0.28)], startPoint: .leading, endPoint: .trailing)))
+                .shadow(color: .black.opacity(0.35), radius: 22, x: -8, y: 6)
+            fold.edge.stroke(.white.opacity(0.45), lineWidth: 0.8)
+        }
+    }
+}
+
 struct Wallpaper: View {
     var body: some View {
-        Image(nsImage: image(captures.appending(path: "wallpaper.atx"))).resizable().interpolation(.high)
+        ZStack {
+            LinearGradient(colors: [Color(hex: 0x553B29), Color(hex: 0x76563C), Color(hex: 0x3A2D35), Color(hex: 0x14121A)], startPoint: .top, endPoint: .bottom)
+            Sheet(fold: Fold(top: CGPoint(x: -40, y: 90), control1: CGPoint(x: 260, y: 160), control2: CGPoint(x: -90, y: 590), bottom: CGPoint(x: 120, y: 884)),
+                  colors: [Color(hex: 0xBE8F5C), Color(hex: 0x86695A), Color(hex: 0x2D2A40)])
+            Sheet(fold: Fold(top: CGPoint(x: 60, y: -10), control1: CGPoint(x: 420, y: 310), control2: CGPoint(x: 30, y: 610), bottom: CGPoint(x: 240, y: 884)),
+                  colors: [Color(hex: 0xC8A988), Color(hex: 0x977F70), Color(hex: 0x474B66)])
+            Sheet(fold: Fold(top: CGPoint(x: 250, y: -10), control1: CGPoint(x: 470, y: 380), control2: CGPoint(x: 160, y: 660), bottom: CGPoint(x: 350, y: 884)),
+                  colors: [Color(hex: 0xD5BFA6), Color(hex: 0xA89786), Color(hex: 0x6E748C)])
+            Sheet(fold: Fold(top: CGPoint(x: 380, y: -10), control1: CGPoint(x: 330, y: 300), control2: CGPoint(x: 470, y: 560), bottom: CGPoint(x: 420, y: 884)),
+                  colors: [Color(hex: 0xE2D3C2), Color(hex: 0xBCAD9F), Color(hex: 0x959AAB)])
+        }
+        .clipped()
     }
 }
 
