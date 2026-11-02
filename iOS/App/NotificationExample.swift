@@ -21,17 +21,25 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
     var route: Route { Route(id: id) }
 
     @concurrent static func bundled() async -> [NotificationExample] {
-        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil)?.appending(path: "notifications"),
-              let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
+        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil)?.appending(path: "notifications") else {
             preconditionFailure("The app bundles the skill's examples folder")
         }
-        return files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
-            do {
-                return try NotificationExample(file: file)
-            } catch {
-                preconditionFailure("examples/notifications/\(file.lastPathComponent): \(error)")
-            }
+        do {
+            return try await load(from: folder)
+        } catch {
+            preconditionFailure("examples/notifications/\(error)")
         }
+    }
+
+    @concurrent static func load(from folder: URL) async throws -> [NotificationExample] {
+        try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
+                do {
+                    return try NotificationExample(file: file)
+                } catch {
+                    throw LayoutError("\(file.lastPathComponent): \(error)")
+                }
+            }
     }
 
     private init(file: URL) throws {

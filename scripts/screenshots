@@ -16,9 +16,11 @@ CRASHES = Path.home() / "Library" / "Logs" / "DiagnosticReports"
 OUTPUT = ROOT / ".local" / "screenshots"
 BUILD = ROOT / ".local" / "build"
 COMPOSER = "iOS/AppStore/compose.swift"
-EXAMPLES = ROOT / "Gateway" / "Sources" / "LyktaGateway" / "Skill" / "examples"
-INPUTS = ["Core/Package.swift", "Core/Sources", "iOS/App", "iOS/Avatars", "iOS/Config", "iOS/Lykta.xcodeproj", "iOS/Rendering",
-          "Gateway/Sources/LyktaGateway/Skill/examples", "scripts/screenshots"]
+CARDS = ROOT / "iOS" / "AppStore" / "cards"
+INPUTS = ["Core/Package.swift", "Core/Sources", "iOS/App", "iOS/AppStore/cards", "iOS/Avatars", "iOS/Config", "iOS/Lykta.xcodeproj", "iOS/Rendering",
+          "scripts/screenshots"]
+WALLPAPER = ("Library/Application Support/PRBPosterExtensionDataStore/*/Extensions/com.apple.MercuryPoster/configurations/*/versions/*/"
+             "RuntimeSnapshot-*-lock.atx")
 DEVICE_TYPE = "iPhone 18 Pro"
 SIMULATOR = f"Lykta {DEVICE_TYPE}"
 KEPT_CAPTURES = 10
@@ -67,6 +69,7 @@ def capture(simulator_runtime, target):
     bundle = run("plutil", "-extract", "CFBundleIdentifier", "raw", app / "Info.plist").strip()
     staging = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=CACHE))
     try:
+        shutil.copytree(CARDS, staging / "cards")
         run("xcrun", "simctl", "bootstatus", udid, "-b")
         run("xcrun", "simctl", "install", udid, app)
         started = time.time()
@@ -76,14 +79,25 @@ def capture(simulator_runtime, target):
             console = f"simctl launch exited with {launch.returncode}:\n{launch.stdout}{launch.stderr}"
         except subprocess.TimeoutExpired:
             console = "The app was still running after 10 minutes."
-        if not all((staging / name).exists() for name in ("home.png", "connect.png")):
-            sys.exit(f"The app did not capture the home screen and the Connect step.\n\n{diagnosis(udid, app.stem, staging, started, console)}")
+        if not (staging / "lights.png").exists():
+            sys.exit(f"The app did not capture every App Store card.\n\n{diagnosis(udid, app.stem, staging, started, console)}")
+        shutil.copyfile(wallpaper(udid), staging / "wallpaper.atx")
         staging.rename(target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
     finally:
         subprocess.run(["xcrun", "simctl", "shutdown", udid], capture_output=True)
+
+
+def wallpaper(udid):
+    data = Path.home() / "Library" / "Developer" / "CoreSimulator" / "Devices" / udid / "data"
+    deadline = time.time() + 120
+    while not (snapshots := sorted(data.glob(WALLPAPER), key=lambda path: path.stat().st_mtime)):
+        if time.time() > deadline:
+            sys.exit(f"The {SIMULATOR} simulator drew no Lock Screen wallpaper snapshot in {data}.")
+        time.sleep(2)
+    return snapshots[-1]
 
 
 def diagnosis(udid, executable, staging, started, console):
@@ -124,7 +138,7 @@ def main():
     source = captures()
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
-    run("xcrun", "swift", ROOT / COMPOSER, source, EXAMPLES, OUTPUT)
+    run("xcrun", "swift", ROOT / COMPOSER, source, OUTPUT)
     print(json.dumps({"captures": str(source), "slides": sorted(str(path) for path in OUTPUT.glob("*.png"))}, indent=2))
 
 

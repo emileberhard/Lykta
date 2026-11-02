@@ -10,17 +10,25 @@ nonisolated struct Example: Identifiable, Sendable {
     private let fields: [String: JSONValue]
 
     @concurrent static func bundled(at date: Date) async -> [Example] {
-        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil),
-              let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
+        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil) else {
             preconditionFailure("The app bundles the skill's examples folder")
         }
-        return files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
-            do {
-                return try Example(file: file, at: date)
-            } catch {
-                preconditionFailure("examples/\(file.lastPathComponent): \(error)")
-            }
+        do {
+            return try await load(from: folder, at: date)
+        } catch {
+            preconditionFailure("examples/\(error)")
         }
+    }
+
+    @concurrent static func load(from folder: URL, at date: Date) async throws -> [Example] {
+        try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
+                do {
+                    return try Example(file: file, at: date)
+                } catch {
+                    throw LayoutError("\(file.lastPathComponent): \(error)")
+                }
+            }
     }
 
     private init(file: URL, at date: Date) throws {

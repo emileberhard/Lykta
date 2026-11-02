@@ -17,17 +17,25 @@ nonisolated struct WidgetExample: Identifiable, Sendable {
     var route: Route { Route(id: id) }
 
     @concurrent static func bundled(at date: Date) async -> [WidgetExample] {
-        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil)?.appending(path: "widgets"),
-              let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
+        guard let folder = Bundle.main.url(forResource: "examples", withExtension: nil)?.appending(path: "widgets") else {
             preconditionFailure("The app bundles the skill's examples folder")
         }
-        return files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
-            do {
-                return try WidgetExample(file: file, at: date)
-            } catch {
-                preconditionFailure("examples/widgets/\(file.lastPathComponent): \(error)")
-            }
+        do {
+            return try await load(from: folder, at: date)
+        } catch {
+            preconditionFailure("examples/widgets/\(error)")
         }
+    }
+
+    @concurrent static func load(from folder: URL, at date: Date) async throws -> [WidgetExample] {
+        try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { file in
+                do {
+                    return try WidgetExample(file: file, at: date)
+                } catch {
+                    throw LayoutError("\(file.lastPathComponent): \(error)")
+                }
+            }
     }
 
     private init(file: URL, at date: Date) throws {
