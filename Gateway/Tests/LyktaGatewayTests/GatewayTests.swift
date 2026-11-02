@@ -622,7 +622,17 @@ struct GatewayTests {
         }
     }
 
+    @Test func everyAppStoreCardStarts() async throws {
+        let files = try FileManager.default.contentsOfDirectory(atPath: Self.appStoreCards.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+        #expect(!files.isEmpty)
+        for file in files {
+            try await put("card", try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: Self.appStoreCards.appending(path: file))))
+            _ = try await send("DELETE", "/v1/activities/card")
+        }
+    }
+
     static let exampleDirectory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/LyktaGateway/Skill/examples")
+    static let appStoreCards = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../../iOS/AppStore/cards")
 
     static func exampleFiles() throws -> [String] {
         try FileManager.default.contentsOfDirectory(atPath: exampleDirectory.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }

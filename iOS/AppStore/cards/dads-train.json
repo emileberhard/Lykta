@@ -1,0 +1,117 @@
+{
+  "title": "Dad’s train",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "concat": [
+                {
+                  "symbol": "train.side.front.car"
+                },
+                " Dad’s train"
+              ],
+              "modifiers": [
+                {
+                  "font": "headline"
+                }
+              ]
+            },
+            {
+              "spacer": true
+            },
+            {
+              "text": "Arrives 11:42 AM",
+              "modifiers": [
+                {
+                  "font": "subheadline"
+                },
+                {
+                  "fontWeight": "semibold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "svg": "<svg viewBox='0 0 340 22'><path d='M8 11H332' stroke='#FFFFFF40' stroke-width='4' stroke-linecap='round'/><path d='M8 11H236' stroke='#93C5FD' stroke-width='4' stroke-linecap='round'/><g fill='#93C5FD'><circle cx='8' cy='11' r='4'/><circle cx='72' cy='11' r='4'/><circle cx='136' cy='11' r='4'/><circle cx='200' cy='11' r='4'/></g><g fill='#0B2547' stroke='#FFFFFF80' stroke-width='2'><circle cx='268' cy='11' r='4'/><circle cx='332' cy='11' r='5'/></g><rect x='224' y='4' width='26' height='14' rx='5' fill='white'/><path d='M228 11h18' stroke='#0B2547' stroke-width='2'/></svg>"
+        },
+        {
+          "hstack": [
+            {
+              "text": "2 stops left · on time"
+            },
+            {
+              "spacer": true
+            },
+            {
+              "text": "Union Station, track 3",
+              "modifiers": [
+                {
+                  "fontWeight": "semibold"
+                }
+              ]
+            }
+          ],
+          "modifiers": [
+            {
+              "font": "caption"
+            },
+            {
+              "opacity": 0.8
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 8,
+      "modifiers": [
+        {
+          "padding": {
+            "horizontal": 16,
+            "vertical": 14
+          }
+        },
+        {
+          "foreground": "white"
+        },
+        {
+          "background": {
+            "gradient": [
+              "#1D4ED8",
+              "#0B2547"
+            ]
+          }
+        }
+      ]
+    },
+    "compactLeading": {
+      "symbol": "train.side.front.car",
+      "modifiers": [
+        {
+          "foreground": "#93C5FD"
+        }
+      ]
+    },
+    "compactTrailing": {
+      "text": "11:42",
+      "modifiers": [
+        {
+          "foreground": "#93C5FD"
+        }
+      ]
+    },
+    "minimal": {
+      "symbol": "train.side.front.car",
+      "modifiers": [
+        {
+          "foreground": "#93C5FD"
+        }
+      ]
+    },
+    "background": "#0B2547",
+    "keyline": "#1D4ED8"
+  },
+  "data": {}
+}

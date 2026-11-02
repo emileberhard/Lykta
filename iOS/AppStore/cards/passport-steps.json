@@ -1,0 +1,294 @@
+{
+  "title": "Passport renewal",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "concat": [
+                {
+                  "symbol": "book.closed.fill"
+                },
+                " Passport renewal"
+              ],
+              "modifiers": [
+                {
+                  "font": "headline"
+                }
+              ]
+            },
+            {
+              "spacer": true
+            },
+            {
+              "text": "Est. Nov 6",
+              "modifiers": [
+                {
+                  "font": "subheadline"
+                },
+                {
+                  "fontWeight": "semibold"
+                },
+                {
+                  "foreground": "#E9C46A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "vstack": [
+            {
+              "svg": "<svg viewBox='0 0 340 18'><path d='M34 9H306' stroke='#FFFFFF33' stroke-width='3'/><path d='M34 9H170' stroke='#E9C46A' stroke-width='3'/><g fill='#E9C46A'><circle cx='34' cy='9' r='6'/><circle cx='102' cy='9' r='6'/></g><circle cx='170' cy='9' r='7' fill='#14213D' stroke='#E9C46A' stroke-width='3'/><circle cx='170' cy='9' r='2.5' fill='#E9C46A'/><g fill='#14213D' stroke='#FFFFFF59' stroke-width='2'><circle cx='238' cy='9' r='5'/><circle cx='306' cy='9' r='5'/></g></svg>"
+            },
+            {
+              "hstack": [
+                {
+                  "vstack": [
+                    {
+                      "text": "Applied",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "medium"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Oct 2",
+                      "modifiers": [
+                        {
+                          "font": "caption2"
+                        },
+                        {
+                          "opacity": 0.6
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 0,
+                  "modifiers": [
+                    {
+                      "frame": {
+                        "maxWidth": "infinity"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "vstack": [
+                    {
+                      "text": "Approved",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "medium"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Oct 14",
+                      "modifiers": [
+                        {
+                          "font": "caption2"
+                        },
+                        {
+                          "opacity": 0.6
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 0,
+                  "modifiers": [
+                    {
+                      "frame": {
+                        "maxWidth": "infinity"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "vstack": [
+                    {
+                      "text": "Printing",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "semibold"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "now",
+                      "modifiers": [
+                        {
+                          "font": "caption2"
+                        },
+                        {
+                          "opacity": 0.6
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 0,
+                  "modifiers": [
+                    {
+                      "frame": {
+                        "maxWidth": "infinity"
+                      }
+                    },
+                    {
+                      "foreground": "#E9C46A"
+                    }
+                  ]
+                },
+                {
+                  "vstack": [
+                    {
+                      "text": "Mailed",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "medium"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "next",
+                      "modifiers": [
+                        {
+                          "font": "caption2"
+                        },
+                        {
+                          "opacity": 0.6
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 0,
+                  "modifiers": [
+                    {
+                      "frame": {
+                        "maxWidth": "infinity"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "vstack": [
+                    {
+                      "text": "Home",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "medium"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nov 6",
+                      "modifiers": [
+                        {
+                          "font": "caption2"
+                        },
+                        {
+                          "opacity": 0.6
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 0,
+                  "modifiers": [
+                    {
+                      "frame": {
+                        "maxWidth": "infinity"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "spacing": 0
+            }
+          ],
+          "spacing": 4
+        },
+        {
+          "text": "Printing takes 5 to 7 days. The tracking number comes next.",
+          "modifiers": [
+            {
+              "font": "caption2"
+            },
+            {
+              "opacity": 0.65
+            },
+            {
+              "lineLimit": 1
+            },
+            {
+              "minimumScaleFactor": 0.8
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 8,
+      "modifiers": [
+        {
+          "padding": {
+            "horizontal": 16,
+            "vertical": 14
+          }
+        },
+        {
+          "foreground": "white"
+        },
+        {
+          "background": {
+            "gradient": [
+              "#1D2D55",
+              "#0E1730"
+            ]
+          }
+        }
+      ]
+    },
+    "compactLeading": {
+      "symbol": "book.closed.fill",
+      "modifiers": [
+        {
+          "foreground": "#E9C46A"
+        }
+      ]
+    },
+    "compactTrailing": {
+      "text": "Nov 6",
+      "modifiers": [
+        {
+          "foreground": "#E9C46A"
+        }
+      ]
+    },
+    "minimal": {
+      "symbol": "book.closed.fill",
+      "modifiers": [
+        {
+          "foreground": "#E9C46A"
+        }
+      ]
+    },
+    "background": "#0E1730",
+    "keyline": "#1D2D55"
+  },
+  "data": {}
+}

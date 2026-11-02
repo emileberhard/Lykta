@@ -1,0 +1,105 @@
+{
+  "title": "Lake Mira",
+  "layout": {
+    "systemSmall": {
+      "vstack": [
+        {
+          "concat": [
+            {
+              "symbol": "water.waves"
+            },
+            " Lake Mira"
+          ],
+          "modifiers": [
+            {
+              "font": "caption"
+            },
+            {
+              "fontWeight": "semibold"
+            },
+            {
+              "opacity": 0.9
+            }
+          ]
+        },
+        {
+          "spacer": true
+        },
+        {
+          "text": "54°F",
+          "modifiers": [
+            {
+              "font": 38
+            },
+            {
+              "fontWeight": "bold"
+            },
+            {
+              "fontDesign": "rounded"
+            }
+          ]
+        },
+        {
+          "concat": [
+            {
+              "symbol": "checkmark.circle.fill"
+            },
+            " Wetsuit swim"
+          ],
+          "modifiers": [
+            {
+              "font": "caption"
+            },
+            {
+              "fontWeight": "bold"
+            },
+            {
+              "padding": {
+                "horizontal": 7,
+                "vertical": 4
+              }
+            },
+            {
+              "background": "#FFFFFF2E"
+            },
+            {
+              "clip": "capsule"
+            }
+          ]
+        },
+        {
+          "svg": "<svg viewBox='0 0 140 24'><path d='M0 8q8-6 17 0t18 0 17 0 18 0 17 0 18 0 17 0 18 0' fill='none' stroke='#FFFFFF8C' stroke-width='2.4' stroke-linecap='round'/><path d='M0 18q8-6 17 0t18 0 17 0 18 0 17 0 18 0 17 0 18 0' fill='none' stroke='#FFFFFF4D' stroke-width='2.4' stroke-linecap='round'/></svg>",
+          "modifiers": [
+            {
+              "padding": {
+                "top": 6
+              }
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 2,
+      "modifiers": [
+        {
+          "frame": {
+            "maxWidth": "infinity",
+            "maxHeight": "infinity",
+            "alignment": "topLeading"
+          }
+        },
+        {
+          "foreground": "white"
+        }
+      ]
+    },
+    "background": {
+      "gradient": [
+        "#0EA5E9",
+        "#0C4A6E"
+      ],
+      "direction": "diagonal"
+    }
+  },
+  "data": {}
+}

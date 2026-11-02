@@ -1,0 +1,130 @@
+{
+  "title": "Apple pie",
+  "layout": {
+    "lockScreen": {
+      "hstack": [
+        {
+          "svg": "<svg viewBox='0 0 56 56'><ellipse cx='28' cy='34' rx='26' ry='14' fill='#8B5A2B'/><ellipse cx='28' cy='30' rx='25' ry='13' fill='#E9A23B'/><g stroke='#C27A1E' stroke-width='3.4' stroke-linecap='round'><path d='M12 24l14 16M22 19l16 20M34 18l12 14'/><path d='M10 34l18-15M18 40l22-20M32 41l14-12'/></g><path d='M3 30q25 22 50 0' fill='none' stroke='#F5C66B' stroke-width='3'/><g stroke='white' stroke-width='2' stroke-linecap='round' opacity='.7' fill='none'><path d='M22 10c-3-3 3-5 0-8'/><path d='M32 10c-3-3 3-5 0-8'/></g></svg>",
+          "modifiers": [
+            {
+              "frame": {
+                "width": 54,
+                "height": 54
+              }
+            }
+          ]
+        },
+        {
+          "vstack": [
+            {
+              "text": "Apple pie",
+              "modifiers": [
+                {
+                  "font": "headline"
+                }
+              ]
+            },
+            {
+              "text": "Oven 375°F · check the lattice at 25 min",
+              "modifiers": [
+                {
+                  "font": "caption"
+                },
+                {
+                  "opacity": 0.8
+                },
+                {
+                  "lineLimit": 2
+                }
+              ]
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 2
+        },
+        {
+          "spacer": true
+        },
+        {
+          "date": "{{done}}",
+          "style": "timer",
+          "modifiers": [
+            {
+              "font": 28
+            },
+            {
+              "fontWeight": "semibold"
+            },
+            {
+              "monospacedDigit": true
+            },
+            {
+              "frame": {
+                "width": 84,
+                "alignment": "trailing"
+              }
+            }
+          ]
+        }
+      ],
+      "spacing": 12,
+      "modifiers": [
+        {
+          "padding": {
+            "horizontal": 16,
+            "vertical": 14
+          }
+        },
+        {
+          "foreground": "#FFF5E6"
+        },
+        {
+          "background": {
+            "gradient": [
+              "#8A4513",
+              "#4A230A"
+            ]
+          }
+        }
+      ]
+    },
+    "compactLeading": {
+      "symbol": "oven.fill",
+      "modifiers": [
+        {
+          "foreground": "#F5C66B"
+        }
+      ]
+    },
+    "compactTrailing": {
+      "date": "{{done}}",
+      "style": "timer",
+      "modifiers": [
+        {
+          "foreground": "#F5C66B"
+        },
+        {
+          "monospacedDigit": true
+        },
+        {
+          "frame": {
+            "width": 44
+          }
+        }
+      ]
+    },
+    "minimal": {
+      "symbol": "oven.fill",
+      "modifiers": [
+        {
+          "foreground": "#F5C66B"
+        }
+      ]
+    },
+    "background": "#4A230A",
+    "keyline": "#8A4513"
+  },
+  "data": {
+    "done": 1793001500
+  }
+}

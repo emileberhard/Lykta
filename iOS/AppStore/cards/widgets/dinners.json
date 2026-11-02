@@ -1,0 +1,370 @@
+{
+  "title": "This week’s dinners",
+  "layout": {
+    "systemMedium": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "concat": [
+                {
+                  "symbol": "fork.knife"
+                },
+                " This week’s dinners"
+              ],
+              "modifiers": [
+                {
+                  "font": "subheadline"
+                },
+                {
+                  "fontWeight": "semibold"
+                }
+              ]
+            },
+            {
+              "spacer": true
+            },
+            {
+              "text": "Shop Saturday",
+              "modifiers": [
+                {
+                  "font": "caption"
+                },
+                {
+                  "opacity": 0.6
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "spacer": true
+        },
+        {
+          "hstack": [
+            {
+              "vstack": [
+                {
+                  "hstack": [
+                    {
+                      "text": "Sun",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 1
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Roast chicken",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "semibold"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                },
+                {
+                  "hstack": [
+                    {
+                      "text": "Mon",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Lentil soup",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                },
+                {
+                  "hstack": [
+                    {
+                      "text": "Tue",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Tacos",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                },
+                {
+                  "hstack": [
+                    {
+                      "text": "Wed",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Salmon and rice",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 4
+            },
+            {
+              "vstack": [
+                {
+                  "hstack": [
+                    {
+                      "text": "Thu",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Leftovers",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                },
+                {
+                  "hstack": [
+                    {
+                      "text": "Fri",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Homemade pasta",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                },
+                {
+                  "hstack": [
+                    {
+                      "text": "Sat",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "frame": {
+                            "width": 30,
+                            "alignment": "leading"
+                          }
+                        },
+                        {
+                          "opacity": 0.55
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Out with the Lees",
+                      "modifiers": [
+                        {
+                          "font": "caption"
+                        },
+                        {
+                          "fontWeight": "regular"
+                        },
+                        {
+                          "lineLimit": 1
+                        }
+                      ]
+                    }
+                  ],
+                  "spacing": 4
+                }
+              ],
+              "alignment": "leading",
+              "spacing": 4,
+              "modifiers": [
+                {
+                  "frame": {
+                    "maxHeight": "infinity",
+                    "alignment": "top"
+                  }
+                }
+              ]
+            }
+          ],
+          "alignment": "top",
+          "spacing": 14,
+          "modifiers": [
+            {
+              "fixedSize": "vertical"
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "modifiers": [
+        {
+          "frame": {
+            "maxWidth": "infinity",
+            "maxHeight": "infinity"
+          }
+        },
+        {
+          "foreground": "#3B2F20"
+        }
+      ]
+    },
+    "background": {
+      "gradient": [
+        "#FEF3C7",
+        "#FDE2B3"
+      ],
+      "direction": "diagonal"
+    }
+  },
+  "data": {}
+}

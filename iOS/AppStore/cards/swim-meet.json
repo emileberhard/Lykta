@@ -1,0 +1,128 @@
+{
+  "title": "Mia’s heat",
+  "layout": {
+    "lockScreen": {
+      "vstack": [
+        {
+          "hstack": [
+            {
+              "concat": [
+                {
+                  "symbol": "figure.pool.swim"
+                },
+                " Mia’s heat"
+              ],
+              "modifiers": [
+                {
+                  "font": "headline"
+                }
+              ]
+            },
+            {
+              "spacer": true
+            },
+            {
+              "text": "100 m free · Heat 3",
+              "modifiers": [
+                {
+                  "font": "subheadline"
+                },
+                {
+                  "fontWeight": "semibold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "svg": "<svg viewBox='0 0 340 34'><rect x='0' y='0' width='340' height='34' rx='6' fill='#FFFFFF1A'/><g stroke='#FFFFFF59' stroke-width='1.2' stroke-dasharray='3 3'><path d='M0 5.7H340M0 11.3H340M0 17H340M0 22.7H340M0 28.3H340'/></g><rect x='0' y='22.7' width='340' height='5.6' fill='#FDE047' opacity='.85'/><circle cx='296' cy='25.5' r='4.6' fill='#0E7490' stroke='#FDE047' stroke-width='1.5'/></svg>"
+        },
+        {
+          "hstack": [
+            {
+              "text": "Lane 5",
+              "modifiers": [
+                {
+                  "fontWeight": "semibold"
+                }
+              ]
+            },
+            {
+              "spacer": true
+            },
+            {
+              "concat": [
+                "Starts in ",
+                {
+                  "date": "{{start}}",
+                  "style": "timer"
+                }
+              ]
+            }
+          ],
+          "modifiers": [
+            {
+              "font": "caption"
+            },
+            {
+              "monospacedDigit": true
+            },
+            {
+              "opacity": 0.85
+            }
+          ]
+        }
+      ],
+      "alignment": "leading",
+      "spacing": 8,
+      "modifiers": [
+        {
+          "padding": {
+            "horizontal": 16,
+            "vertical": 14
+          }
+        },
+        {
+          "foreground": "white"
+        },
+        {
+          "background": {
+            "gradient": [
+              "#0E7490",
+              "#164E63"
+            ]
+          }
+        }
+      ]
+    },
+    "compactLeading": {
+      "symbol": "figure.pool.swim",
+      "modifiers": [
+        {
+          "foreground": "#FDE047"
+        }
+      ]
+    },
+    "compactTrailing": {
+      "text": "Lane 5",
+      "modifiers": [
+        {
+          "foreground": "#FDE047"
+        }
+      ]
+    },
+    "minimal": {
+      "symbol": "figure.pool.swim",
+      "modifiers": [
+        {
+          "foreground": "#FDE047"
+        }
+      ]
+    },
+    "background": "#164E63",
+    "keyline": "#0E7490"
+  },
+  "data": {
+    "start": 1793002287
+  }
+}

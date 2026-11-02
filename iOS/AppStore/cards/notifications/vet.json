@@ -1,0 +1,27 @@
+{
+  "sender": {
+    "id": "vet",
+    "name": "Vet",
+    "avatar": {
+      "symbol": "pawprint.fill",
+      "modifiers": [
+        {
+          "font": 28
+        },
+        {
+          "foreground": "white"
+        },
+        {
+          "frame": {
+            "width": 64,
+            "height": 64
+          }
+        },
+        {
+          "background": "#0D9488"
+        }
+      ]
+    }
+  },
+  "body": "Luna’s checkup is Thursday at 4 PM."
+}

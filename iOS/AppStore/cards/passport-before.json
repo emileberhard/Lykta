@@ -1,0 +1,101 @@
+{
+  "title": "Passport renewal",
+  "layout": {
+    "lockScreen": {
+      "hstack": [
+        {
+          "symbol": "book.closed.fill",
+          "modifiers": [
+            {
+              "font": "title2"
+            },
+            {
+              "foreground": "#64D2FF"
+            }
+          ]
+        },
+        {
+          "vstack": [
+            {
+              "text": "Passport renewal",
+              "modifiers": [
+                {
+                  "font": "headline"
+                }
+              ]
+            },
+            {
+              "text": "In process · est. Nov 6",
+              "modifiers": [
+                {
+                  "font": "subheadline"
+                },
+                {
+                  "opacity": 0.7
+                }
+              ]
+            }
+          ],
+          "alignment": "leading",
+          "spacing": 2
+        },
+        {
+          "spacer": true
+        },
+        {
+          "symbol": "hourglass",
+          "modifiers": [
+            {
+              "font": "title3"
+            },
+            {
+              "opacity": 0.6
+            }
+          ]
+        }
+      ],
+      "spacing": 12,
+      "modifiers": [
+        {
+          "padding": {
+            "horizontal": 16,
+            "vertical": 14
+          }
+        },
+        {
+          "foreground": "white"
+        },
+        {
+          "background": "#2C2C2E"
+        }
+      ]
+    },
+    "compactLeading": {
+      "symbol": "book.closed.fill",
+      "modifiers": [
+        {
+          "foreground": "#64D2FF"
+        }
+      ]
+    },
+    "compactTrailing": {
+      "text": "Nov 6",
+      "modifiers": [
+        {
+          "foreground": "#64D2FF"
+        }
+      ]
+    },
+    "minimal": {
+      "symbol": "book.closed.fill",
+      "modifiers": [
+        {
+          "foreground": "#64D2FF"
+        }
+      ]
+    },
+    "background": "#2C2C2E",
+    "keyline": "#2C2C2E"
+  },
+  "data": {}
+}

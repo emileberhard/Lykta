@@ -316,10 +316,11 @@ struct WidgetTests {
         #expect(result.delivery == "fetched")
     }
 
-    @Test func everyBundledWidgetExampleCanBePut() async throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appending(path: "Sources/LyktaGateway/Skill/examples/widgets")
-        let examples = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+    @Test(arguments: [GatewayTests.exampleDirectory, GatewayTests.appStoreCards])
+    func everyBundledWidgetCanBePut(folder: URL) async throws {
+        let examples = try FileManager.default.contentsOfDirectory(at: folder.appending(path: "widgets"), includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+        #expect(!examples.isEmpty)
         for example in examples {
             let body = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: example))
             #expect(await send("PUT", "/v1/widgets/\(example.deletingPathExtension().lastPathComponent)", body).status == 201)

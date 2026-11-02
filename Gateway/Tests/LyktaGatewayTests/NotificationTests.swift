@@ -439,16 +439,32 @@ struct NotificationTests {
         }
         for file in files where file.hasSuffix(".json") {
             #expect(reference.contains("examples/notifications/\(file)"), "\(file)")
-            var request = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: folder.appending(path: file)))
-            for path in ["sender.avatar", "sound", "image"] {
-                guard case let .string(medium)? = try? request.value(at: path) else { continue }
-                unused.remove(medium)
-                let uploaded: Uploaded = try await upload(Array(try Data(contentsOf: folder.appending(path: medium)))).decoded()
-                request = try request.replacing(path, with: .string(uploaded.id))
-            }
-            #expect(try await send("PUT", "/v1/notifications/\(file.dropLast(5))", body: request).status == 201, "\(file)")
+            unused.subtract(try await sendWithMedia(folder.appending(path: file)))
         }
         #expect(unused.isEmpty)
+    }
+
+    @Test func everyAppStoreNotificationSends() async throws {
+        let folder = GatewayTests.appStoreCards.appending(path: "notifications")
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)).filter { $0.hasSuffix(".json") }
+        #expect(!files.isEmpty)
+        for file in files {
+            _ = try await sendWithMedia(folder.appending(path: file))
+        }
+    }
+
+    private func sendWithMedia(_ file: URL) async throws -> [String] {
+        var request = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: file))
+        var media: [String] = []
+        for path in ["sender.avatar", "sound", "image"] {
+            guard case let .string(medium)? = try? request.value(at: path) else { continue }
+            media.append(medium)
+            let uploaded: Uploaded = try await upload(Array(try Data(contentsOf: file.deletingLastPathComponent().appending(path: medium)))).decoded()
+            request = try request.replacing(path, with: .string(uploaded.id))
+        }
+        let name = file.deletingPathExtension().lastPathComponent
+        #expect(try await send("PUT", "/v1/notifications/\(name)", body: request).status == 201, "\(name)")
+        return media
     }
 
     static func wav(milliseconds: Int, format: Int = 1, sampleRate: Int = 8000, declaredByteRate: Int? = nil, fill: UInt8 = 0) -> [UInt8] {
