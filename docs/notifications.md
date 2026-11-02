@@ -6,9 +6,8 @@ Status: text notifications and media have landed, and their decisions are in
 
 ## Remaining for 0.6.0
 
-Capture the five App Store slides once the 0.6.0 gateway is live, since the
-notification slide needs it, and have the maintainer add uploaded sounds and
-images to the App Store privacy label.
+Have the maintainer add uploaded sounds and images to the App Store privacy
+label.
 
 ## Still open
 

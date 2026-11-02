@@ -22,7 +22,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, the `hello.json` activity its setup starts, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
-| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, and the capture mode, which renders the bundled examples, the home screen and the Connect step of the introduction |
+| `scripts/screenshots`, `iOS/AppStore/compose.swift`, `iOS/AppStore/cards`, `iOS/App/Capture.swift` | The App Store slides: the script that captures the Debug app on a simulator, caches the captures by the files that draw them and composes the slides, the composer, the cards the slides show, and the capture mode, which renders those cards' Lock Screen views, widgets and notification avatars |
 | `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots, build and App Review submission |
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
@@ -34,7 +34,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 - A layout change touches `Core`, `Rendering` and the skill's `layout.md`
   together. Gateway tests compile every JSON example in `layout.md`, start
   every activity in the skill's `examples`, send every notification in
-  `examples/notifications` and put every widget in `examples/widgets`. Look at a layout change with
+  `examples/notifications` and put every widget in `examples/widgets`, and
+  do the same for the App Store cards in `iOS/AppStore/cards`. Look at a layout change with
   `just render` before shipping it.
 - Every layout feature (node, key, enum case and value form the decoder
   accepts) is recorded while decoding and has a row, by exact name, in
@@ -80,7 +81,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   beside it, where the ids go. File names are unique across the skill, because
   the gateway embeds them under flattened names. Example times stay within two days of 1793000000;
   Core's `movingExampleTimes` moves them to the present for the gallery and
-  `just render`.
+  `just render`. The App Store cards in `iOS/AppStore/cards` keep the same
+  folder layout and time window; a card joins the skill's `examples` only
+  when it teaches a technique the examples lack.
 - The gateway is the only content writer. The app never calls
   `Activity.request`, updates content or schedules local notifications; it
   ends an activity only when the gateway reports it ended, or on Reset. The
@@ -387,17 +390,21 @@ keys, the tunnel credential, backup credentials and the watchdog's Lykta token
 are untracked and have recovery sources outside the VPS.
 
 The App Store screenshots are five 1206 × 2622 slides, the required 6.3-inch
-iPhone size, drawn by `just screenshots`. In capture mode, which
-`LYKTA_CAPTURE` turns on in Debug builds, the app renders every bundled
-example's Lock Screen card and islands, its home screen and the introduction's
-Connect step as PNGs, in US
-English with the clock at 9:41 like the composed Lock Screen, and exits;
-`iOS/AppStore/compose.swift` holds the captions and arranges the captures into
-opaque slides, as App Store Connect requires. An empty `ImageRenderer` result
+iPhone size, drawn by `just screenshots`. The script copies
+`iOS/AppStore/cards` into the capture. In capture mode, which
+`LYKTA_CAPTURE` turns on in Debug builds, the app renders each card's Lock
+Screen view, each widget family and each notification avatar as PNGs, in US
+English with the clock at 9:41 like the composed Lock Screen, and exits.
+`iOS/AppStore/compose.swift` holds each slide's request and reply, draws its
+own wallpaper, because the release's fresh simulator never draws one and
+Apple's must not be committed to this public repository, and arranges the
+captures into opaque slides, as App Store Connect requires. Its rings are
+measured on these captures, so measure them again when a ringed card or
+`Rendering` moves what they frame. An empty `ImageRenderer` result
 comes out transparent or as the previous slide's pixels, so the composer stops
 on a slide with a transparent pixel or an earlier slide's exact pixels instead
-of writing it. Look at the slides after a change to the app's UI or the
-examples, because the release uploads them.
+of writing it. Look at the slides after a change to `Rendering`, the cards or
+the composer, because the release uploads them.
 
 Self-hosters build the gateway image from a tagged commit, passing the tag as
 `--build-arg LYKTA_VERSION`, and the app from Xcode with their own
