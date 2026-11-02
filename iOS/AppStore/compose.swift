@@ -477,9 +477,16 @@ let slides: [(String, AnyView)] = [
 ]
 
 enum Marks {
-    static let launch: [Mark] = []
-    static let passport: [Mark] = []
-    static let lake: [Mark] = []
+    static let launch = [
+        Mark(rect: CGRect(x: 267, y: 10, width: 91, height: 27), color: Key.teal, radius: 14),
+        Mark(rect: CGRect(x: 12, y: 68, width: 150, height: 61), color: Key.amber, radius: 14),
+        Mark(rect: CGRect(x: 174, y: 45, width: 184, height: 84), color: Key.pink, radius: 14),
+    ]
+    static let passport = [Mark(rect: CGRect(x: 12, y: 39, width: 346, height: 57), color: Key.amber, radius: 14)]
+    static let lake = [
+        Mark(rect: CGRect(x: 12, y: 48, width: 96, height: 53), color: Key.teal, radius: 14),
+        Mark(rect: CGRect(x: 19, y: 100, width: 106, height: 22), color: Key.amber, radius: 11),
+    ]
 }
 
 MainActor.assumeIsolated {
