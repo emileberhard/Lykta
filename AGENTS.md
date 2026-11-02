@@ -326,7 +326,9 @@ does the rest, gateway first:
    because the export keeps only the capabilities the archive's signatures
    request. The map must cover exactly the app and both extensions.
 3. The GitHub-hosted `gateway` job builds the admitted tag, attests its binary,
-   and publishes both in a GitHub prerelease. The VPS pulls the highest release
+   attaches both to a draft GitHub prerelease and then publishes it, because
+   the repository's releases are immutable: a published release takes no new
+   assets and its tag can never be reused. The VPS pulls the highest release
    with both assets, verifies the exact tagged workflow identity and digest,
    and deploys with a database backup and schema-safe rollback. The job reports
    `lykta-gateway/<version>` on the admitted commit and waits for public health.

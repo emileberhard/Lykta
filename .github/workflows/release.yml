@@ -90,18 +90,22 @@ jobs:
             tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq .object.sha)
             gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag" --jq .message > "$RUNNER_TEMP/notes.md"
             [[ -s "$RUNNER_TEMP/notes.md" ]]
-            gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
           fi
+          release=$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json databaseId --jq .databaseId)
           for name in lykta-gateway-linux-amd64 lykta-gateway-linux-amd64.sigstore.json; do
             artifact="$RUNNER_TEMP/$name"
             expected="sha256:$(sha256sum "$artifact" | cut -d ' ' -f 1)"
-            existing=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VERSION" --jq ".assets[] | select(.name == \"$name\") | .digest")
+            existing=$(gh api "repos/$GITHUB_REPOSITORY/releases/$release" --jq ".assets[] | select(.name == \"$name\") | .digest")
             if [[ -z "$existing" ]]; then
               gh release upload "$VERSION" "$artifact" --repo "$GITHUB_REPOSITORY"
             elif [[ "$name" != *.sigstore.json ]]; then
               [[ "$existing" == "$expected" ]] || { echo 'Existing gateway asset has a different digest.' >&2; exit 1; }
             fi
           done
+          if [[ $(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft) == true ]]; then
+            gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi
       - name: Wait for the public gateway
         timeout-minutes: 31
         run: scripts/wait-for-gateway
