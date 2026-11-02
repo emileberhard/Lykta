@@ -7,9 +7,14 @@ let canvas = CGSize(width: 1206, height: 2622)
 let captures = URL(filePath: CommandLine.arguments[1])
 let output = URL(filePath: CommandLine.arguments[2])
 
+func fail(_ message: String) -> Never {
+    FileHandle.standardError.write(Data("\(message)\n".utf8))
+    exit(1)
+}
+
 func capture(_ name: String) -> NSImage {
     let url = captures.appending(path: "\(name).png")
-    guard let image = NSImage(contentsOf: url) else { fatalError("missing \(url.path)") }
+    guard let image = NSImage(contentsOf: url) else { fail("missing \(url.path)") }
     return image
 }
 
@@ -498,21 +503,21 @@ MainActor.assumeIsolated {
                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { fatalError("could not render \(name)") }
+        else { fail("could not render \(name)") }
         let bounds = CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height)
         rgba.clear(bounds)
         rgba.draw(rendered, in: bounds)
         let pixels = UnsafeBufferPointer(start: rgba.data!.assumingMemoryBound(to: UInt8.self), count: rendered.width * rendered.height * 4)
         guard !stride(from: 3, to: pixels.count, by: 4).contains(where: { pixels[$0] != 255 }) else {
-            fatalError("\(name) rendered with transparent pixels instead of covering its canvas")
+            fail("\(name) rendered with transparent pixels instead of covering its canvas")
         }
-        guard drawn.insert(Data(pixels)).inserted else { fatalError("\(name) rendered the same pixels as an earlier slide") }
+        guard drawn.insert(Data(pixels)).inserted else { fail("\(name) rendered the same pixels as an earlier slide") }
         context.draw(rendered, in: bounds)
         let url = output.appending(path: "\(name).png")
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            fatalError("could not create \(url.path)")
+            fail("could not create \(url.path)")
         }
         CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-        guard CGImageDestinationFinalize(destination) else { fatalError("could not write \(url.path)") }
+        guard CGImageDestinationFinalize(destination) else { fail("could not write \(url.path)") }
     }
 }
