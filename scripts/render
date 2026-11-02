@@ -143,8 +143,8 @@ def workspace(xcode):
     identifier = match.group(1) if match else xcode.call("XcodeOpenWorkspace", {"path": str(PROJECT)})["workspaceIdentifier"]
     destinations = xcode.call("XcodeListRunDestinations", {"workspaceIdentifier": identifier})
     active = next((d for d in destinations["destinations"] if d["isActive"]), None)
-    if not (active and active["isSimulator"] and active["displayTitle"].startswith("iPhone")):
-        iphone = next((d for d in destinations["destinations"] if d["isSimulator"] and d["displayTitle"].startswith("iPhone")), None)
+    if not (active and active["isSimulator"] and "iPhone" in active["displayTitle"]):
+        iphone = next((d for d in destinations["destinations"] if d["isSimulator"] and "iPhone" in d["displayTitle"]), None)
         if iphone is None:
             raise RenderError("no iPhone simulator is available as a run destination")
         xcode.call("XcodeSwitchRunDestination", {"workspaceIdentifier": identifier, "displayTitle": iphone["displayTitle"]})
