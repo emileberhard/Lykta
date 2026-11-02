@@ -8,6 +8,8 @@ Usage: lykta COMMAND
   install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or piped in, to /v1/PATH and wait for Apple's answer
+  render PATH [FILE]
+                    Draw what put would show, in light and dark, as NAME.render.png beside FILE, or lykta.render.png here
   get PATH          GET /v1/PATH, such as activities/deploy or actions?wait=25
   delete PATH       DELETE /v1/PATH, such as activities/deploy?dismissAfter=0
   media FILE        Upload an image or sound and print its id
@@ -157,9 +159,10 @@ function Send-Gateway([string]$Method, [string]$Target, [scriptblock]$Content) {
     }
     try {
         $script:served = Get-Served $response
-        $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+        $text = [Text.UTF8Encoding]::new($false).GetString($bytes)
         $status = [int]$response.StatusCode
-        if ($status -ge 200 -and $status -lt 300) { return @{ Code = 0; Text = $text } }
+        if ($status -ge 200 -and $status -lt 300) { return @{ Code = 0; Text = $text; Bytes = $bytes } }
         if ($status -ge 400 -and $status -lt 500) { return @{ Code = 1; Text = "lykta: $Method $Target was refused with HTTP ${status}:`n$text" } }
         @{ Code = 3; Text = "lykta: $Method $Target failed with HTTP ${status}; ${again}:`n$text" }
     } finally { $response.Dispose() }
@@ -275,22 +278,51 @@ function Invoke-Docs([string[]]$Names) {
     }
 }
 
+function Read-Body([string[]]$Arguments, $Piped) {
+    if ($Arguments.Count -eq 2) {
+        try { return [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Arguments[1]).ProviderPath) }
+        catch { Fail "could not read $($Arguments[1])" 2 }
+    }
+    if ($Piped.Count -gt 0) { return $Piped -join "`n" }
+    if ([Console]::IsInputRedirected) {
+        [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
+        return [Console]::In.ReadToEnd()
+    }
+    Fail 'pipe the JSON body in, such as from a here-string, or name a file' 2
+}
+
 function Invoke-Put([string[]]$Arguments, $Piped) {
     if ($Arguments.Count -lt 1 -or $Arguments.Count -gt 2) { Fail 'usage: lykta put PATH [FILE], with the JSON body in FILE or piped in' 2 }
-    if ($Arguments.Count -eq 2) {
-        try { $body = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Arguments[1]).ProviderPath) }
-        catch { Fail "could not read $($Arguments[1])" 2 }
-    } elseif ($Piped.Count -gt 0) {
-        $body = $Piped -join "`n"
-    } elseif ([Console]::IsInputRedirected) {
-        [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
-        $body = [Console]::In.ReadToEnd()
-    } else {
-        Fail 'pipe the JSON body in, such as from a here-string, or name a file' 2
-    }
+    $body = Read-Body $Arguments $Piped
     $path = Get-ApiPath $Arguments[0]
     $path += if ($path.Contains('?')) { '&wait=10' } else { '?wait=10' }
     Write-Output (Invoke-Gateway 'PUT' $path { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') })
+}
+
+function Invoke-Render([string[]]$Arguments, $Piped) {
+    if ($Arguments.Count -lt 1 -or $Arguments.Count -gt 2) { Fail 'usage: lykta render PATH [FILE], with the JSON body put would send in FILE or piped in' 2 }
+    $body = Read-Body $Arguments $Piped
+    $image = if ($Arguments.Count -eq 2) { [IO.Path]::ChangeExtension($Arguments[1], '.render.png') } else { 'lykta.render.png' }
+    $target = [IO.Path]::GetFullPath([IO.Path]::Combine((Get-Location).ProviderPath, $image))
+    $answer = Invoke-Gateway 'POST' "/v1/render/$((Get-ApiPath $Arguments[0]).Substring(4))" { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') }
+    if ($answer -notmatch '^\{"id":"([^"]*)",') { Fail "the gateway answered without a render id: $answer" 3 }
+    $id = $Matches[1]
+    $rest = $answer.Substring($Matches[0].Length)
+    $drawn = Send-Gateway 'GET' "/v1/render/images/$id"
+    if ($drawn.Code -ne 0) {
+        [Console]::Error.WriteLine($drawn.Text)
+        exit $drawn.Code
+    }
+    $temp = Join-Path (Split-Path -Parent $target) ".lykta.$([IO.Path]::GetRandomFileName())"
+    try {
+        $file = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+        try { $file.Write($drawn.Bytes, 0, $drawn.Bytes.Length) } finally { $file.Dispose() }
+        if (Test-Path -LiteralPath $target) { [IO.File]::Replace($temp, $target, [NullString]::Value) } else { [IO.File]::Move($temp, $target) }
+    } catch {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+        Fail "could not write ${image}: $($_.Exception.Message)" 2
+    }
+    Write-Output ('{"image":"' + $image.Replace('\', '\\').Replace('"', '\"') + '",' + $rest)
 }
 
 function Invoke-Media([string[]]$Arguments) {
@@ -315,7 +347,7 @@ $rest = [string[]]@(
 switch ($verb) {
     { $_ -in 'help', '-h', '--help' } { Write-Output $usage; exit 0 }
     '' { [Console]::Error.WriteLine($usage); exit 2 }
-    { $_ -in 'setup', 'install', 'docs', 'put', 'get', 'delete', 'media' } {}
+    { $_ -in 'setup', 'install', 'docs', 'put', 'render', 'get', 'delete', 'media' } {}
     default { [Console]::Error.WriteLine($usage); Fail "unknown command $verb" 2 }
 }
 Add-Type -AssemblyName System.Net.Http
@@ -330,6 +362,7 @@ try {
         'install' { Import-Setup; Invoke-Install $rest }
         'docs' { Import-Setup; Invoke-Docs $rest }
         'put' { Import-Setup; Invoke-Put $rest $piped }
+        'render' { Import-Setup; Invoke-Render $rest $piped }
         'get' { if ($rest.Count -ne 1) { Fail 'usage: lykta get PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'GET' (Get-ApiPath $rest[0])) }
         'delete' { if ($rest.Count -ne 1) { Fail 'usage: lykta delete PATH' 2 }; Import-Setup; Write-Output (Invoke-Gateway 'DELETE' (Get-ApiPath $rest[0])) }
         'media' { Import-Setup; Invoke-Media $rest }

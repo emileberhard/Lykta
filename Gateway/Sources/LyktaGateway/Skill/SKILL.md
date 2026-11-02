@@ -30,6 +30,7 @@ first `scripts/lykta setup URL TOKEN` with the user's gateway and token.
 | Command | Does |
 | --- | --- |
 | `lykta put PATH [FILE]` | Sends the JSON in FILE, or on stdin, to `PUT /v1/PATH` and prints the result, once Apple has answered when it sends a push |
+| `lykta render PATH [FILE]` | Draws what `lykta put PATH` would show, without sending it, into `NAME.render.png` beside FILE, or `lykta.render.png`, and prints its path |
 | `lykta get PATH` | `GET /v1/PATH` |
 | `lykta delete PATH` | `DELETE /v1/PATH` |
 | `lykta media FILE` | Uploads an image or sound and prints its id |
@@ -50,6 +51,32 @@ and quote an argument that holds `&` twice, as `'"actions?after=40&wait=25"'`,
 because `lykta` passes it on through cmd. Without a shell, send the same
 requests over HTTP with the token as `Authorization: Bearer <token>`, `wait=10`
 in each PUT's query, and media as the body of `POST /v1/media`.
+
+## Preview
+
+`lykta render` shows you a design before the user sees it. Give it the PATH
+and body of the `lykta put` you are about to send. The gateway checks the body
+exactly as the PUT would, sends nothing, and draws every presentation the body
+has into one image, a light row above a dark one: the Lock Screen, expanded,
+compact and minimal for an activity, every family for a widget, the banner and
+the avatar for a notification, and the Lock Screen for `parts/NAME`. A body
+with only `data` draws the current layout with that data.
+
+```sh
+lykta render activities/deploy deploy.json
+```
+
+```json
+{"image": "deploy.render.png", "warnings": []}
+```
+
+Look at the image, fix what you see and render again, then send the PUT. A
+warning names content the phone will cut off, such as a Lock Screen taller
+than 160 points. Text in the image runs about 2 % wider than on the phone.
+Renders never reach the phone or spend its start budget. They are drawn on a
+Mac the gateway's operator runs, so a render takes a few seconds, and
+`render_unavailable` means none is connected: send the PUT and look at the
+phone, or ask the user to.
 
 ## Saved parts
 
@@ -160,7 +187,7 @@ still a small slice of what the nodes and SVG can do, one answer each to one
 subject, so treat them as a vocabulary of techniques rather than templates:
 combine them, go beyond them, and let your own subject decide the design.
 [Fitting](references/layout.md#fitting) gives margins and sizes. Before
-sending, check every presentation: does each show something live, do related
+sending, [render](#preview) it and check every presentation: does each show something live, do related
 elements share a leading edge, does text clear every drawing, do the expanded
 rows add up to less than about 145 points, and would it be recognizable
 without its title?

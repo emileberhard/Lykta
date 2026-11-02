@@ -14,7 +14,7 @@ struct GatewayTests {
     init() async throws {
         store = try Store(path: ":memory:")
         api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
-                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
+                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         credentials = try await api.handle(Self.registration(.invite(try await store.invite(now: now)))).decoded()
         _ = try await report([])
     }

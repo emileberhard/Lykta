@@ -24,7 +24,7 @@
       "kind": "group",
       "path": "Avatars",
       "children": [
-        { "path": "Initials.swift", "target-membership": [ "Lykta/compile-sources", "LyktaNotifications/compile-sources" ] },
+        { "path": "Initials.swift", "target-membership": [ "Lykta/compile-sources", "LyktaNotifications/compile-sources", "LyktaRender/compile-sources" ] },
         { "path": "DrawnAvatar.swift", "target-membership": [ "LyktaNotifications/compile-sources" ] },
       ],
     },

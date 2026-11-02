@@ -17,7 +17,7 @@ struct DrawnAvatarTests {
     private init(path: String) async throws {
         store = try Store(path: path)
         api = API(store: store, maximumDevices: 1, maximumLiveActivities: 1, environments: [.development],
-                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
+                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         let registration = Registration(environment: .development, appVersion: "0.17.0", proof: .invite(try await store.invite(now: now)))
         credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],
                                                        body: Array(try JSONEncoder().encode(registration)))).decoded()

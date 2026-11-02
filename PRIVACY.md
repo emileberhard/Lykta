@@ -63,6 +63,17 @@ images, apart from the fixed examples you send from the app's gallery and the fi
 hello that `lykta setup` sends. Do not send content that you do not
 want stored on the gateway.
 
+## Previews
+
+When an agent asks for a preview with `lykta render`, the gateway checks the
+request as it would a send and passes its layout, data, notification text and
+the uploaded files it names to a renderer that the gateway's operator runs on a
+Mac; for the App Store app's gateway, that is Emil Eberhard's Mac. The renderer
+draws the preview and keeps the request and drawing for at most ten minutes;
+the gateway keeps the image in memory for ten minutes for the agent's phone
+alone. A preview is never stored in the gateway's database and never reaches
+your phone or Apple.
+
 ## Diagnostics
 
 So that problems can be fixed without access to the phone, the app sends the
@@ -114,7 +125,8 @@ app deletes them.
 Apple's Push Notification service delivers activity content and notifications,
 including an inline avatar drawing when one is supplied,
 to the phone, and tells its widgets when to reload; widget content travels
-only between the gateway and the phone. To show a notification as a message from its sender, the app
+only between the gateway and the phone. Previews travel only between the
+gateway and its operator's renderer. To show a notification as a message from its sender, the app
 shares the sender's name and the text with iOS on the phone, which may suggest
 the sender in Siri and the share sheet; this stays on the phone. The
 App Store app reaches its gateway over HTTPS through Cloudflare's network.

@@ -31,6 +31,12 @@ The `esmadil.se` Cloudflare configuration rule disables Browser Integrity
 Check for `lykta.esmadil.se`. Without it, Python's default `urllib` client can
 receive Cloudflare error 1010 before reaching the gateway.
 
+Previews need `/etc/lykta/render.env`, root-owned and untracked, holding
+`LYKTA_RENDER_TOKEN_SHA256` for the render worker that `deploy/mac-render`
+runs on the Mini. Its token exists only in the Mini's
+`~/.config/lykta/render-worker.env`; to replace it, write both and restart the
+gateway. Without the file, previews answer `render_unavailable`.
+
 The unit sets `LYKTA_MAX_DEVICES=1000`. At up to roughly 8 MB of events per
 device, that permits around 8 GB of event storage. Devices leave through Reset
 in the app. Before raising the cap to resolve `registration_closed`, check disk

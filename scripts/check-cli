@@ -6,16 +6,28 @@ gateway=$(swift build --package-path Gateway --show-bin-path)/LyktaGateway
 skill=$PWD/Gateway/Sources/LyktaGateway/Skill
 url=http://127.0.0.1:$((20000 + $$ % 20000))
 token=lykta_agent_9e2b7c4f1a8d3e6b0c5f9a2d7e4b1c8f3a6d0e9b2c5f8a1d4e7b0c3f6a9d2e5b
+worker=lykta_render_check
+if command -v sha256sum >/dev/null 2>&1; then digest=$(printf %s "$worker" | sha256sum); else digest=$(printf %s "$worker" | shasum -a 256); fi
+png=iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
 work=$(mktemp -d)
 cp "$skill/scripts/lykta" "$work/lykta.source"
 cp "$skill/scripts/lykta.ps1" "$work/lykta.ps1.source"
-LYKTA_HOST=127.0.0.1 LYKTA_PORT=${url##*:} "$gateway" simulate 2>"$work/gateway.log" &
+printf %s "$png" | base64 -d >"$work/drawn.png" 2>/dev/null || printf %s "$png" | base64 -D >"$work/drawn.png"
+LYKTA_HOST=127.0.0.1 LYKTA_PORT=${url##*:} LYKTA_RENDER_TOKEN_SHA256=${digest%% *} "$gateway" simulate 2>"$work/gateway.log" &
 pid=$!
-trap 'kill "$pid" 2>/dev/null; rm -rf "$work"' EXIT
+renderer=
+trap 'kill "$pid" $renderer 2>/dev/null; [ -z "$renderer" ] || wait "$renderer" 2>/dev/null || :; rm -rf "$work"' EXIT
 until curl -fsS "$url/v1/version" >/dev/null 2>&1; do
 	kill -0 "$pid" 2>/dev/null || { cat "$work/gateway.log"; exit 1; }
 	sleep 0.2
 done
+while kill -0 "$pid" 2>/dev/null; do
+	job=$(curl -fsS -H "Authorization: Bearer $worker" "$url/v1/render/jobs?wait=25") || { sleep 0.2; continue; }
+	id=$(printf '%s' "$job" | sed -n 's/^{"id":"\([^"]*\)".*/\1/p')
+	[ -z "$id" ] || curl -fsS -X PUT -H "Authorization: Bearer $worker" --data-binary "{\"image\":\"$png\",\"warnings\":[\"drawn\"]}" \
+		"$url/v1/render/jobs/$id" >/dev/null
+done &
+renderer=$!
 
 cli() {
 	if [ "$shell" = sh ]; then sh "$skill/scripts/lykta" "$@"; else pwsh -NoProfile -File "$skill/scripts/lykta.ps1" "$@"; fi
@@ -92,6 +104,12 @@ for shell in sh pwsh; do
 	printf '{"now": {"eta": 60}}' | expect '"revision":2' 0 cli put /v1/activities/printer
 	expect '"eta":' 0 cli get activities/printer
 	printf '{"title": "Broken", "layout": {}}' | expect 'refused with HTTP 400' 1 cli put activities/broken
+	cp "$skill/examples/printer.json" "$HOME/printer.json"
+	expect "{\"image\":\"$HOME/printer.render.png\",\"warnings\":[\"drawn\"]}" 0 cli render activities/printer "$HOME/printer.json"
+	cmp "$work/drawn.png" "$HOME/printer.render.png"
+	(cd "$HOME" && printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring"}' | expect '{"image":"lykta.render.png",' 0 cli render notifications/ring)
+	cmp "$work/drawn.png" "$HOME/lykta.render.png"
+	printf '{"title": "Broken", "layout": {}}' | expect 'refused with HTTP 400' 1 cli render activities/broken
 	expect 'm_' 0 cli media "$skill/examples/notifications/doorbell.wav"
 	sound=$(cat "$work/out")
 	printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring", "sound": "%s"}' "$sound" |

@@ -60,7 +60,9 @@ such as `~/.claude/skills` or `~/.agents/skills`, with `lykta install`, so later
 sessions know Lykta, and `lykta` keeps that copy and itself in step with the
 gateway after each upgrade.
 `lykta` sends a request in one call and answers once Apple has, so agents
-spend their output on the activity rather than on HTTP plumbing. The skill
+spend their output on the activity rather than on HTTP plumbing. Before
+sending, `lykta render` gives the agent an image of every presentation, in
+light and dark, so it sees its design without waiting for the phone. The skill
 covers the API, its [layout reference](Gateway/Sources/LyktaGateway/Skill/references/layout.md)
 covers every node, modifier and reusable layout part, its [widgets reference](Gateway/Sources/LyktaGateway/Skill/references/widgets.md)
 covers Home Screen and Lock Screen widgets and their buttons and toggles, and its [notifications reference](Gateway/Sources/LyktaGateway/Skill/references/notifications.md)

@@ -13,7 +13,7 @@ struct SavedPartsTests {
     init() async throws {
         store = try Store(path: ":memory:")
         api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
-                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
+                  enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         let registration = Registration(environment: .development, appVersion: Layout.version.description,
                                         proof: .invite(try await store.invite(now: now)))
         credentials = try await api.handle(HTTPRequest(method: "POST", target: "/v1/devices", headers: [:],

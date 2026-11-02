@@ -12,7 +12,7 @@ struct PartsStorageTests {
         let store = try Store(path: path)
         let now = Int(Date().timeIntervalSince1970)
         let api = API(store: store, maximumDevices: 1, maximumLiveActivities: 1, environments: [.development],
-                      enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown())
+                      enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         let credentials: Credentials = try await api.handle(HTTPRequest(
             method: "POST", target: "/v1/devices", headers: [:],
             body: Array(try JSONEncoder().encode(Registration(environment: .development, appVersion: "1.0 (1)",

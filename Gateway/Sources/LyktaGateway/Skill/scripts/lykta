@@ -9,6 +9,8 @@ Usage: lykta COMMAND
   install DIR       Install the skill as DIR/lykta, such as ~/.claude/skills, and keep it current
   docs FILE...      Print skill files, such as references/layout.md examples/printer.json
   put PATH [FILE]   PUT the JSON in FILE, or on stdin, to /v1/PATH and wait for Apple's answer
+  render PATH [FILE]
+                    Draw what put would show, in light and dark, as NAME.render.png beside FILE, or lykta.render.png here
   get PATH          GET /v1/PATH, such as activities/deploy or actions?wait=25
   delete PATH       DELETE /v1/PATH, such as activities/deploy?dismissAfter=0
   media FILE        Upload an image or sound and print its id
@@ -201,6 +203,32 @@ put() {
 	answer
 }
 
+render() {
+	[ $# -eq 1 ] || [ $# -eq 2 ] || fail "usage: lykta render PATH [FILE], with the JSON body put would send in FILE or on stdin" 2
+	if [ $# -eq 1 ] && [ -t 0 ]; then fail "send the JSON body on stdin, such as with a heredoc, or name a file" 2; fi
+	cat -- "${2:--}" >"$work/body" || fail "could not read ${2:-stdin}" 2
+	case ${2:--} in
+	-) image=lykta.render.png ;;
+	*) case ${2##*/} in *.*) image=${2%.*}.render.png ;; *) image=$2.render.png ;; esac ;;
+	esac
+	dir=$(dirname -- "$image")
+	api "$1"
+	call POST "/v1/render/${path#/v1/}" -H 'Content-Type: application/json' --data-binary "@$work/body"
+	id=$(sed -n 's/^{"id":"\([^"]*\)",.*/\1/p' "$response")
+	if [ -z "$id" ]; then
+		{ printf 'lykta: the gateway answered without a render id: '; answer; } >&2
+		exit 3
+	fi
+	rest=$(sed 's/^{"id":"[^"]*",//' "$response")
+	call GET "/v1/render/images/$id"
+	tmp=$(mktemp "$dir/.lykta.XXXXXX") || fail "could not write $image" 2
+	if ! { cat "$response" >"$tmp" && mv -f "$tmp" "$image"; }; then
+		rm -f "$tmp"
+		fail "could not write $image" 2
+	fi
+	printf '{"image":"%s",%s\n' "$(printf '%s' "$image" | sed 's/\\/\\\\/g; s/"/\\"/g')" "$rest"
+}
+
 media() {
 	[ $# -eq 1 ] || fail "usage: lykta media FILE" 2
 	file=$1
@@ -229,7 +257,7 @@ verb=${1:-}
 case $verb in
 help | -h | --help) usage; exit 0 ;;
 '') usage >&2; exit 2 ;;
-setup | install | docs | put | get | delete | media) ;;
+setup | install | docs | put | render | get | delete | media) ;;
 *) usage >&2; fail "unknown command $verb" 2 ;;
 esac
 command -v curl >/dev/null 2>&1 || fail "needs curl; install it, such as with apt-get install curl or apk add curl" 2
@@ -245,6 +273,7 @@ setup) setup "$@" ;;
 install) load && install_skill "$@" ;;
 docs) load && docs "$@" ;;
 put) load && put "$@" ;;
+render) load && render "$@" ;;
 get) send GET get "$@" ;;
 delete) send DELETE delete "$@" ;;
 media) load && media "$@" ;;

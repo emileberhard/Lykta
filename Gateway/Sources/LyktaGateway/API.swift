@@ -14,6 +14,7 @@ struct API: Sendable {
     let enrolment: Enrolment
     let version: Version?
     let shutdown: Shutdown
+    let renders: RenderQueue
 
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
         var response = await respond(to: request)
@@ -42,7 +43,11 @@ struct API: Sendable {
     }
 
     static func bodyLimit(method: String, target: String) -> Int {
-        method == "POST" && HTTPRequest(method: method, target: target, headers: [:], body: []).path == ["v1", "media"] ? Medium.maximumBytes : 1 << 20
+        switch (method, route(HTTPRequest(method: method, target: target, headers: [:], body: []).path)) {
+        case ("POST", "v1/media"): Medium.maximumBytes
+        case ("PUT", "v1/render/jobs/{id}"): RenderQueue.maximumImageBytes / 3 * 4 + (1 << 16)
+        default: 1 << 20
+        }
     }
 
     private static let skillFiles: [String: [UInt8]] = [
@@ -226,6 +231,54 @@ struct API: Sendable {
         case ("DELETE", "v1/parts/{name}"):
             try await store.deletePart(try await agent(request), name: try Self.name(path[2]))
             return .noContent
+        case ("POST", "v1/render/{kind}/{name}"):
+            let device = try await agent(request)
+            let name = try Self.name(path[3])
+            let (input, presentations): (RenderInput, [String]) = switch path[2] {
+            case "activities":
+                (try await store.renderActivity(device, name: name, request: try Self.activityRequest(request.body), now: now), ["lock", "expanded", "compact", "minimal"])
+            case "widgets":
+                (try await store.renderWidget(device, name: name, request: try Self.decode(request.body), now: now),
+                 ["small", "medium", "large", "circular", "rectangular", "inline"])
+            case "notifications":
+                (try await store.renderNotification(device, request: try NotificationRequest.decode(try Self.decode(request.body))), ["banner", "avatar"])
+            default:
+                (try await store.renderPart(device, name: name, node: try Self.decode(request.body)), ["lock"])
+            }
+            let id = try await renders.submit(device: device.id, name: name, input: input, presentations: presentations)
+            var outcome: Result<RenderReply, APIError>?
+            do {
+                try await waiting(RenderQueue.wait) {
+                    outcome = await renders.outcome(of: id)
+                    return outcome != nil
+                }
+            } catch {
+                await renders.abandon(id)
+                throw error
+            }
+            guard let outcome else {
+                await renders.abandon(id)
+                throw APIError(.renderFailed, "The renderer did not answer within \(RenderQueue.wait) seconds. Render again.")
+            }
+            return Self.json(200, try outcome.get())
+        case ("GET", "v1/render/images/{id}"):
+            let device = try await agent(request)
+            guard let id = UUID(uuidString: path[3]) else { throw APIError(.notFound, "No render has the id \(path[3]).") }
+            return HTTPResponse(status: 200, contentType: "image/png", body: try await renders.image(id, device: device.id))
+        case ("GET", "v1/render/jobs"):
+            try worker(request)
+            let wait = try Self.wait(request)
+            var job: RenderJob?
+            try await waiting(wait) {
+                job = await renders.claim()
+                return job != nil
+            }
+            return job.map { Self.json(200, $0) } ?? .noContent
+        case ("PUT", "v1/render/jobs/{id}"):
+            try worker(request)
+            guard let id = UUID(uuidString: path[3]) else { throw APIError(.notFound, "No claimed render has the id \(path[3]).") }
+            try await renders.complete(id, with: try Self.decode(request.body))
+            return .noContent
         case ("GET", "v1/activities"):
             return Self.json(200, ["activities": try await store.list(try await agent(request))])
         case ("GET", "v1/activities/{name}"):
@@ -259,6 +312,9 @@ struct API: Sendable {
         case 4 where path[0] == "v1" && path[1] == "device" && path[2] == "widgets" && path[3] != "credential": "v1/device/widgets/{id}"
         case 5 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "report": "v1/device/notifications/{id}/report"
         case 6 where path[0] == "v1" && path[1] == "device" && path[2] == "notifications" && path[4] == "media": "v1/device/notifications/{id}/media/{media}"
+        case 4 where path[0] == "v1" && path[1] == "render" && ["activities", "widgets", "notifications", "parts"].contains(path[2]): "v1/render/{kind}/{name}"
+        case 4 where path[0] == "v1" && path[1] == "render" && path[2] == "images": "v1/render/images/{id}"
+        case 4 where path[0] == "v1" && path[1] == "render" && path[2] == "jobs": "v1/render/jobs/{id}"
         default: path.joined(separator: "/")
         }
     }
@@ -299,6 +355,10 @@ struct API: Sendable {
     private func widgetPhone(_ request: HTTPRequest) async throws -> Device {
         guard let device = try await store.widgetDevice(token: try Self.bearer(request)) else { throw Self.unauthorized }
         return device
+    }
+
+    private func worker(_ request: HTTPRequest) throws {
+        guard renders.isWorker(try Self.bearer(request)) else { throw Self.unauthorized }
     }
 
     private static let unauthorized = APIError(.unauthorized, "Send Authorization: Bearer <token>.")

@@ -6,14 +6,10 @@ nonisolated struct NotificationExample: Identifiable, Sendable {
         let id: String
     }
 
-    enum Avatar: Sendable {
-        case picture(Data), drawing(Node)
-    }
-
     let id: String
     let sender: String
     let body: String
-    let avatar: Avatar
+    let avatar: NotificationAvatar.Source
     let image: Data?
     let media: [String: Data]
     private let fields: JSONValue

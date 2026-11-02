@@ -13,6 +13,7 @@ Environment=LYKTA_BUNDLE_ID=emileberhard.Lykta LYKTA_TEAM_ID=NNP2B278S6
 Environment=LYKTA_DEVELOPMENT_KEY_ID=TU5Z6GJYGH LYKTA_PRODUCTION_KEY_ID=XGSDFVZ2V6
 Environment=LYKTA_MAX_DEVICES=1000
 EnvironmentFile=/opt/lykta/current/version.env
+EnvironmentFile=-/etc/lykta/render.env
 LoadCredential=development.p8:/etc/lykta/apns-development.p8
 LoadCredential=production.p8:/etc/lykta/apns-production.p8
 Environment=LYKTA_DEVELOPMENT_KEY_FILE=%d/development.p8

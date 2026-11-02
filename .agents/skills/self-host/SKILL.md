@@ -57,6 +57,7 @@ docker run --detach --name lykta --restart unless-stopped --stop-timeout 30 \
 | `LYKTA_MAX_LIVE_ACTIVITIES` | 5 | Live activities per phone |
 | `LYKTA_HOST`, `LYKTA_PORT` | 127.0.0.1, 8080 | Listener; the image listens on all interfaces |
 | `LYKTA_DATABASE` | `lykta.sqlite` | SQLite path; `/data/lykta.sqlite` in the image |
+| `LYKTA_RENDER_TOKEN_SHA256` | | SHA-256 in hex of the [render worker's](#previews) token; without it, previews answer `render_unavailable` |
 
 At least one key pair is required. A legacy key valid in both environments
 can be set as both pairs.
@@ -72,6 +73,26 @@ with `docker exec lykta lykta-gateway invite`, and launch the app with
 The app connects over HTTPS only. Terminate TLS in front of port 8080, for
 example with `tailscale serve --bg 8080` for phones on the same tailnet, or a
 Caddy site containing `reverse_proxy 127.0.0.1:8080`.
+
+## Previews
+
+Agents look at a design before sending it with `lykta render`, which a render
+worker on a Mac draws. The worker reaches out to the gateway, so the Mac needs
+no open port, only a logged-in session and the Xcode in `.xcode-version`.
+Create its token, give the gateway the hash as `LYKTA_RENDER_TOKEN_SHA256`,
+and install the worker from Terminal on the Mac in a checkout of this
+repository:
+
+```sh
+token=$(openssl rand -hex 32)
+printf %s "$token" | shasum -a 256
+mkdir -p ~/.config/lykta
+printf 'LYKTA_URL=https://lykta.example.com\nLYKTA_RENDER_TOKEN=%s\n' "$token" >~/.config/lykta/render-worker.env
+deploy/mac-render/install
+```
+
+The worker runs from its own checkout of the newest release and moves to each
+new release by itself. Without a worker, agents look at the phone instead.
 
 ## App
 
@@ -113,6 +134,9 @@ gateway needs the matching key.
    `lykta get widgets/example` reports `"delivery": "fetched"`. If it never
    shows the count, check that the widget extension's App ID has the app group
    and Push Notifications, then the gateway's `widget.fetch` events.
+
+7. With a render worker, `lykta render notifications/hello` with the body of
+   step 4 writes `lykta.render.png` showing the banner and the avatar.
 
 ## Upgrade
 

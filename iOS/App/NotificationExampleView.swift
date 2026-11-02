@@ -47,65 +47,9 @@ struct NotificationExampleView: View {
     }
 }
 
-struct NotificationBanner: View {
-    let example: NotificationExample
-    @ScaledMetric(relativeTo: .subheadline) private var avatarSize: CGFloat = 40
-
-    var body: some View {
-        HStack(spacing: 12) {
-            NotificationAvatar(avatar: example.avatar)
-                .scaleEffect(avatarSize / AvatarView.size)
-                .frame(width: avatarSize, height: avatarSize)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(example.sender)
-                    .fontWeight(.semibold)
-                Text(example.body)
-            }
-            .font(.subheadline)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let image = example.image {
-                Picture(data: image)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .accessibilityHidden(true)
-            }
-        }
-    }
-}
-
-struct NotificationAvatar: View {
-    let avatar: NotificationExample.Avatar
-
-    var body: some View {
-        Group {
-            switch avatar {
-            case let .drawing(node): AvatarView(node: node)
-            case let .picture(data):
-                if let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                }
-            }
-        }
-        .frame(width: AvatarView.size, height: AvatarView.size)
-        .clipShape(Circle())
-        .accessibilityHidden(true)
-    }
-}
-
-private struct Picture: View {
-    let data: Data
-    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 40
-
-    var body: some View {
-        Group {
-            if let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            }
-        }
-        .frame(width: size, height: size)
+extension NotificationBanner {
+    init(example: NotificationExample) {
+        self.init(sender: example.sender, text: example.body, avatar: example.avatar, image: example.image)
     }
 }
 

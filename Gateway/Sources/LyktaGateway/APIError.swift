@@ -20,6 +20,8 @@ struct APIError: Error, Encodable, Sendable {
         case notificationsNotSetUp = "notifications_not_set_up"
         case tooManyNotifications = "too_many_notifications"
         case unsupportedMedia = "unsupported_media"
+        case renderUnavailable = "render_unavailable"
+        case renderFailed = "render_failed"
         case `internal`
 
         var status: Int {
@@ -34,6 +36,8 @@ struct APIError: Error, Encodable, Sendable {
             case .unsupportedMedia: 415
             case .tooManyNotifications: 429
             case .internal: 500
+            case .renderFailed: 502
+            case .renderUnavailable: 503
             }
         }
     }

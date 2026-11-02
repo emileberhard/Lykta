@@ -14,12 +14,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `iOS/Rendering` | SwiftUI for every node and modifier, the Lock Screen view, the widget view and the tap intents; the app, widget extension, notification extension and `LyktaRender` compile it, the last for Mac Catalyst, where ActivityKit's environment values do not exist, and `LYKTA_APP` marks app-only live timers; `LYKTA_WIDGET` selects widget-native circular progress, while the app and notification extension draw a determinate ring |
 | `iOS/Widgets` | The Live Activity configuration and Dynamic Island presentations, and the Lykta widget: its timeline provider, the states it draws and its push handler |
 | `iOS/Gateway` | The phone's link to its gateway, compiled into the app and the widget extension: `GatewayClient`, the Keychain items, among them the widget credential, the widget's `WidgetSelection` intent with its entity query, and `WidgetCache` |
-| `iOS/Previews` | The gallery's Lock Screen card, Dynamic Island and widget previews, which the app and `LyktaRender` share |
+| `iOS/Previews` | The gallery's Lock Screen card, Dynamic Island, widget and notification banner previews, which the app and `LyktaRender` share |
 | `iOS/App` | Registration, ActivityKit observation, the widget credential and places report, notification permission and token, device reports and telemetry, the first-launch introduction that waits for the agent's hello, the in-app Lock Screen cards' headers and details sheet, and the example gallery with its hint to lock the phone after each start |
 | `iOS/Notifications` | The notification service extension: media downloads and the phone's media cache in the app group, the communication notification and the report to the gateway |
 | `iOS/Avatars` | The extension-only bounded drawn avatar and the independent Core Graphics initials shared by the extension and app gallery |
 | `iOS/App/AppIcon.icon` | The final app icon, three overlapping lights; change it only when the maintainer asks |
-| `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs |
+| `Gateway` | HTTP API, `Store` (all durable state) and its `Schema`, delivery and APNs, and `RenderQueue`, which hands agents' previews to a render worker in memory |
 | `Gateway/Sources/LyktaGateway/Skill` | The agent skill the gateway serves; `.agents/skills/lykta` links to it |
 | `Gateway/Sources/LyktaGateway/Skill/scripts`, `scripts/check-cli` | The `lykta` command agents send with, as `lykta` for sh with curl and its PowerShell twin `lykta.ps1`, the `hello.json` activity its setup starts, and the check that runs both against `lykta-gateway simulate` |
 | `.agents/skills/self-host` | Setting up a gateway and app build |
@@ -27,7 +27,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `scripts/app-store-connect` | Taking a release's build through App Store Connect: What to Test and TestFlight review for the external groups, then the App Store version's version string, What's New, screenshots, build and App Review submission |
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
-| `scripts/render`, `iOS/Render`, `iOS/Widgets/RenderPreviews.swift` | The render tool; its engine, `LyktaRender`, a Mac Catalyst app that draws requests through `iOS/Previews` and answers on its standard output; and the activity and widget previews it drives with `--xcode`, which show the layouts staged in `.local/render` |
+| `scripts/render`, `iOS/Render`, `iOS/Widgets/RenderPreviews.swift` | The render tool; its engine, `LyktaRender`, a Mac Catalyst app that draws requests through `iOS/Previews` and answers on its standard output; its `--worker` mode, which draws the gateway's previews; and the activity and widget previews it drives with `--xcode`, which show the layouts staged in `.local/render` |
+| `deploy/mac-render` | The LaunchAgent that keeps a render worker running on a Mac from the newest release |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
 ## Invariants
@@ -134,11 +135,18 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   extend `scripts/check-cli` with them. They need only sh with curl, or
   PowerShell 5.1 or later, never print the token, and retry only a refused
   connection, because only that proves a request was never sent. `lykta`
-  writes only its own installed file and the SKILL.md of folders
-  `lykta install` created, each through a temporary file it creates exclusively
-  and one rename, and replaces only a file that ends with its `lykta-skill`
-  line. It refuses a symlinked skill folder, updates only from the gateway
+  writes only its own installed file, the SKILL.md of folders
+  `lykta install` created and the `.render.png` that `lykta render` names
+  after its body file, each through a temporary file it creates exclusively
+  and one rename, and replaces a skill file only when it ends with its
+  `lykta-skill` line. It refuses a symlinked skill folder, updates only from the gateway
   setup saved, and never lets a failed update change a command's result.
+- A render stores and pushes nothing. `POST /v1/render/...` admits its body
+  through the same `Store` preparation as the PUT it previews, saved parts,
+  `now` and version checks included, and `RenderQueue` keeps its job and
+  image only in memory, the image for ten minutes and only for its own phone.
+  Only the worker token, whose hash `LYKTA_RENDER_TOKEN_SHA256` holds, claims
+  and answers jobs, and the worker reaches the gateway, never the reverse.
 - A phone registers only with a verified App Attest attestation of a new key
   over a challenge this gateway signed, or with a one-time invite an operator
   created. Never add a registration path without such proof.
@@ -287,7 +295,7 @@ maintainer, because the App Store privacy label must match.
 | `just gateway` | Run the gateway locally with `LYKTA_*` settings |
 | `just image` | Build the gateway container |
 | `just evals <options>` | Run the fresh agents in `evals/job.yaml`, twice each, on every task in `evals/tasks` against a simulated phone and check each trial; options go to `harbor run` and override the job, such as `--include-task-name train` or `--agent codex --model gpt-6.1-sol`, and `~/.config/lykta/evals.env` sets endpoints and keys. Transcripts, rewards and the gateway's events land in `.local/evals`, and the run ends with each agent's tokens and timings from `scripts/eval-metrics`; read the trials with `harbor view .local/evals` |
-| `just render <inputs>` | Render activity or widget request bodies or bare layouts (files, directories, inline JSON or `-`): every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. The engine renders a request of many inputs in about a second through `LyktaRender`, a hidden Mac app it keeps running. It builds the app after a Swift change in seconds, the first time in about a minute, and stops after ten idle minutes or with `--stop`. It draws the gallery's views at an iPhone's width and scale, so sizes match Xcode's previews within a few points, but Mac Catalyst sets text about 2% wider, so text that fits there fits on a phone; Lock Screen tints are exact rather than lightened, accessory widgets are grayscale rather than vibrant and circular progress is the app's ring. It needs the logged-in Mac session, not SSH alone. `--xcode` renders through Xcode's previews at seconds per image, and is the only way to draw `standby` and `smartstack`; it needs Xcode 27 with its MCP server enabled and leaves the project open in Xcode, so close it there before removing a worktree that rendered. `--only lock,expanded,small,circular` and `--dark` narrow either. Neither draws the tinted Home Screen, so check `accented` on a phone. |
+| `just render <inputs>` | Render activity, widget or notification request bodies or bare layouts (files, directories, inline JSON or `-`; a notification's media ids name files beside it): every presentation of every input as PNGs in `.local/renders`, plus `sheet.png` side by side to compare variants. The engine renders a request of many inputs in about a second through `LyktaRender`, a hidden Mac app it keeps running. Each checkout runs its own engine in `.local/engine`; it builds the app after a Swift change in seconds, the first time in about a minute, and stops after ten idle minutes or with `--stop`. It draws the gallery's views at an iPhone's width and scale, so sizes match Xcode's previews within a few points, but Mac Catalyst sets text about 2% wider, so text that fits there fits on a phone; Lock Screen tints are exact rather than lightened, accessory widgets are grayscale rather than vibrant and circular progress is the app's ring. It needs the logged-in Mac session, not SSH alone. `--xcode` renders through Xcode's previews at seconds per image, and is the only way to draw `standby` and `smartstack`; it needs Xcode 27 with its MCP server enabled and leaves the project open in Xcode, so close it there before removing a worktree that rendered. `--only lock,expanded,small,circular` and `--dark` narrow either. Neither draws the tinted Home Screen, so check `accented` on a phone. |
 | `just screenshots` | Compose the App Store slides into `.local/screenshots`. Captures of the app are cached in `~/Library/Caches/lykta/captures`, shared by every checkout and keyed by the sources that draw them, Xcode and the simulator, so only a change to what they show builds and launches the app again |
 
 Device behavior, such as how a layout looks or whether a push arrives, needs a

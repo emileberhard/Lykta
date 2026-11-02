@@ -37,6 +37,10 @@ again, so after a lost response repeat the exact request; a different
 request under the name fails with `conflict`. Never send under a new name to
 retry, because the user may already have seen the first.
 
+`lykta render notifications/{name}` with the same body draws the banner and
+the avatar without sending anything or reserving the name, as the main
+skill's [Preview](../SKILL.md#preview) describes.
+
 A PUT sends at once; Lykta cannot send one later by itself. To tell the user
 something at a later time, have a scheduler that outlives your session send
 the PUT then, as the main skill describes for activities.

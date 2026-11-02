@@ -63,7 +63,8 @@ enum Gateway {
             let signals = shutdown.onSignals([SIGTERM, SIGINT])
             let api = API(store: store, maximumDevices: try number("LYKTA_MAX_DEVICES", default: 100),
                           maximumLiveActivities: try number("LYKTA_MAX_LIVE_ACTIVITIES", default: 5), environments: push.environments,
-                          enrolment: Enrolment(appID: appID), version: version, shutdown: shutdown)
+                          enrolment: Enrolment(appID: appID), version: version, shutdown: shutdown,
+                          renders: RenderQueue(workerTokenHash: try renderTokenHash(settings["LYKTA_RENDER_TOKEN_SHA256"])))
             let host = try value("LYKTA_HOST", default: "127.0.0.1")
             let port = try number("LYKTA_PORT", default: 8080)
             let server = HTTPServer(host: host, port: port, bodyLimit: API.bodyLimit, shutdown: shutdown) { await api.handle($0) }
@@ -100,6 +101,14 @@ enum Gateway {
             FileHandle.standardOutput.write(try encoder.encode(event) + Data("\n".utf8))
         }
     }
+}
+
+private func renderTokenHash(_ value: String?) throws -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    guard value.count == 64, value.allSatisfy(\.isHexDigit) else {
+        throw ConfigurationError("LYKTA_RENDER_TOKEN_SHA256 must be the SHA-256 of the render worker's token in hex.")
+    }
+    return value.lowercased()
 }
 
 struct ConfigurationError: Error, CustomStringConvertible {

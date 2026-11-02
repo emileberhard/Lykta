@@ -15,6 +15,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,11 +39,14 @@ PRESENTATIONS = {
     "rectangular": ("accessoryRectangular", 5, {}),
     "inline": ("accessoryInline", 6, {}),
 }
-DEFAULT = "lock,expanded,compact,minimal,small,medium,large,circular,rectangular,inline"
+NOTIFICATION_PRESENTATIONS = ["banner", "avatar"]
+DEFAULT = "lock,expanded,compact,minimal,small,medium,large,circular,rectangular,inline,banner,avatar"
+KNOWN = [*PRESENTATIONS, *NOTIFICATION_PRESENTATIONS]
 FAMILIES = {family for family, _, _ in PRESENTATIONS.values() if family}
 ENGINE_PRESENTATIONS = set(DEFAULT.split(","))
+LOCK_SCREEN_HEIGHT = 160
 CACHE = Path.home() / "Library" / "Caches" / "lykta"
-ENGINE = CACHE / "render"
+ENGINE = ROOT / ".local" / "engine"
 JOBS = ENGINE / "jobs"
 APPS = ENGINE / "apps"
 BUILD = ROOT / ".local" / "render-build"
@@ -52,8 +57,10 @@ ENGINE_START = 30
 ENGINE_STALL = 60
 ENGINE_RESULT_LIFETIME = 600
 ENGINE_LOG_LIMIT = 1 << 20
-KEPT_APPS = 3
+KEPT_APPS = 2
 SCRIPT = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+WORKER_SETTINGS = Path.home() / ".config" / "lykta" / "render-worker.env"
+WORKER_UPDATE_CHECK = 600
 
 
 class RenderError(Exception):
@@ -131,31 +138,51 @@ def load(arguments):
     bodies = []
     for argument in arguments:
         if argument == "-":
-            sources = [("stdin", sys.stdin.read())]
+            sources = [("stdin", sys.stdin.read(), Path.cwd())]
         elif argument.lstrip().startswith("{"):
-            sources = [("inline", argument)]
+            sources = [("inline", argument, Path.cwd())]
         elif Path(argument).is_dir():
-            sources = [(path.stem, path.read_text()) for path in sorted(Path(argument).glob("*.json"))]
+            sources = [(path.stem, path.read_text(), path.parent) for path in sorted(Path(argument).glob("*.json"))]
         elif Path(argument).is_file():
-            sources = [(Path(argument).stem, Path(argument).read_text())]
+            sources = [(Path(argument).stem, Path(argument).read_text(), Path(argument).parent)]
         else:
             raise RenderError(f"{argument}: not a file, directory, inline JSON or -")
-        for name, text in sources:
+        for name, text, folder in sources:
             try:
                 body = json.loads(text)
             except json.JSONDecodeError as error:
                 raise RenderError(f"{name}: invalid JSON: {error}")
+            taken = {existing for existing, _, _ in bodies}
+            unique = name if name not in taken else next(f"{name}-{n}" for n in range(2, 1000) if f"{name}-{n}" not in taken)
+            if isinstance(body, dict) and "sender" in body and "body" in body:
+                bodies.append((unique, "notification", notification(body, folder, name)))
+                continue
             if not isinstance(body, dict) or not ("layout" in body or "lockScreen" in body or FAMILIES & body.keys()):
-                raise RenderError(f"{name}: expected a layout or an object with a layout")
+                raise RenderError(f"{name}: expected a layout, an object with a layout or a notification")
             if "layout" not in body:
                 body = {"layout": body}
             kind = "widget" if isinstance(body["layout"], dict) and FAMILIES & body["layout"].keys() else "activity"
-            taken = {existing for existing, _, _ in bodies}
-            unique = name if name not in taken else next(f"{name}-{n}" for n in range(2, 1000) if f"{name}-{n}" not in taken)
             bodies.append((unique, kind, {"title": body.get("title", unique), "layout": body["layout"], "data": body.get("data", {})}))
     if not bodies:
         raise RenderError("no inputs to render")
     return bodies
+
+
+def notification(body, folder, name):
+    def medium(file):
+        try:
+            return base64.b64encode((folder / file).read_bytes()).decode()
+        except OSError as error:
+            raise RenderError(f"{name}: name a media file beside it: {error}")
+    sender = body["sender"]
+    entry = {"sender": {"id": sender["id"], "name": sender["name"]}, "body": body["body"]}
+    if isinstance(sender.get("avatar"), dict):
+        entry["avatar"] = {"drawing": sender["avatar"]}
+    elif isinstance(sender.get("avatar"), str):
+        entry["avatar"] = {"image": medium(sender["avatar"])}
+    if isinstance(body.get("image"), str):
+        entry["image"] = medium(body["image"])
+    return entry
 
 
 def workspace(xcode):
@@ -224,7 +251,10 @@ def summary(message):
     return "\n".join(errors.values()) if errors else message[:2000]
 
 
-def xcode_renders(bodies, presentations, dark):
+def xcode_renders(bodies, presentations, dark, output):
+    if any(kind == "notification" for _, kind, _ in bodies):
+        raise RenderError("notifications render only through the engine; leave out --xcode")
+    presentations = [p for p in presentations if p not in NOTIFICATION_PRESENTATIONS]
     staged = []
     for name, kind, body in bodies:
         index = sum(1 for _, other in staged if other == kind)
@@ -234,7 +264,7 @@ def xcode_renders(bodies, presentations, dark):
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
     try:
         identifier = workspace(xcode)
-        jobs = {(name, index, presentation): OUTPUT / f"{name}-{presentation}.png"
+        jobs = {(name, index, presentation): output / f"{name}-{presentation}.png"
                 for presentation in presentations
                 for (name, kind, body), (index, _) in zip(bodies, staged) if shows(presentation, kind, body["layout"])}
         failures = {}
@@ -249,10 +279,10 @@ def xcode_renders(bodies, presentations, dark):
     reports = [(name, STAGE / f"{kind}-{index:03d}-{name}.error") for (name, kind, _), (index, _) in zip(bodies, staged)]
     errors = [{"input": name, "error": report.read_text()} for name, report in reports if report.exists()]
     rendered = [(name, target) for (name, _, _), target in jobs.items() if target.exists()]
-    return rendered, errors, [{"error": error, "renders": sorted(names)} for error, names in failures.items()]
+    return rendered, errors, [{"error": error, "renders": sorted(names)} for error, names in failures.items()], []
 
 
-def engine_renders(bodies, presentations, dark):
+def engine_renders(bodies, presentations, dark, output):
     xcode_only = [p for p in presentations if p not in ENGINE_PRESENTATIONS]
     if xcode_only:
         raise RenderError(f"{', '.join(xcode_only)} render only through Xcode's previews; add --xcode")
@@ -289,7 +319,7 @@ def engine_renders(bodies, presentations, dark):
             raise RenderError(manifest["error"])
         rendered = []
         for entry in manifest["renders"]:
-            target = OUTPUT / entry["file"]
+            target = output / entry["file"]
             shutil.move(result / entry["file"], target)
             rendered.append((entry["input"], target))
     finally:
@@ -299,7 +329,9 @@ def engine_renders(bodies, presentations, dark):
         failures.append({"error": "the snapshot is missing image data for some views", "renders": incomplete})
     if blank := [f"{entry['input']}-{entry['presentation']}" for entry in manifest["blank"]]:
         failures.append({"error": "these presentations draw nothing", "renders": blank})
-    return rendered, manifest["layoutErrors"], failures
+    tall = [f"{entry['input']} {entry['presentation']}: the content is {entry['idealHeight']:.0f} points tall, and the system shows "
+            f"{LOCK_SCREEN_HEIGHT} and cuts off the rest" for entry in manifest["renders"] if (entry.get("idealHeight") or 0) > LOCK_SCREEN_HEIGHT + 0.5]
+    return rendered, manifest["layoutErrors"], failures, tall
 
 
 def run(*args, timeout=120):
@@ -645,20 +677,98 @@ def sheet(rows, target):
     run(binary, *arguments)
 
 
+def worker():
+    try:
+        settings = dict(line.split("=", 1) for line in WORKER_SETTINGS.read_text().splitlines() if "=" in line and not line.startswith("#"))
+        url, token = settings["LYKTA_URL"].rstrip("/"), settings["LYKTA_RENDER_TOKEN"]
+    except (OSError, KeyError) as error:
+        raise RenderError(f"set LYKTA_URL and LYKTA_RENDER_TOKEN in {WORKER_SETTINGS}: {error}")
+    version = run("git", "-C", ROOT, "tag", "--points-at", "HEAD", "--list", "[0-9]*.[0-9]*.[0-9]*").split()
+    print(f"rendering for {url} at {version[0] if version else 'an untagged commit'}", flush=True)
+    engine_app()
+    start_supervisor()
+    checked = time.monotonic()
+    failures = 0
+    while True:
+        if version and time.monotonic() - checked > WORKER_UPDATE_CHECK:
+            checked = time.monotonic()
+            if newer := newer_release(version[0]):
+                print(f"{newer} is released; exiting to update", flush=True)
+                return 0
+        try:
+            job = call("GET", f"{url}/v1/render/jobs?wait=25", token)
+            failures = 0
+        except (urllib.error.URLError, OSError) as error:
+            failures += 1
+            print(f"polling failed: {error}", flush=True)
+            time.sleep(min(60, 2 ** min(failures, 6)))
+            continue
+        if job is None:
+            continue
+        if (ENGINE / "worker.log").exists() and (ENGINE / "worker.log").stat().st_size > ENGINE_LOG_LIMIT:
+            os.truncate(ENGINE / "worker.log", 0)
+        started = time.monotonic()
+        result = draw(job)
+        try:
+            call("PUT", f"{url}/v1/render/jobs/{job['id']}", token, json.dumps(result).encode())
+            print(f"answered {job['id']} in {time.monotonic() - started:.1f} s{': ' + result['error'] if 'error' in result else ''}", flush=True)
+        except (urllib.error.URLError, OSError) as error:
+            print(f"answering {job['id']} failed: {error}", flush=True)
+
+
+def newer_release(version):
+    def parse(tag):
+        return tuple(int(part) for part in tag.split("."))
+    tags = [line.rsplit("/", 1)[1] for line in run("git", "-C", ROOT, "ls-remote", "--tags", "--refs", "origin").splitlines()]
+    newest = max((tag for tag in tags if re.fullmatch(r"\d+\.\d+\.\d+", tag)), key=parse, default=version)
+    return newest if parse(newest) > parse(version) else None
+
+
+def call(method, url, token, body=None):
+    request = urllib.request.Request(url, data=body, method=method, headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "lykta-render-worker"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return json.loads(response.read()) if response.status == 200 else None
+
+
+def draw(job):
+    body = dict(job["input"])
+    kind = body.pop("kind")
+    try:
+        with tempfile.TemporaryDirectory(prefix="lykta-render-") as folder:
+            rows, warnings = [], []
+            for dark in (False, True):
+                output = Path(folder) / ("dark" if dark else "light")
+                output.mkdir()
+                rendered, errors, failures, tall = engine_renders([(job["name"], kind, body)], job["presentations"], dark, output)
+                problems = [error["error"] for error in errors] + [f"{failure['error']}: {', '.join(failure['renders'])}" for failure in failures]
+                if problems or not rendered:
+                    return {"error": "; ".join(problems) or "nothing to draw"}
+                rows.append(("Dark" if dark else "Light", [target for _, target in rendered]))
+                warnings += [] if dark else tall
+            sheet(rows, Path(folder) / "sheet.png")
+            return {"image": base64.b64encode((Path(folder) / "sheet.png").read_bytes()).decode(), "warnings": warnings}
+    except RenderError as error:
+        return {"error": str(error)}
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Render Lykta layouts in seconds through a resident app on a dedicated simulator, which shuts down "
+        description="Render Lykta layouts and notifications in about a second through a resident Mac app, which stops "
                     f"after {ENGINE_IDLE // 60} idle minutes, or through Xcode's previews with --xcode.")
     parser.add_argument("inputs", nargs="*",
-                        help="request bodies ({title, layout, data}) or bare layouts of activities or widgets: files, directories, inline JSON, or - for stdin")
+                        help="request bodies of activities, widgets or notifications, or bare layouts: files, directories, inline JSON, "
+                             "or - for stdin; a notification's media ids name files beside it")
     parser.add_argument("--only", default=DEFAULT,
-                        help=f"comma-separated presentations from {', '.join(PRESENTATIONS)}; each input renders those it has "
+                        help=f"comma-separated presentations from {', '.join(KNOWN)}; each input renders those it has "
                              f"(default: {DEFAULT})")
     parser.add_argument("--dark", action="store_true", help="render in dark appearance")
     parser.add_argument("--xcode", action="store_true",
                         help="render through Xcode's previews, which draw the system's own Dynamic Island, Lock Screen and StandBy "
                              "and take seconds per image; needs Xcode 27 with its MCP server enabled")
-    parser.add_argument("--stop", action="store_true", help="shut the render engine and its simulator down now")
+    parser.add_argument("--stop", action="store_true", help="stop the render engine now")
+    parser.add_argument("--worker", action="store_true",
+                        help=f"render for a gateway: claim its render jobs with the URL and token in {WORKER_SETTINGS} until a newer release is out")
     parser.add_argument("--supervise", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
@@ -666,12 +776,14 @@ def main():
             return supervise()
         if args.stop:
             return stop()
+        if args.worker:
+            return worker()
         if not args.inputs:
             parser.error("give at least one input to render")
         presentations = args.only.split(",")
-        unknown = [p for p in presentations if p not in PRESENTATIONS]
+        unknown = [p for p in presentations if p not in KNOWN]
         if unknown:
-            raise RenderError(f"unknown presentation {', '.join(unknown)}; use {', '.join(PRESENTATIONS)}")
+            raise RenderError(f"unknown presentation {', '.join(unknown)}; use {', '.join(KNOWN)}")
         bodies = load(args.inputs)
         STAGE.mkdir(parents=True, exist_ok=True)
         with open(ROOT / ".local" / "render.lock", "w") as lock:
@@ -680,9 +792,9 @@ def main():
                 stale.unlink()
             OUTPUT.mkdir(exist_ok=True)
             renders = xcode_renders if args.xcode else engine_renders
-            rendered, errors, failures = renders(bodies, presentations, args.dark)
+            rendered, errors, failures, tall = renders(bodies, presentations, args.dark, OUTPUT)
             rows = [(name, [target for owner, target in rendered if owner == name]) for name, _, _ in bodies]
-            result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": failures}
+            result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": failures, "tooTall": tall}
             if rendered:
                 sheet([row for row in rows if row[1]], OUTPUT / "sheet.png")
                 result["sheet"] = str(OUTPUT / "sheet.png")

@@ -15,7 +15,7 @@ struct SimulatedPhoneTests {
         let now = Int(Date().timeIntervalSince1970)
         let phone = try await SimulatedPhone(store: store, now: now)
         let api = API(store: store, maximumDevices: 1, maximumLiveActivities: 5, environments: phone.environments,
-                      enrolment: Enrolment(appID: "simulated"), version: nil, shutdown: Shutdown())
+                      enrolment: Enrolment(appID: "simulated"), version: nil, shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         let delivery = Delivery(store: store, push: phone, shutdown: Shutdown())
         var time = now
 
@@ -66,7 +66,7 @@ struct SimulatedPhoneTests {
         let now = Int(Date().timeIntervalSince1970)
         let phone = try await SimulatedPhone(store: store, now: now)
         let api = API(store: store, maximumDevices: 1, maximumLiveActivities: 5, environments: phone.environments,
-                      enrolment: Enrolment(appID: "simulated"), version: nil, shutdown: Shutdown())
+                      enrolment: Enrolment(appID: "simulated"), version: nil, shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         func request(_ method: String, _ body: JSONValue? = nil) async -> HTTPResponse {
             await api.handle(HTTPRequest(method: method, target: "/v1/widgets/steps",
                                          headers: ["authorization": "Bearer \(SimulatedPhone.credentials.agentToken)"], body: body?.json ?? []))

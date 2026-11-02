@@ -10,11 +10,13 @@
 - An agent keeps a native widget on the Home Screen with one HTTP request, in
   the same layout language, and keeps it current by sending data; it stays
   until the agent deletes it.
+- An agent sees what it designed, in light and dark, before it sends it, with
+  one command and without the phone.
 - What an agent writes is the activity, widget or notification itself. Output tokens
   and tool calls are an agent's dominant cost and latency, so sending, timing
   and checking delivery take one command each, while the docs may be long.
 - One person can self-host the gateway. Apple Push Notification service is the
-  only external service.
+  only external service; previews also need a Mac the operator runs.
 - The codebase stays small: two Swift packages, Apple frameworks first, and
   third-party dependencies only from Apple's GitHub organization.
 
@@ -220,6 +222,26 @@ runs about 2% wider than on a phone and can wrap a line earlier; a layout that
 fits the render fits the phone. The engine draws what the gallery draws, not
 the system's containers, so StandBy and the Smart Stack, the lightened Lock
 Screen tints and vibrant accessory widgets remain Xcode's, through `--xcode`.
+
+**Agents preview through the gateway on the operator's Mac.** An agent that
+cannot see its layout designs blind, and trying a draft on the phone spends
+the push-to-start budget and needs the user to look. `lykta render` posts the
+body a PUT would send to `POST /v1/render/{activities,widgets,notifications,parts}/{name}`,
+which runs the PUT's own preparation in `Store`, saved parts, `now`, version
+and size checks included, but stores and pushes nothing, so a preview that
+draws is a PUT that the gateway accepts. SwiftUI does not run on the Linux gateway, so a
+worker on a Mac, `scripts/render --worker` kept running by `deploy/mac-render`,
+long-polls `GET /v1/render/jobs` with its own token, draws each job through the
+render engine in light and dark, and answers with one sheet and a warning for
+content taller than the system shows. The worker reaches out, so the Mac
+needs no inbound port, and the gateway's `RenderQueue` holds jobs and images
+in memory only: at most 16 waiting, two per phone, each image for ten minutes
+and only for the phone that asked. The worker follows the newest release tag
+by itself instead of being deployed by the release, so a release never waits
+on the Mac; a gateway without a worker answers `render_unavailable`, and the
+agent falls back to the phone. Rendering on the phone was the alternative; it
+needs the app open and the user present. The engine draws the gallery's
+views, so the phone stays the judge of the final look.
 
 **Every started example asks to lock the phone.**
 iOS keeps an app's own Live Activity out of the Dynamic Island and banners

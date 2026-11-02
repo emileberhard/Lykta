@@ -272,23 +272,7 @@ actor Store {
             if let expected = request.ifRevision, current?.revision != expected {
                 throw APIError(.conflict, "The activity is no longer at revision \(expected). Read it again, then send your change.")
             }
-            guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
-                throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
-            }
-            var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
-            for (path, offset) in request.now ?? [:] {
-                do { data = try data.setting(path, to: .number(Double(now) + offset)) }
-                catch { throw APIError(.invalidRequest, "now: \(error)") }
-            }
-            let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
-            let expandedLayout = prepared.value
-            let state: LyktaActivity.ContentState
-            let filled: JSONValue
-            do {
-                filled = try prepared.filled(with: data)
-                state = try LyktaActivity.ContentState(title: title, layout: filled.json)
-            } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
-            try Self.admit(state, on: device)
+            let (title, expandedLayout, data, filled, state) = try activityContent(device, current: current, request: request, now: now)
             let content = try Self.encoded(state)
             let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
             let staleAfter = request.staleAfter ?? current?.staleAfter
@@ -331,6 +315,46 @@ actor Store {
             ])
             return (activity, size)
         }
+    }
+
+    func renderActivity(_ device: Device, name: Name, request: ActivityRequest, now: Int) throws -> RenderInput {
+        try db.transaction {
+            let (title, layout, data, _, _) = try activityContent(device, current: try liveActivity(device, name: name), request: request, now: now)
+            return .activity(title: title, layout: layout, data: data)
+        }
+    }
+
+    func renderPart(_ device: Device, name: Name, node: JSONValue) throws -> RenderInput {
+        try db.transaction {
+            let expanded = try expanding(node, on: device) { saved throws(LayoutError) in try node.expandingPart(saved: saved) }
+            let layout = JSONValue.object(["lockScreen": expanded, "compactLeading": .string(""), "compactTrailing": .string(""), "minimal": .string("")])
+            let state: LyktaActivity.ContentState
+            do { state = try LyktaActivity.ContentState(title: name.rawValue, layout: try layout.filled(with: .object([:]), for: .activity).json) }
+            catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+            try Self.admit(state, on: device)
+            return .activity(title: name.rawValue, layout: layout, data: .object([:]))
+        }
+    }
+
+    private func activityContent(_ device: Device, current: Activity?, request: ActivityRequest, now: Int) throws
+        -> (title: String, layout: JSONValue, data: JSONValue, filled: JSONValue, state: LyktaActivity.ContentState) {
+        guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
+            throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
+        }
+        var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
+        for (path, offset) in request.now ?? [:] {
+            do { data = try data.setting(path, to: .number(Double(now) + offset)) }
+            catch { throw APIError(.invalidRequest, "now: \(error)") }
+        }
+        let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
+        let state: LyktaActivity.ContentState
+        let filled: JSONValue
+        do {
+            filled = try prepared.filled(with: data)
+            state = try LyktaActivity.ContentState(title: title, layout: filled.json)
+        } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+        try Self.admit(state, on: device)
+        return (title, prepared.value, data, filled, state)
     }
 
     func attempted(_ activity: Activity, now: Int) throws -> Bool {
@@ -416,16 +440,7 @@ actor Store {
                 }
                 return false
             }
-            for reference in request.references {
-                guard let medium = try db.query("SELECT kind FROM media WHERE id = ? AND device_id = ?", reference.id.rawValue, device.id).first else {
-                    throw APIError(.invalidRequest, "\(reference.path) is \(reference.id), which this phone has not uploaded or the gateway removed "
-                                   + "a day after its last use. Upload the file with POST /v1/media and use the id it returns.")
-                }
-                guard try medium.string("kind") == reference.kind.rawValue else {
-                    throw APIError(.invalidRequest, "\(reference.path) must be \(reference.kind == .image ? "an image" : "a sound"); "
-                                   + "\(reference.id) is \(reference.kind == .image ? "a sound" : "an image").")
-                }
-            }
+            try checkReferences(of: request, on: device)
             try Self.admitNotifications(on: device)
             let recent = try db.query("SELECT count(*) AS n, min(created_at) AS oldest FROM notifications WHERE device_id = ? AND created_at > ?",
                                       device.id, now - 3600)
@@ -437,17 +452,7 @@ actor Store {
                 throw error
             }
             let id = UUID()
-            let size = try request.payload(id: id, token: Self.token("lykta_fetch_")).count
-            guard size <= Self.maximumPayloadBytes else {
-                let advice: String
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.withoutEscapingSlashes]
-                if let drawing, let bytes = drawing.compressedBytes,
-                   try encoder.encode(drawing).count > max(encoder.encode(request.body).count, encoder.encode(request.sender.name).count) {
-                    advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
-                } else { advice = "Shorten the body." }
-                throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(Self.maximumPayloadBytes). \(advice)")
-            }
+            let size = try Self.payloadBytes(of: request, id: id, drawing: drawing)
             try db.run("""
                 INSERT INTO notifications (id, device_id, name, request, state, created_at, expires_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)
                 """, id, device.id, name, canonical, now, now + Self.notificationLifetime)
@@ -474,6 +479,54 @@ actor Store {
             try record("notification.put", device: device.id, activity: nil, detail)
             return true
         }
+    }
+
+    func renderNotification(_ device: Device, request: NotificationRequest) throws -> RenderInput {
+        try db.transaction {
+            let (request, drawing) = try prepareNotification(request, on: device)
+            try checkReferences(of: request, on: device)
+            _ = try Self.payloadBytes(of: request, id: UUID(), drawing: drawing)
+            func bytes(_ id: MediaID) throws -> [UInt8] {
+                guard let row = try db.query("SELECT bytes FROM media WHERE id = ? AND device_id = ?", id.rawValue, device.id).first else {
+                    throw APIError(.invalidRequest, "\(id) is not a medium of this phone.")
+                }
+                return try row.blob("bytes")
+            }
+            let avatar: RenderInput.Avatar? = switch request.sender.avatar {
+            case let .drawing(node)?: .drawing(node)
+            case let .medium(id)?: .image(try bytes(id))
+            case nil: nil
+            }
+            return .notification(sender: request.sender, body: request.body, avatar: avatar, image: try request.image.map(bytes))
+        }
+    }
+
+    private func checkReferences(of request: NotificationRequest, on device: Device) throws {
+        for reference in request.references {
+            guard let medium = try db.query("SELECT kind FROM media WHERE id = ? AND device_id = ?", reference.id.rawValue, device.id).first else {
+                throw APIError(.invalidRequest, "\(reference.path) is \(reference.id), which this phone has not uploaded or the gateway removed "
+                               + "a day after its last use. Upload the file with POST /v1/media and use the id it returns.")
+            }
+            guard try medium.string("kind") == reference.kind.rawValue else {
+                throw APIError(.invalidRequest, "\(reference.path) must be \(reference.kind == .image ? "an image" : "a sound"); "
+                               + "\(reference.id) is \(reference.kind == .image ? "a sound" : "an image").")
+            }
+        }
+    }
+
+    private static func payloadBytes(of request: NotificationRequest, id: UUID, drawing: PackedNode?) throws -> Int {
+        let size = try request.payload(id: id, token: token("lykta_fetch_")).count
+        guard size <= maximumPayloadBytes else {
+            let advice: String
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.withoutEscapingSlashes]
+            if let drawing, let bytes = drawing.compressedBytes,
+               try encoder.encode(drawing).count > max(encoder.encode(request.body).count, encoder.encode(request.sender.name).count) {
+                advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
+            } else { advice = "Shorten the body." }
+            throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). \(advice)")
+        }
+        return size
     }
 
     private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> (NotificationRequest, PackedNode?) {
@@ -1170,19 +1223,10 @@ extension Store {
             if let expected = request.ifRevision, expected != current?.revision {
                 throw APIError(.conflict, "The widget is no longer at revision \(expected). Read it again, then send your change.")
             }
-            guard let title = request.title ?? current?.title, let template = request.layout ?? current?.layout else {
-                throw APIError(.invalidRequest, "Creating a widget needs a title and a layout.")
-            }
             if current == nil, try count(db.query("SELECT count(*) AS n FROM widgets WHERE device_id = ?", device.id)) >= Self.maximumWidgets {
                 throw APIError(.tooManyWidgets, "Delete a widget before creating another; the limit is \(Self.maximumWidgets).")
             }
-            var data = request.data ?? current?.data ?? .object([:])
-            for (path, offset) in request.now ?? [:] {
-                do { data = try data.setting(path, to: .number(Double(now) + offset)) }
-                catch { throw APIError(.invalidRequest, "$.now: \(error)") }
-            }
-            let prepared = try expanding(template, on: device) { saved throws(LayoutError) in try PreparedParts(template, saved: saved, for: .widget) }
-            let (layout, content, requirement) = try Self.admitWidget(prepared, data: data, on: device)
+            let (title, layout, data, content, requirement) = try widgetContent(device, current: current, request: request, now: now)
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
             let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || request.staleAfter != nil
@@ -1202,6 +1246,28 @@ extension Store {
             }
             return (id, current == nil)
         }
+    }
+
+    func renderWidget(_ device: Device, name: Name, request: WidgetRequest, now: Int) throws -> RenderInput {
+        try db.transaction {
+            let (_, layout, data, _, _) = try widgetContent(device, current: try widget(device, name: name), request: request, now: now)
+            return .widget(layout: layout, data: data)
+        }
+    }
+
+    private func widgetContent(_ device: Device, current: Widget?, request: WidgetRequest, now: Int) throws
+        -> (title: String, layout: JSONValue, data: JSONValue, content: JSONValue, requirement: Layout.Requirement) {
+        guard let title = request.title ?? current?.title, let template = request.layout ?? current?.layout else {
+            throw APIError(.invalidRequest, "Creating a widget needs a title and a layout.")
+        }
+        var data = request.data ?? current?.data ?? .object([:])
+        for (path, offset) in request.now ?? [:] {
+            do { data = try data.setting(path, to: .number(Double(now) + offset)) }
+            catch { throw APIError(.invalidRequest, "$.now: \(error)") }
+        }
+        let prepared = try expanding(template, on: device) { saved throws(LayoutError) in try PreparedParts(template, saved: saved, for: .widget) }
+        let (layout, content, requirement) = try Self.admitWidget(prepared, data: data, on: device)
+        return (title, layout, data, content, requirement)
     }
 
     private static func admitWidget(_ prepared: PreparedParts, data: JSONValue, on device: Device) throws -> (JSONValue, JSONValue, Layout.Requirement) {

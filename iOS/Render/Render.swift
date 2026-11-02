@@ -93,12 +93,11 @@ final class RenderController: UIViewController {
     }
 
     private func shots(of input: Job.Input, as presentations: [Presentation], in style: UIUserInterfaceStyle, result: inout Result) -> [Shot] {
-        let data = input.data.movingExampleTimes(to: .now)
-        switch input.kind {
-        case .activity:
+        switch input.content {
+        case let .activity(title, layout, data):
             let state: LyktaActivity.ContentState
             do {
-                state = try LyktaActivity.ContentState(title: input.title, layout: input.layout.filled(with: data, for: .activity).json)
+                state = try LyktaActivity.ContentState(title: title, layout: layout.filled(with: data.movingExampleTimes(to: .now), for: .activity).json)
             } catch {
                 result.layoutErrors.append(Result.Failure(input: input.name, error: "\(error)"))
                 return []
@@ -124,14 +123,14 @@ final class RenderController: UIViewController {
                 case .minimal:
                     return Shot(input: input.name, presentation: presentation, idealHeight: nil,
                                 host: Self.host(MinimalBubble(node: layout?.minimal, keyline: keyline).fixedSize(), in: style))
-                case .small, .medium, .large, .circular, .rectangular, .inline:
+                case .small, .medium, .large, .circular, .rectangular, .inline, .banner, .avatar:
                     return nil
                 }
             }
-        case .widget:
+        case let .widget(template, data):
             let layout: WidgetLayout
             do {
-                layout = try WidgetLayout(json: input.layout.filled(with: data, for: .widget).json)
+                layout = try WidgetLayout(json: template.filled(with: data.movingExampleTimes(to: .now), for: .widget).json)
             } catch {
                 result.layoutErrors.append(Result.Failure(input: input.name, error: "\(error)"))
                 return []
@@ -140,6 +139,32 @@ final class RenderController: UIViewController {
                 guard let family = presentation.family, layout.presentations[family] != nil else { return nil }
                 return Shot(input: input.name, presentation: presentation, idealHeight: nil,
                             host: Self.host(WidgetPreview(layout: layout, family: family).fixedSize(), in: style))
+            }
+        case let .notification(sender, body, avatar, image):
+            let source: NotificationAvatar.Source
+            switch avatar {
+            case let .drawing(node)?:
+                do {
+                    source = .drawing(try node.avatarNode())
+                } catch {
+                    result.layoutErrors.append(Result.Failure(input: input.name, error: "\(error)"))
+                    return []
+                }
+            case let .image(data)?: source = .picture(data)
+            case nil: source = .picture(Initials.avatar(of: sender.name, sender: sender.id))
+            }
+            return presentations.compactMap { presentation in
+                switch presentation {
+                case .banner:
+                    Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                         host: Self.host(NotificationCanvas(banner: NotificationBanner(sender: sender.name, text: body, avatar: source, image: image))
+                            .frame(width: Self.width), in: style))
+                case .avatar:
+                    Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                         host: Self.host(NotificationAvatar(avatar: source).fixedSize(), in: style))
+                case .lock, .expanded, .compact, .minimal, .small, .medium, .large, .circular, .rectangular, .inline:
+                    nil
+                }
             }
         }
     }
@@ -217,12 +242,23 @@ private struct LockCanvas: View {
     }
 }
 
+private struct NotificationCanvas: View {
+    let banner: NotificationBanner
+
+    var body: some View {
+        banner
+            .padding(14)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(.rect(cornerRadius: 24, style: .continuous))
+    }
+}
+
 private enum Presentation: String, Codable {
-    case lock, expanded, compact, minimal, small, medium, large, circular, rectangular, inline
+    case lock, expanded, compact, minimal, small, medium, large, circular, rectangular, inline, banner, avatar
 
     var family: WidgetLayout.Family? {
         switch self {
-        case .lock, .expanded, .compact, .minimal: nil
+        case .lock, .expanded, .compact, .minimal, .banner, .avatar: nil
         case .small: .systemSmall
         case .medium: .systemMedium
         case .large: .systemLarge
@@ -239,7 +275,7 @@ private struct Ready: Encodable {
 
 private struct Job: Decodable {
     enum Kind: String, Decodable {
-        case activity, widget
+        case activity, widget, notification
     }
 
     enum Appearance: String, Decodable {
@@ -254,11 +290,56 @@ private struct Job: Decodable {
     }
 
     struct Input: Decodable {
+        enum Content {
+            case activity(title: String, layout: JSONValue, data: JSONValue)
+            case widget(layout: JSONValue, data: JSONValue)
+            case notification(sender: Sender, body: String, avatar: Avatar?, image: Data?)
+        }
+
+        struct Sender: Decodable {
+            let id: String
+            let name: String
+        }
+
+        enum Avatar: Decodable {
+            case drawing(JSONValue)
+            case image(Data)
+
+            init(from decoder: any Decoder) throws {
+                let fields = try decoder.container(keyedBy: CodingKeys.self)
+                if let node = try fields.decodeIfPresent(JSONValue.self, forKey: .drawing) {
+                    self = .drawing(node)
+                } else {
+                    self = .image(try fields.decode(Data.self, forKey: .image))
+                }
+            }
+
+            private enum CodingKeys: CodingKey {
+                case drawing, image
+            }
+        }
+
         let name: String
-        let kind: Kind
-        let title: String
-        let layout: JSONValue
-        let data: JSONValue
+        let content: Content
+
+        init(from decoder: any Decoder) throws {
+            let fields = try decoder.container(keyedBy: CodingKeys.self)
+            name = try fields.decode(String.self, forKey: .name)
+            content = switch try fields.decode(Kind.self, forKey: .kind) {
+            case .activity:
+                .activity(title: try fields.decode(String.self, forKey: .title), layout: try fields.decode(JSONValue.self, forKey: .layout),
+                          data: try fields.decode(JSONValue.self, forKey: .data))
+            case .widget:
+                .widget(layout: try fields.decode(JSONValue.self, forKey: .layout), data: try fields.decode(JSONValue.self, forKey: .data))
+            case .notification:
+                .notification(sender: try fields.decode(Sender.self, forKey: .sender), body: try fields.decode(String.self, forKey: .body),
+                              avatar: try fields.decodeIfPresent(Avatar.self, forKey: .avatar), image: try fields.decodeIfPresent(Data.self, forKey: .image))
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, kind, title, layout, data, sender, body, avatar, image
+        }
     }
 
     let id: String

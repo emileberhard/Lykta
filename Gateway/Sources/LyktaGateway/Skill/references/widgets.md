@@ -116,6 +116,11 @@ data, such as on the Lock Screen while the phone is locked.
 own URL for a part of it, in every Home Screen family and
 `accessoryRectangular`.
 
+`lykta render widgets/{name}` draws every family the body has, as the main
+skill's [Preview](../SKILL.md#preview) describes. It draws the Lock Screen
+sizes in their colors and the Home Screen sizes with their background, so
+check `vibrant` and `accented` on the phone.
+
 The [steps example](../examples/widgets/steps-widget.json) shows every family,
 with the week's chart in the medium and large ones, and renders them all in the
 app's examples.
