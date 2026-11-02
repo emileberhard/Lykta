@@ -2,7 +2,6 @@ import LyktaCore
 import SwiftUI
 
 struct LockScreenCard: View {
-    private static let maximumHeight: CGFloat = 160
     static let textSizes = DynamicTypeSize.large ... .xxxLarge
 
     let state: LyktaActivity.ContentState
@@ -10,10 +9,27 @@ struct LockScreenCard: View {
     let isStale: Bool
 
     var body: some View {
-        LockScreenView(state: state, activity: activity, isStale: isStale)
-            .frame(maxWidth: .infinity, maxHeight: Self.maximumHeight)
-            .clipped()
-            .dynamicTypeSize(Self.textSizes)
+        let capped = CappedHeight(maximum: 160)
+        capped {
+            LockScreenView(state: state, activity: activity, isStale: isStale)
+        }
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .dynamicTypeSize(Self.textSizes)
+    }
+}
+
+struct CappedHeight: SwiftUI.Layout {
+    let maximum: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let ideal = content.sizeThatFits(.unspecified)
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, maximum))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 
