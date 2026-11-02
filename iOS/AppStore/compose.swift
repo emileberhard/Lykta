@@ -5,8 +5,7 @@ import UniformTypeIdentifiers
 
 let canvas = CGSize(width: 1206, height: 2622)
 let captures = URL(filePath: CommandLine.arguments[1])
-let examples = URL(filePath: CommandLine.arguments[2])
-let output = URL(filePath: CommandLine.arguments[3])
+let output = URL(filePath: CommandLine.arguments[2])
 
 func image(_ url: URL) -> NSImage {
     guard let image = NSImage(contentsOf: url) else { fatalError("missing \(url.path)") }
@@ -17,136 +16,68 @@ func capture(_ name: String) -> NSImage {
     image(captures.appending(path: "\(name).png"))
 }
 
-enum Light {
-    case pink, amber, blue
+let paper = [Color(red: 0.969, green: 0.949, blue: 0.914), Color(red: 0.929, green: 0.902, blue: 0.86)]
+let ink = Color(red: 0.12, green: 0.1, blue: 0.09)
 
-    var color: Color {
-        switch self {
-        case .pink: Color(red: 1, green: 0.310, blue: 0.545)
-        case .amber: Color(red: 1, green: 0.690, blue: 0.125)
-        case .blue: Color(red: 0.184, green: 0.482, blue: 1)
-        }
+enum Key {
+    static let amber = Color(red: 1, green: 0.64, blue: 0.1)
+    static let pink = Color(red: 1, green: 0.25, blue: 0.52)
+    static let teal = Color(red: 0.06, green: 0.74, blue: 0.66)
+}
+
+enum DarkKey {
+    static let amber = Color(red: 0.82, green: 0.47, blue: 0)
+    static let pink = Color(red: 0.86, green: 0.12, blue: 0.42)
+    static let teal = Color(red: 0, green: 0.56, blue: 0.5)
+}
+
+struct Magnify: Layout {
+    let scale: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews[0].sizeThatFits(.unspecified)
+        return CGSize(width: size.width * scale, height: size.height * scale)
     }
 
-    func shape(size: CGFloat) -> AnyShape {
-        switch self {
-        case .pink: AnyShape(Circle())
-        case .amber: AnyShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
-        case .blue: AnyShape(Triangle())
-        }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .unspecified)
     }
 }
 
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-            path.closeSubpath()
-        }
-    }
-}
-
-struct Glow: View {
-    let light: Light
-    let x: CGFloat
-    let y: CGFloat
-    let size: CGFloat
-    var opacity = 0.8
-
-    var body: some View {
-        light.shape(size: size)
-            .fill(light.color)
-            .frame(width: size, height: size)
-            .blur(radius: size * 0.22)
-            .opacity(opacity)
-            .position(x: x, y: y)
-            .blendMode(.screen)
-    }
-}
-
-struct Night: View {
-    let glows: [Glow]
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.02, green: 0.024, blue: 0.055), Color(red: 0.045, green: 0.05, blue: 0.1)],
-                           startPoint: .top, endPoint: .bottom)
-            ForEach(glows.indices, id: \.self) { glows[$0] }
-        }
-        .compositingGroup()
-    }
-}
-
-struct Grain: View {
-    var body: some View {
-        Canvas { context, size in
-            var seed: UInt64 = 0x4C796B7461
-            func next() -> UInt64 {
-                seed &+= 0x9E3779B97F4A7C15
-                var z = seed
-                z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
-                z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
-                return z ^ (z >> 31)
-            }
-            for _ in 0..<Int(size.width * size.height / 40) {
-                let value = next()
-                let point = CGPoint(x: Double(value % UInt64(size.width)), y: Double((value >> 20) % UInt64(size.height)))
-                let shade: Color = value >> 63 == 0 ? .white.opacity(0.045) : .black.opacity(0.07)
-                context.fill(Path(CGRect(origin: point, size: CGSize(width: 2, height: 2))), with: .color(shade))
-            }
-        }
-    }
-}
-
-struct Caption: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
-            Text(title)
-                .font(.system(size: 118, weight: .bold).leading(.tight))
-                .tracking(-2.5)
-            Text(subtitle)
-                .font(.system(size: 52, weight: .regular))
-                .foregroundStyle(.white.opacity(0.62))
-        }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 96)
-        .padding(.top, 180)
-    }
-}
-
-struct Slide<Art: View>: View {
-    let title: String
-    let subtitle: String
-    let glows: [Glow]
-    @ViewBuilder let art: Art
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Night(glows: glows)
-            art
-            Caption(title: title, subtitle: subtitle)
-            Grain().blendMode(.overlay)
-        }
-        .frame(width: canvas.width, height: canvas.height)
-        .clipped()
-    }
+struct Mark {
+    let rect: CGRect
+    let color: Color
+    let radius: CGFloat
 }
 
 extension View {
-    func lifted() -> some View {
-        shadow(color: .black.opacity(0.65), radius: 60, y: 34)
+    func magnified(_ scale: CGFloat) -> some View {
+        Magnify(scale: scale) { scaleEffect(scale, anchor: .topLeading) }
     }
 
-    func scaled(_ scale: CGFloat, from size: CGSize) -> some View {
-        frame(width: size.width, height: size.height)
-            .scaleEffect(scale, anchor: .topLeading)
-            .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
+    func marked(_ marks: [Mark]) -> some View {
+        overlay(alignment: .topLeading) {
+            ZStack(alignment: .topLeading) {
+                ForEach(marks.indices, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: marks[index].radius, style: .continuous)
+                        .stroke(marks[index].color, lineWidth: 3)
+                        .frame(width: marks[index].rect.width, height: marks[index].rect.height)
+                        .offset(x: marks[index].rect.minX, y: marks[index].rect.minY)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder func ring(_ color: Color?) -> some View {
+        if let color {
+            overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(color, lineWidth: 2.5).padding(-4))
+        } else {
+            self
+        }
+    }
+
+    func outlined(_ color: Color) -> some View {
+        overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(color, lineWidth: 2.5).padding(-3))
     }
 }
 
@@ -158,45 +89,36 @@ enum Screen {
 struct Phone<Content: View>: View {
     static var size: CGSize { CGSize(width: Screen.size.width + 15, height: Screen.size.height + 15) }
 
-    let scale: CGFloat
-    var showsCamera = true
     @ViewBuilder let content: Content
 
     var body: some View {
         let outer = RoundedRectangle(cornerRadius: Screen.cornerRadius + 7.5, style: .continuous)
         ZStack {
-            outer.fill(LinearGradient(colors: [Color(white: 0.58), Color(white: 0.2), Color(white: 0.1), Color(white: 0.42)],
+            outer.fill(LinearGradient(colors: [Color(white: 0.44), Color(white: 0.17), Color(white: 0.1), Color(white: 0.32)],
                                       startPoint: .topLeading, endPoint: .bottomTrailing))
-            outer.strokeBorder(AngularGradient(colors: [Light.pink.color, Light.amber.color, Light.blue.color, Light.pink.color],
-                                               center: .center), lineWidth: 1.2)
-                .opacity(0.7)
+            outer.strokeBorder(.white.opacity(0.22), lineWidth: 0.8)
             RoundedRectangle(cornerRadius: Screen.cornerRadius + 5, style: .continuous).fill(.black).padding(2.5)
             content
                 .frame(width: Screen.size.width, height: Screen.size.height)
                 .clipShape(RoundedRectangle(cornerRadius: Screen.cornerRadius, style: .continuous))
                 .overlay(alignment: .top) {
-                    if showsCamera {
-                        Capsule().fill(.black).frame(width: 126, height: 37).padding(.top, 11)
-                    }
+                    Capsule().fill(.black).frame(width: 126, height: 37).padding(.top, 11)
                 }
         }
-        .scaled(scale, from: Self.size)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .magnified(2.4)
+        .shadow(color: Color(red: 0.35, green: 0.25, blue: 0.15).opacity(0.28), radius: 50, y: 30)
     }
 }
 
 struct Wallpaper: View {
     var body: some View {
-        Night(glows: [
-            Glow(light: .pink, x: 330, y: 150, size: 420, opacity: 0.55),
-            Glow(light: .blue, x: 40, y: 600, size: 520, opacity: 0.5),
-            Glow(light: .amber, x: 390, y: 860, size: 380, opacity: 0.4),
-        ])
+        Image(nsImage: image(captures.appending(path: "wallpaper.atx"))).resizable().interpolation(.high)
     }
 }
 
 struct StatusBar: View {
     var showsTime = true
-    var symbols = ["cellularbars", "wifi", "battery.100percent"]
 
     var body: some View {
         HStack {
@@ -205,7 +127,7 @@ struct StatusBar: View {
                 .opacity(showsTime ? 1 : 0)
             Spacer()
             HStack(spacing: 6) {
-                ForEach(symbols, id: \.self) { Image(systemName: $0) }
+                ForEach(["cellularbars", "wifi", "battery.100percent"], id: \.self) { Image(systemName: $0) }
             }
             .font(.system(size: 15, weight: .semibold))
         }
@@ -223,19 +145,20 @@ struct LockScreen<Stack: View>: View {
         ZStack(alignment: .top) {
             Wallpaper()
             VStack(spacing: 0) {
-                StatusBar(showsTime: false)
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .padding(.top, 10)
-                Text("Sunday, October 25")
-                    .font(.system(size: 20, weight: .semibold))
-                    .opacity(0.85)
-                    .padding(.top, 12)
-                Text("9:41")
-                    .font(.system(size: 108, weight: .bold))
-                    .tracking(-1)
-                    .opacity(0.94)
-                    .padding(.top, -8)
+                VStack(spacing: 0) {
+                    StatusBar(showsTime: false)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .padding(.top, 10)
+                    Text("Sunday, October 25")
+                        .font(.system(size: 20, weight: .semibold))
+                        .padding(.top, 12)
+                    Text("9:41")
+                        .font(.system(size: 108, weight: .bold))
+                        .tracking(-1)
+                        .padding(.top, -8)
+                }
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 1)
                 VStack(spacing: 10) { stack }
                     .padding(.top, 22)
                 Spacer(minLength: 0)
@@ -268,17 +191,21 @@ struct QuickActions: View {
     }
 }
 
-struct Platter: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .background(Color(red: 0.07, green: 0.07, blue: 0.1).opacity(0.86))
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+struct HomeScreen<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Wallpaper()
+            StatusBar()
+            content.padding(.top, 72)
+        }
     }
 }
 
 struct Card: View {
     let name: String
+    var marks: [Mark] = []
 
     var body: some View {
         let image = capture("\(name).lock")
@@ -286,7 +213,28 @@ struct Card: View {
             .resizable()
             .interpolation(.high)
             .frame(width: image.size.width, height: image.size.height)
-            .modifier(Platter())
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .marked(marks)
+    }
+}
+
+struct HomeWidget: View {
+    let name: String
+    var marks: [Mark] = []
+
+    var body: some View {
+        let image = capture(name)
+        VStack(spacing: 5) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: image.size.width, height: image.size.height)
+                .marked(marks)
+            Text("Lykta")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+        }
     }
 }
 
@@ -300,151 +248,188 @@ struct AppIcon: View {
     }
 }
 
+enum BannerPart {
+    case sender, body
+}
+
 struct Banner: View {
     let example: String
     var time = "now"
+    var marks: [BannerPart: Color] = [:]
 
     var body: some View {
-        let request = try! JSONSerialization.jsonObject(with: Data(contentsOf: examples.appending(path: "notifications/\(example).json"))) as! [String: Any]
+        let request = try! JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: "cards/notifications/\(example).json"))) as! [String: Any]
         let sender = request["sender"] as! [String: Any]
         HStack(spacing: 12) {
             Image(nsImage: capture("\(example).avatar"))
                 .resizable()
+                .interpolation(.high)
                 .frame(width: 40, height: 40)
                 .overlay(alignment: .bottomTrailing) {
                     AppIcon().frame(width: 18, height: 18).offset(x: 4, y: 4)
                 }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: marks.count == 2 ? 10 : 2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(sender["name"] as! String).font(.system(size: 15, weight: .semibold))
+                    Text(sender["name"] as! String).font(.system(size: 15, weight: .semibold)).ring(marks[.sender])
                     Spacer()
                     Text(time).font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
                 }
-                Text(request["body"] as! String).font(.system(size: 15)).lineLimit(3)
-            }
-            if let attachment = request["image"] as? String {
-                Image(nsImage: image(examples.appending(path: "notifications/\(attachment)")))
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(request["body"] as! String).font(.system(size: 15)).lineLimit(3).ring(marks[.body])
             }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .frame(width: 370)
-        .modifier(Platter())
+        .background(Color(red: 0.07, green: 0.07, blue: 0.1).opacity(0.86))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
     }
 }
 
-struct Island: View {
-    let name: String
-    let presentation: String
+typealias Phrase = (String, Color?)
+
+struct Headline: View {
+    let phrases: [Phrase]
+    var size: CGFloat = 88
 
     var body: some View {
-        let image = capture("\(name).\(presentation)")
-        Image(nsImage: image)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: image.size.width, height: image.size.height)
+        let text = (phrases + [("”", nil)]).reduce(AttributedString()) { result, phrase in
+            var run = AttributedString(phrase.0)
+            run.foregroundColor = phrase.1 ?? ink
+            return result + run
+        }
+        ZStack(alignment: .topLeading) {
+            Text("“").foregroundStyle(DarkKey.pink).alignmentGuide(.leading) { $0[.trailing] }
+            Text(text)
+        }
+        .font(.system(size: size, weight: .bold).leading(.tight))
+        .tracking(-2.2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 104)
     }
 }
 
-struct Faded: ViewModifier {
-    let height: CGFloat
+struct Reply: View {
+    let text: String
 
-    func body(content: Content) -> some View {
-        content.mask(alignment: .top) {
-            LinearGradient(stops: [.init(color: .black, location: 0.6), .init(color: .clear, location: 1)],
-                           startPoint: .top, endPoint: .bottom)
-                .frame(height: height)
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(ink, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your agent")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.45))
+                Text(text)
+                    .font(.system(size: 17))
+                    .foregroundStyle(ink.opacity(0.78))
+                    .fixedSize()
+            }
+        }
+        .magnified(2.7)
+        .padding(.leading, 104)
+    }
+}
+
+struct Paper<Words: View, Screen: View>: View {
+    let phoneTop: CGFloat
+    @ViewBuilder let words: Words
+    @ViewBuilder let screen: Screen
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: paper, startPoint: .top, endPoint: .bottom)
+            Phone { screen }
+                .frame(width: canvas.width)
+                .offset(y: phoneTop)
+            words
+        }
+        .frame(width: canvas.width, height: canvas.height)
+        .clipped()
+    }
+}
+
+struct Exchange: View {
+    let phrases: [Phrase]
+    let reply: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 56) {
+            Headline(phrases: phrases)
+            Reply(text: reply)
         }
     }
+}
+
+func request<Screen: View>(_ phrases: [Phrase], reply: String, phoneTop: CGFloat = 860, @ViewBuilder screen: () -> Screen) -> AnyView {
+    AnyView(Paper(phoneTop: phoneTop) {
+        Exchange(phrases: phrases, reply: reply).padding(.top, 160)
+    } screen: {
+        screen()
+    })
 }
 
 let slides: [(String, AnyView)] = [
-    ("1-agents", AnyView(Slide(title: "Watch your\nagents work", subtitle: "Live Activities on your Lock Screen", glows: [
-        Glow(light: .pink, x: 1060, y: 520, size: 1100, opacity: 0.85),
-        Glow(light: .amber, x: 120, y: 1500, size: 900, opacity: 0.7),
-        Glow(light: .blue, x: 700, y: 2550, size: 1300, opacity: 0.85),
-    ]) {
-        Phone(scale: 2.43) {
-            LockScreen {
-                Card(name: "agent-question")
-                Card(name: "app-review")
-                Card(name: "homelab")
+    ("1-three", request([("Help me keep\ntrack of ", nil), ("Dad’s train", DarkKey.teal), (",\n", nil), ("the apple pie", DarkKey.amber), (" and\n", nil),
+                         ("Mia’s swim heat", DarkKey.pink), (".", nil)], reply: "Done. All three are on\nyour Lock Screen.", phoneTop: 900) {
+        LockScreen {
+            Card(name: "dads-train").outlined(Key.teal)
+            Card(name: "apple-pie").outlined(Key.amber)
+            Card(name: "swim-meet").outlined(Key.pink)
+        }
+    }),
+    ("2-launch", request([("Count down to ", nil), ("tonight’s\nlaunch", DarkKey.amber), (", with ", nil), ("the weather\nodds", DarkKey.teal), (", and ", nil),
+                          ("draw its path", DarkKey.pink), (".", nil)], reply: "It’s set. It counts\ndown on its own.") {
+        LockScreen {
+            Card(name: "launch", marks: Marks.launch)
+        }
+    }),
+    ("3-passport", AnyView(Paper(phoneTop: 1240) {
+        VStack(alignment: .leading, spacing: 26) {
+            Text("“Track my passport renewal.”")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(ink.opacity(0.5))
+            Card(name: "passport-before").magnified(1.5)
+        }
+        .padding(.leading, 104)
+        .padding(.top, 140)
+        Exchange(phrases: [("Now ", nil), ("show me\nevery step", DarkKey.amber), (".", nil)], reply: "Done. Same passport,\nevery step.")
+            .padding(.top, 560)
+    } screen: {
+        LockScreen {
+            Card(name: "passport-steps", marks: Marks.passport)
+        }
+    })),
+    ("4-lake", request([("I want to know\n", nil), ("how warm the lake is", DarkKey.teal), ("\nand ", nil), ("whether to swim", DarkKey.amber), (".", nil)],
+                       reply: "Ready. Add the Lykta widget\nand pick Lake.") {
+        HomeScreen {
+            VStack(spacing: 20) {
+                HStack(spacing: 24) {
+                    HomeWidget(name: "lake.systemSmall", marks: Marks.lake)
+                    HomeWidget(name: "pumpkin-patch.systemSmall")
+                }
+                HomeWidget(name: "dinners.systemMedium")
             }
         }
-        .lifted()
-        .offset(x: 96, y: 720)
-    })),
-    ("2-notifications", AnyView(Slide(title: "Hear back the\nmoment it’s done", subtitle: "Agents message you like a person would", glows: [
-        Glow(light: .amber, x: 980, y: 640, size: 1250, opacity: 0.9),
-        Glow(light: .pink, x: 80, y: 2150, size: 950, opacity: 0.65),
-        Glow(light: .blue, x: 1150, y: 2650, size: 900, opacity: 0.55),
-    ]) {
-        Phone(scale: 2.3) {
-            LockScreen {
-                Banner(example: "tests-passed", time: "12m ago")
-                Card(name: "orion-return")
-            }
+    }),
+    ("5-sneakers", request([("Tell me when ", nil), ("the trail\nrunners", DarkKey.teal), (" are back in\n", nil), ("size 10", DarkKey.pink), (".", nil)],
+                           reply: "I’ll message you the\nmoment they’re back.") {
+        LockScreen {
+            Banner(example: "sneaker-drop", marks: [.sender: Key.teal, .body: Key.pink])
+            Banner(example: "vet", time: "2h ago")
         }
-        .lifted()
-        .offset(x: 127, y: 900)
-        Banner(example: "print-finished")
-            .scaleEffect(2.75, anchor: .topLeading)
-            .lifted()
-            .offset(x: 94, y: 730)
-    })),
-    ("3-dynamic-island", AnyView(Slide(title: "Progress\nat a glance", subtitle: "Right in the Dynamic Island", glows: [
-        Glow(light: .blue, x: 640, y: 1250, size: 1450, opacity: 0.9),
-        Glow(light: .pink, x: 60, y: 420, size: 760, opacity: 0.6),
-        Glow(light: .amber, x: 1150, y: 2450, size: 950, opacity: 0.55),
-    ]) {
-        Island(name: "orion-return", presentation: "expanded")
-            .scaleEffect(3, anchor: .topLeading)
-            .lifted()
-            .offset(x: 48, y: 690)
-        Phone(scale: 2.75, showsCamera: false) {
-            ZStack(alignment: .top) {
-                Image(nsImage: capture("home")).resizable().blur(radius: 9).overlay(.black.opacity(0.3))
-                StatusBar(symbols: ["wifi", "battery.100percent"])
-                Island(name: "solar-eclipse", presentation: "compact").padding(.top, 11)
-            }
-        }
-        .modifier(Faded(height: 820))
-        .lifted()
-        .offset(x: 30, y: 1560)
-    })),
-    ("4-layouts", AnyView(Slide(title: "Designed by\nyour agent", subtitle: "Any layout, without an app update", glows: [
-        Glow(light: .pink, x: 640, y: 1550, size: 1500, opacity: 0.75),
-        Glow(light: .amber, x: 1120, y: 820, size: 760, opacity: 0.6),
-        Glow(light: .blue, x: 80, y: 2350, size: 950, opacity: 0.65),
-    ]) {
-        ForEach(Array(["solar-eclipse", "recipe-steps", "movie-night", "homelab", "puppy-potty"].enumerated()), id: \.offset) { index, name in
-            Card(name: name)
-                .scaled(2.5, from: capture("\(name).lock").size)
-                .rotationEffect(.degrees(index.isMultiple(of: 2) ? -2.5 : 2))
-                .lifted()
-                .offset(x: index.isMultiple(of: 2) ? -40 : 320, y: 660 + CGFloat(index) * 385)
-        }
-    })),
-    ("5-setup", AnyView(Slide(title: "Set up in\none paste", subtitle: "Copy the setup and hand it to your agent", glows: [
-        Glow(light: .blue, x: 1080, y: 1300, size: 1100, opacity: 0.8),
-        Glow(light: .pink, x: 120, y: 1000, size: 950, opacity: 0.7),
-        Glow(light: .amber, x: 600, y: 2600, size: 1100, opacity: 0.6),
-    ]) {
-        Phone(scale: 2.15) {
-            ZStack(alignment: .top) {
-                Image(nsImage: capture("connect")).resizable().interpolation(.high)
-                StatusBar()
-            }
-        }
-        .lifted()
-        .offset(x: 155, y: 640)
-    })),
+    }),
 ]
+
+enum Marks {
+    static let launch: [Mark] = []
+    static let passport: [Mark] = []
+    static let lake: [Mark] = []
+}
 
 MainActor.assumeIsolated {
     var drawn = Set<Data>()
