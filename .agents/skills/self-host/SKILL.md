@@ -91,8 +91,8 @@ printf 'LYKTA_URL=https://lykta.example.com\nLYKTA_RENDER_TOKEN=%s\n' "$token" >
 deploy/mac-render/install
 ```
 
-The worker runs from its own checkout of the newest release and moves to each
-new release by itself. Without a worker, agents look at the phone instead.
+The worker runs from its own checkout of the release the gateway reports and
+follows the gateway to each new release by itself. Without a worker, agents look at the phone instead.
 
 ## App
 

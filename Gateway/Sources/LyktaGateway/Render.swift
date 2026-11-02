@@ -117,6 +117,7 @@ actor RenderQueue {
     }
 
     func submit(device: UUID, name: Name, input: RenderInput, presentations: [String]) throws(APIError) -> UUID {
+        removeExpiredImages()
         guard let lastPoll, ContinuousClock.now - lastPoll < Self.workerTimeout else {
             throw APIError(.renderUnavailable, "No renderer is connected to this gateway. Send the PUT and look at the phone instead.")
         }
@@ -143,6 +144,7 @@ actor RenderQueue {
 
     func claim() -> RenderJob? {
         lastPoll = .now
+        removeExpiredImages()
         guard !pending.isEmpty else { return nil }
         let job = pending.removeFirst()
         claimed[job.id] = job
@@ -155,12 +157,11 @@ actor RenderQueue {
         }
         switch result.outcome {
         case let .image(bytes):
-            let now = ContinuousClock.now
-            images = images.filter { $0.value.expires > now }
+            removeExpiredImages()
             while images.count >= Self.maximumImages, let oldest = images.min(by: { $0.value.expires < $1.value.expires }) {
                 images[oldest.key] = nil
             }
-            images[id] = Image(device: job.device, bytes: bytes, expires: now + Self.imageLifetime)
+            images[id] = Image(device: job.device, bytes: bytes, expires: .now + Self.imageLifetime)
             finished[id] = .success(RenderReply(id: id, warnings: result.warnings))
         case let .failure(message):
             finished[id] = .failure(APIError(.renderFailed, "The renderer could not draw it: \(message)"))
@@ -168,9 +169,15 @@ actor RenderQueue {
     }
 
     func image(_ id: UUID, device: UUID) throws(APIError) -> [UInt8] {
-        guard let image = images[id], image.device == device, image.expires > .now else {
+        removeExpiredImages()
+        guard let image = images[id], image.device == device else {
             throw APIError(.notFound, "No render has the id \(id); renders are kept for ten minutes.")
         }
         return image.bytes
+    }
+
+    private func removeExpiredImages() {
+        let now = ContinuousClock.now
+        images = images.filter { $0.value.expires > now }
     }
 }

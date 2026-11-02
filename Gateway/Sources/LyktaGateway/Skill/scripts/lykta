@@ -211,6 +211,7 @@ render() {
 	-) image=lykta.render.png ;;
 	*) case ${2##*/} in *.*) image=${2%.*}.render.png ;; *) image=$2.render.png ;; esac ;;
 	esac
+	case $image in *[[:cntrl:]]*) fail "name the body file without control characters, such as tabs or line breaks" 2 ;; esac
 	dir=$(dirname -- "$image")
 	api "$1"
 	call POST "/v1/render/${path#/v1/}" -H 'Content-Type: application/json' --data-binary "@$work/body"

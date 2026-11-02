@@ -267,61 +267,87 @@ actor Store {
     }
 
     func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
-        try db.transaction {
-            let current = try liveActivity(device, name: name)
-            if let expected = request.ifRevision, current?.revision != expected {
-                throw APIError(.conflict, "The activity is no longer at revision \(expected). Read it again, then send your change.")
+        try db.transaction { try putting(device, name: name, request: request, maximumLiveActivities: maximumLiveActivities, now: now) }
+    }
+
+    func renderActivity(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> RenderInput {
+        do {
+            try db.transaction { () throws -> Never in
+                let (activity, _) = try putting(device, name: name, request: request, maximumLiveActivities: maximumLiveActivities, now: now)
+                throw Previewed(input: .activity(title: activity.title, layout: try decode(activity.layout), data: try decode(activity.data)))
             }
-            let (title, expandedLayout, data, filled, state) = try activityContent(device, current: current, request: request, now: now)
-            let content = try Self.encoded(state)
-            let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
-            let staleAfter = request.staleAfter ?? current?.staleAfter
-            let relevance = request.relevance ?? current?.relevance
-            let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
-            let id: UUID
-            var stored = state
-            if let current {
-                id = current.id
-                let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
-                    || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
-                if changed {
-                    try db.run("""
-                        UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
-                          alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
-                        """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
-                } else {
-                    stored = try current.contentState()
-                }
-            } else {
-                guard device.pushToken != nil else {
-                    throw APIError(.deviceNotReady, "The phone has not shared its push token yet. Open Lykta on the phone.")
-                }
-                let live = try count(db.query("SELECT count(*) AS n FROM activities WHERE device_id = ? AND phase IN ('starting', 'live')", device.id))
-                guard live < maximumLiveActivities else {
-                    throw APIError(.tooManyActivities, "End an activity before starting another; the limit is \(maximumLiveActivities).")
-                }
-                id = UUID()
-                try db.run("""
-                    INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, ends_at, relevance, alert,
-                      revision, delivery, created_at, updated_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?)
-                    """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
-            }
-            let activity = try self.activity(id)
-            let size = try Self.measure(activity, contentState: stored, filled: filled, on: device, now: now)
-            try record("activity.put", device: device.id, activity: id, [
-                "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
-                "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
-                "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
-            ])
-            return (activity, size)
+        } catch let previewed as Previewed {
+            return previewed.input
         }
     }
 
-    func renderActivity(_ device: Device, name: Name, request: ActivityRequest, now: Int) throws -> RenderInput {
-        try db.transaction {
-            let (title, layout, data, _, _) = try activityContent(device, current: try liveActivity(device, name: name), request: request, now: now)
-            return .activity(title: title, layout: layout, data: data)
+    private struct Previewed: Error {
+        let input: RenderInput
+    }
+
+    private func putting(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
+        let current = try liveActivity(device, name: name)
+        if let expected = request.ifRevision, current?.revision != expected {
+            throw APIError(.conflict, "The activity is no longer at revision \(expected). Read it again, then send your change.")
         }
+        guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
+            throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
+        }
+        var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
+        for (path, offset) in request.now ?? [:] {
+            do { data = try data.setting(path, to: .number(Double(now) + offset)) }
+            catch { throw APIError(.invalidRequest, "now: \(error)") }
+        }
+        let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
+        let expandedLayout = prepared.value
+        let state: LyktaActivity.ContentState
+        let filled: JSONValue
+        do {
+            filled = try prepared.filled(with: data)
+            state = try LyktaActivity.ContentState(title: title, layout: filled.json)
+        } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
+        try Self.admit(state, on: device)
+        let content = try Self.encoded(state)
+        let alert = try request.alert.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
+        let staleAfter = request.staleAfter ?? current?.staleAfter
+        let relevance = request.relevance ?? current?.relevance
+        let endsAt = request.endAfter.map { now + $0 } ?? current?.endsAt
+        let id: UUID
+        var stored = state
+        if let current {
+            id = current.id
+            let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
+                || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
+            if changed {
+                try db.run("""
+                    UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
+                      alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
+                    """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
+            } else {
+                stored = try current.contentState()
+            }
+        } else {
+            guard device.pushToken != nil else {
+                throw APIError(.deviceNotReady, "The phone has not shared its push token yet. Open Lykta on the phone.")
+            }
+            let live = try count(db.query("SELECT count(*) AS n FROM activities WHERE device_id = ? AND phase IN ('starting', 'live')", device.id))
+            guard live < maximumLiveActivities else {
+                throw APIError(.tooManyActivities, "End an activity before starting another; the limit is \(maximumLiveActivities).")
+            }
+            id = UUID()
+            try db.run("""
+                INSERT INTO activities (id, device_id, name, phase, title, layout, data, content, stale_after, ends_at, relevance, alert,
+                  revision, delivery, created_at, updated_at) VALUES (?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?)
+                """, id, device.id, name, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, now)
+        }
+        let activity = try self.activity(id)
+        let size = try Self.measure(activity, contentState: stored, filled: filled, on: device, now: now)
+        try record("activity.put", device: device.id, activity: id, [
+            "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
+            "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+            "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
+        ])
+        return (activity, size)
     }
 
     func renderPart(_ device: Device, name: Name, node: JSONValue) throws -> RenderInput {
@@ -334,27 +360,6 @@ actor Store {
             try Self.admit(state, on: device)
             return .activity(title: name.rawValue, layout: layout, data: .object([:]))
         }
-    }
-
-    private func activityContent(_ device: Device, current: Activity?, request: ActivityRequest, now: Int) throws
-        -> (title: String, layout: JSONValue, data: JSONValue, filled: JSONValue, state: LyktaActivity.ContentState) {
-        guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
-            throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
-        }
-        var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
-        for (path, offset) in request.now ?? [:] {
-            do { data = try data.setting(path, to: .number(Double(now) + offset)) }
-            catch { throw APIError(.invalidRequest, "now: \(error)") }
-        }
-        let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
-        let state: LyktaActivity.ContentState
-        let filled: JSONValue
-        do {
-            filled = try prepared.filled(with: data)
-            state = try LyktaActivity.ContentState(title: title, layout: filled.json)
-        } catch let error as LayoutError { throw APIError(.invalidLayout, error.description) }
-        try Self.admit(state, on: device)
-        return (title, prepared.value, data, filled, state)
     }
 
     func attempted(_ activity: Activity, now: Int) throws -> Bool {

@@ -52,6 +52,7 @@ struct RenderTests {
 
     @Test(arguments: [
         ("/v1/render/activities/deploy", ["title": "Deploy", "layout": ["lockScreen": "Hi"]] as JSONValue, "invalid_layout"),
+        ("/v1/render/activities/deploy", ["title": "Deploy", "layout": GatewayTests.oversized] as JSONValue, "payload_too_large"),
         ("/v1/render/activities/deploy", ["title": "Deploy", "layout": ["lockScreen": ["use": "missing"], "compactLeading": "", "compactTrailing": "", "minimal": ""]] as JSONValue, "invalid_layout"),
         ("/v1/render/widgets/steps", ["title": "Steps"] as JSONValue, "invalid_request"),
         ("/v1/render/notifications/done", ["sender": ["id": "bot", "name": "Bot"], "body": "Done", "image": "m_0123456789abcdef0123456789abcdef"] as JSONValue, "invalid_request"),

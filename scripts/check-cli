@@ -110,6 +110,8 @@ for shell in sh pwsh; do
 	(cd "$HOME" && printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring"}' | expect '{"image":"lykta.render.png",' 0 cli render notifications/ring)
 	cmp "$work/drawn.png" "$HOME/lykta.render.png"
 	printf '{"title": "Broken", "layout": {}}' | expect 'refused with HTTP 400' 1 cli render activities/broken
+	cp "$skill/examples/printer.json" "$HOME/tab	name.json"
+	expect 'without control characters' 2 cli render activities/printer "$HOME/tab	name.json"
 	expect 'm_' 0 cli media "$skill/examples/notifications/doorbell.wav"
 	sound=$(cat "$work/out")
 	printf '{"sender": {"id": "door", "name": "Door"}, "body": "Ring", "sound": "%s"}' "$sound" |

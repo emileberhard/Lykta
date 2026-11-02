@@ -20,7 +20,7 @@ cat >"$agent" <<PLIST
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>git fetch --quiet --tags --prune origin &amp;&amp; tag=\$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1) &amp;&amp; git -c advice.detachedHead=false checkout --quiet --force "\$tag" &amp;&amp; exec scripts/render --worker</string>
+    <string>url=\$(sed -n 's/^LYKTA_URL=//p' "\$HOME/.config/lykta/render-worker.env"); version=\$(curl -fsS --max-time 10 "\$url/v1/version" | sed -n 's/^{"version":"\([0-9]*\.[0-9]*\.[0-9]*\)"}\$/\1/p'); git fetch --quiet --tags origin; [ -z "\$version" ] || git -c advice.detachedHead=false checkout --quiet --force "refs/tags/\$version"; exec scripts/render --worker</string>
   </array>
   <key>WorkingDirectory</key><string>$checkout</string>
   <key>EnvironmentVariables</key>
@@ -36,4 +36,4 @@ cat >"$agent" <<PLIST
 PLIST
 launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || :
 launchctl bootstrap "gui/$(id -u)" "$agent"
-echo "install: $label renders for the gateway in $settings from the newest release in $checkout; its log is $log"
+echo "install: $label renders for the gateway in $settings from the release it runs, in $checkout; its log is $log"

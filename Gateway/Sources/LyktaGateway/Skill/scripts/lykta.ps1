@@ -303,6 +303,7 @@ function Invoke-Render([string[]]$Arguments, $Piped) {
     if ($Arguments.Count -lt 1 -or $Arguments.Count -gt 2) { Fail 'usage: lykta render PATH [FILE], with the JSON body put would send in FILE or piped in' 2 }
     $body = Read-Body $Arguments $Piped
     $image = if ($Arguments.Count -eq 2) { [IO.Path]::ChangeExtension($Arguments[1], '.render.png') } else { 'lykta.render.png' }
+    if ($image -match '\p{Cc}') { Fail 'name the body file without control characters, such as tabs or line breaks' 2 }
     $target = [IO.Path]::GetFullPath([IO.Path]::Combine((Get-Location).ProviderPath, $image))
     $answer = Invoke-Gateway 'POST' "/v1/render/$((Get-ApiPath $Arguments[0]).Substring(4))" { [System.Net.Http.StringContent]::new($body, [Text.UTF8Encoding]::new($false), 'application/json') }
     if ($answer -notmatch '^\{"id":"([^"]*)",') { Fail "the gateway answered without a render id: $answer" 3 }

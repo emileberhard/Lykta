@@ -236,9 +236,9 @@ render engine in light and dark, and answers with one sheet and a warning for
 content taller than the system shows. The worker reaches out, so the Mac
 needs no inbound port, and the gateway's `RenderQueue` holds jobs and images
 in memory only: at most 16 waiting, two per phone, each image for ten minutes
-and only for the phone that asked. The worker follows the newest release tag
-by itself instead of being deployed by the release, so a release never waits
-on the Mac; a gateway without a worker answers `render_unavailable`, and the
+and only for the phone that asked. The worker follows the release its gateway
+reports instead of being deployed by the release, so a release never waits
+on the Mac and the renderer draws what its gateway admits; a gateway without a worker answers `render_unavailable`, and the
 agent falls back to the phone. Rendering on the phone was the alternative; it
 needs the app open and the user present. The engine draws the gallery's
 views, so the phone stays the judge of the final look.

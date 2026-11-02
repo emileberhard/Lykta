@@ -28,7 +28,7 @@ boundary below. `CLAUDE.md` is a symlink to this file.
 | `.xcode-version`, `scripts/select-xcode` | The Xcode version CI and releases require |
 | `iOS/Config/entitlements.json`, `scripts/sign-bundles` | The entitlements every shipping bundle claims before export and must retain afterwards |
 | `scripts/render`, `iOS/Render`, `iOS/Widgets/RenderPreviews.swift` | The render tool; its engine, `LyktaRender`, a Mac Catalyst app that draws requests through `iOS/Previews` and answers on its standard output; its `--worker` mode, which draws the gateway's previews; and the activity and widget previews it drives with `--xcode`, which show the layouts staged in `.local/render` |
-| `deploy/mac-render` | The LaunchAgent that keeps a render worker running on a Mac from the newest release |
+| `deploy/mac-render` | The LaunchAgent that keeps a render worker running on a Mac from the release its gateway runs |
 | `evals`, `scripts/eval-metrics` | The [agent runner](docs/evals.md): Harbor tasks that give a fresh agent the app's setup paste and one request, against `lykta-gateway simulate`, the binary checks that read its gateway afterwards and the script that sums up each job's tokens and timings |
 
 ## Invariants

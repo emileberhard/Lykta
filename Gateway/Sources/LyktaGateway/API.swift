@@ -236,7 +236,8 @@ struct API: Sendable {
             let name = try Self.name(path[3])
             let (input, presentations): (RenderInput, [String]) = switch path[2] {
             case "activities":
-                (try await store.renderActivity(device, name: name, request: try Self.activityRequest(request.body), now: now), ["lock", "expanded", "compact", "minimal"])
+                (try await store.renderActivity(device, name: name, request: try Self.activityRequest(request.body), maximumLiveActivities: maximumLiveActivities, now: now),
+                 ["lock", "expanded", "compact", "minimal"])
             case "widgets":
                 (try await store.renderWidget(device, name: name, request: try Self.decode(request.body), now: now),
                  ["small", "medium", "large", "circular", "rectangular", "inline"])
