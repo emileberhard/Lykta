@@ -38,6 +38,7 @@ jobs:
           persist-credentials: false
       - run: scripts/select-xcode
       - run: xcodebuild -quiet -project iOS/Lykta.xcodeproj -scheme Lykta -configuration Debug -destination generic/platform=iOS -derivedDataPath "${{ runner.temp }}/build-${{ github.run_id }}-${{ github.run_attempt }}" -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build
+      - run: xcodebuild -quiet -project iOS/Lykta.xcodeproj -scheme LyktaRender -configuration Debug -destination 'generic/platform=macOS,variant=Mac Catalyst' -derivedDataPath "${{ runner.temp }}/build-${{ github.run_id }}-${{ github.run_attempt }}" -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build
       - name: Remove build output
         if: always()
         run: rm -rf "${{ runner.temp }}/build-${{ github.run_id }}-${{ github.run_attempt }}"

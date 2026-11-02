@@ -1,5 +1,5 @@
 import Foundation
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 #endif
 
@@ -108,6 +108,6 @@ public struct LyktaActivity: Codable, Hashable, Sendable {
     }
 }
 
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 extension LyktaActivity: ActivityAttributes {}
 #endif

@@ -285,7 +285,11 @@ private struct ConditionalNodeView: View {
     @Environment(\.isActivityStale) private var isStale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    #if targetEnvironment(macCatalyst)
+    private let isFullscreen = false
+    #else
     @Environment(\.isActivityFullscreen) private var isFullscreen
+    #endif
     @Environment(\.isDynamicIslandLimitedInWidth) private var isLimitedInWidth
     @Environment(\.widgetRenderingMode) private var renderingMode
     @Environment(\.showsWidgetContainerBackground) private var showsBackground

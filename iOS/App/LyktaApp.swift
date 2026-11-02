@@ -9,7 +9,7 @@ struct LyktaApp: App {
 
     init() {
         #if DEBUG
-        if Capture.directory != nil || Render.directory != nil { return }
+        if Capture.directory != nil { return }
         #endif
         model.start()
         let model = model
@@ -21,8 +21,6 @@ struct LyktaApp: App {
             #if DEBUG
             if let directory = Capture.directory {
                 CaptureView(directory: directory)
-            } else if let directory = Render.directory {
-                RenderHost(directory: directory)
             } else {
                 AppView(model: model)
             }

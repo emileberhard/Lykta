@@ -11,7 +11,7 @@ test:
 gateway:
     swift run --package-path Gateway LyktaGateway
 
-# Render layouts with Xcode previews: files, directories, inline JSON or - for stdin
+# Render layouts as PNGs: files, directories, inline JSON or - for stdin
 [positional-arguments]
 render *args:
     @scripts/render "$@"
@@ -40,6 +40,7 @@ evals *args: image
     [ -d ".local/evals/$job" ] && scripts/eval-metrics ".local/evals/$job"
     exit $status
 
-# Compile the app and its extensions for iOS without signing
+# Compile the app and its extensions for iOS, and the renderer for Mac Catalyst, without signing
 ios:
     xcodebuild -project iOS/Lykta.xcodeproj -scheme Lykta -destination 'generic/platform=iOS' -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates CODE_SIGNING_ALLOWED=NO build
+    xcodebuild -project iOS/Lykta.xcodeproj -scheme LyktaRender -destination 'generic/platform=macOS,variant=Mac Catalyst' -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates CODE_SIGNING_ALLOWED=NO build

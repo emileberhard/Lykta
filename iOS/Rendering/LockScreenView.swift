@@ -6,7 +6,12 @@ struct LockScreenView: View {
     let state: LyktaActivity.ContentState
     let activity: UUID?
     let isStale: Bool
+    #if targetEnvironment(macCatalyst)
+    private let isSmall = false
+    #else
     @Environment(\.activityFamily) private var family
+    private var isSmall: Bool { family == .small }
+    #endif
 
     var body: some View {
         content
@@ -18,7 +23,9 @@ struct LockScreenView: View {
                         .accessibilityLabel("Out of date")
                 }
             }
+            #if !targetEnvironment(macCatalyst)
             .activityBackgroundTint(state.layout?.background?.value)
+            #endif
             .widgetURL(state.layout?.link)
     }
 
@@ -28,9 +35,9 @@ struct LockScreenView: View {
 
     @ViewBuilder private var content: some View {
         if let layout = state.layout {
-            if family == .small, let small = layout.small {
+            if isSmall, let small = layout.small {
                 Root(node: small, target: target, isStale: isStale)
-            } else if family == .small {
+            } else if isSmall {
                 HStack {
                     Root(node: layout.compactLeading, target: target, isStale: isStale)
                     Spacer(minLength: 4)

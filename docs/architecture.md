@@ -199,23 +199,27 @@ is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
 
-**`just render` draws through a resident app.** Xcode's previews build and
+**`just render` draws through a resident Mac app.** Xcode's previews build and
 launch a preview host for every image, about eight seconds each, although a
-layout is only data. The render engine is a Debug mode of the app,
-`LYKTA_RENDER`, that stays running on a dedicated simulator and draws each
-request through the gallery's views, so one request of many inputs takes about
-a second. It captures with `drawHierarchy`, because ImageRenderer draws
-placeholders for UIKit-backed views such as linear progress and switches.
-`scripts/render` keys the built app by the sources that draw it and the Xcode
-version, and its supervisor owns the simulator and the app's lifetime. Requests
-and results move through one folder per key by atomic renames: the app claims a
-request by renaming it, the supervisor fails a request whose app exits or stalls
-and restarts the app, and it shuts the simulator down when idle. The engine
-draws what the gallery draws, not the system's containers, so StandBy and the
-Smart Stack, the lightened Lock Screen tints and vibrant accessory widgets
-remain Xcode's, through `--xcode`. The engine never ships, and Apple licenses
-the simulator only for developing apps, so rendering for agents through the
-gateway needs its own decision.
+layout is only data. The render engine is `LyktaRender`, a Mac Catalyst app
+that compiles `Rendering` and the gallery's views in `iOS/Previews`, stays
+running and draws each request in an iPhone's width, scale and default text
+size, so one request of many inputs takes about a second. It runs sandboxed
+without file access: `scripts/render` writes requests to its standard input and
+reads one line of PNGs per request from its standard output, and the app orders
+its window out so nothing appears on screen. It captures with `drawHierarchy`,
+because ImageRenderer draws placeholders for UIKit-backed views such as linear
+progress and switches. `scripts/render` keys the built app by the sources that
+draw it and the Xcode version, and its supervisor owns the app's lifetime,
+fails a request whose app exits or stalls and restarts it, and stops when idle.
+A resident simulator drew within a point of Xcode, but Apple licenses the
+simulator only for developing apps, while a Mac app may serve anyone, so the
+gateway can render for agents with the same engine. Catalyst lays out an iPad
+app at 77% and picks the system font's tracking for that smaller size, so text
+runs about 2% wider than on a phone and can wrap a line earlier; a layout that
+fits the render fits the phone. The engine draws what the gallery draws, not
+the system's containers, so StandBy and the Smart Stack, the lightened Lock
+Screen tints and vibrant accessory widgets remain Xcode's, through `--xcode`.
 
 **Every started example asks to lock the phone.**
 iOS keeps an app's own Live Activity out of the Dynamic Island and banners
