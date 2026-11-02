@@ -282,12 +282,20 @@ def submit_beta(app, version, build, notes):
         sys.exit(f"The {version} build is {state} in TestFlight, so it cannot go to external testers.")
 
 
-def processed_screenshots(placements):
-    attributes = [api("GET", f"appAssetLibraryPlacements/{p}")["attributes"] for p in placements]
-    failed = [a["stateDetails"] for a in attributes if a["state"] == "FAILED"]
-    if failed:
-        sys.exit(f"App Store Connect could not process a screenshot: {failed}")
-    return None if any(a["state"] == "ASSET_PROCESSING" for a in attributes) else True
+def wait_for_screenshots(placements):
+    ready = {"ACTIVE", "PARENT_PREPARE_FOR_SUBMISSION", "PARENT_READY_FOR_REVIEW",
+             "PARENT_WAITING_FOR_REVIEW", "PARENT_IN_REVIEW", "PARENT_APPROVED"}
+    while True:
+        attributes = {p: api("GET", f"appAssetLibraryPlacements/{p}")["attributes"] for p in placements}
+        failed = [a["stateDetails"] for a in attributes.values() if a["state"] == "FAILED"]
+        if failed:
+            sys.exit(f"App Store Connect could not process a screenshot: {failed}")
+        states = {p: a["state"] for p, a in attributes.items()}
+        if all(state in ready for state in states.values()):
+            return
+        if time.monotonic() > DEADLINE:
+            sys.exit(f"The screenshots did not finish processing within 40 minutes of the start. Last placement states: {states}.")
+        time.sleep(20)
 
 
 def testflight(app, version, number, notes):
@@ -333,7 +341,7 @@ def prepare(app, version_id, build, slides, notes):
         raise
     delete_unplaced(displaced)
     api("PATCH", f"appStoreVersions/{version_id}/relationships/build", {"type": "builds", "id": build})
-    wait("The screenshots", lambda: processed_screenshots(placements))
+    wait_for_screenshots(placements)
 
 
 def main(command, *arguments):

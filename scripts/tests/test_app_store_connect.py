@@ -13,18 +13,33 @@ loader.exec_module(asc)
 
 
 class ScreenshotProcessingTests(unittest.TestCase):
-    def test_a_draft_screenshot_finishes_at_the_documented_parent_state(self):
-        for state in ("ACTIVE", "PARENT_PREPARE_FOR_SUBMISSION"):
-            with self.subTest(state=state):
-                with patch.object(asc, "api", return_value={"attributes": {"state": state}}):
-                    self.assertTrue(asc.processed_screenshots(["screenshot"]))
+    def test_ready_placements_need_no_further_processing(self):
+        for state in ("ACTIVE", "PARENT_PREPARE_FOR_SUBMISSION", "PARENT_READY_FOR_REVIEW",
+                      "PARENT_WAITING_FOR_REVIEW", "PARENT_IN_REVIEW", "PARENT_APPROVED"):
+            with self.subTest(state=state), patch.object(asc, "api", return_value={"attributes": {"state": state}}), \
+                 patch.object(asc.time, "sleep", side_effect=AssertionError("A ready placement must not wait")):
+                asc.wait_for_screenshots(["screenshot"])
 
-    def test_processing_is_pending_and_failed_processing_is_reported(self):
-        with patch.object(asc, "api", return_value={"attributes": {"state": "ASSET_PROCESSING"}}):
-            self.assertIsNone(asc.processed_screenshots(["screenshot"]))
+    def test_unknown_and_processing_states_wait_until_the_deadline(self):
+        for state in ("ASSET_PROCESSING", "PENDING", "UPLOAD_COMPLETE", "PARENT_FUTURE_STATE"):
+            with self.subTest(state=state), patch.object(asc, "api", return_value={"attributes": {"state": state}}), \
+                 patch.object(asc, "DEADLINE", 1), patch.object(asc.time, "monotonic", return_value=2):
+                with self.assertRaisesRegex(SystemExit, f"40 minutes.*screenshot.*{state}"):
+                    asc.wait_for_screenshots(["screenshot"])
+
+    def test_pending_placements_are_polled_until_every_screenshot_is_ready(self):
+        with patch.object(asc, "api", side_effect=[
+            {"attributes": {"state": "ACTIVE"}}, {"attributes": {"state": "PENDING"}},
+            {"attributes": {"state": "ACTIVE"}}, {"attributes": {"state": "ACTIVE"}},
+        ]), patch.object(asc, "DEADLINE", 1), patch.object(asc.time, "monotonic", return_value=0), \
+             patch.object(asc.time, "sleep") as sleep:
+            asc.wait_for_screenshots(["ipad", "iphone"])
+            sleep.assert_called_once_with(20)
+
+    def test_failed_processing_reports_the_apple_failure(self):
         with patch.object(asc, "api", return_value={"attributes": {"state": "FAILED", "stateDetails": "Invalid image"}}):
             with self.assertRaisesRegex(SystemExit, "Invalid image"):
-                asc.processed_screenshots(["screenshot"])
+                asc.wait_for_screenshots(["screenshot"])
 
 
 class BuildIdentityTests(unittest.TestCase):
