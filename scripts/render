@@ -746,8 +746,11 @@ def draw(job):
                     return {"error": "; ".join(problems) or "nothing to draw"}
                 rows.append(("Dark" if dark else "Light", [target for _, target in rendered]))
                 warnings += [] if dark else tall
-            sheet(rows, Path(folder) / "sheet.png")
-            return {"image": base64.b64encode((Path(folder) / "sheet.png").read_bytes()).decode(), "warnings": warnings}
+            image = Path(folder) / "sheet.png"
+            sheet(rows, image)
+            width = int(re.search(r"pixelWidth: (\d+)", run("sips", "-g", "pixelWidth", image)).group(1))
+            run("sips", "--resampleWidth", str(width * 2 // 3), image)
+            return {"image": base64.b64encode(image.read_bytes()).decode(), "warnings": warnings}
     except RenderError as error:
         return {"error": str(error)}
 
