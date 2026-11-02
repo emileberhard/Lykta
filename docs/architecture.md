@@ -190,11 +190,32 @@ gateway would need a connection and a listing endpoint, and could show layouts
 newer than the installed app draws. The Dynamic Island previews approximate the
 system's regions and hold text to the sizes Xcode's previews draw: expanded
 between large and xxxLarge like the Lock Screen, compact and minimal at large.
-Timers ignore these limits in the app and follow its text size. Only a phone
-shows the real presentation. Sending an example
+The Lock Screen card takes its content's ideal height up to 160 points, as the
+system does. The expanded island follows the same rule, as the HIG describes,
+although Xcode's previews always draw it 160 points tall; a phone has yet to
+confirm it. Timers ignore these limits in the app and follow its text size.
+Only a phone shows the real presentation. Sending an example
 is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
 budget, and the gateway stays the only content writer.
+
+**`just render` draws through a resident app.** Xcode's previews build and
+launch a preview host for every image, about eight seconds each, although a
+layout is only data. The render engine is a Debug mode of the app,
+`LYKTA_RENDER`, that stays running on a dedicated simulator and draws each
+request through the gallery's views, so one request of many inputs takes about
+a second. It captures with `drawHierarchy`, because ImageRenderer draws
+placeholders for UIKit-backed views such as linear progress and switches.
+`scripts/render` keys the built app by the sources that draw it and the Xcode
+version, and its supervisor owns the simulator and the app's lifetime. Requests
+and results move through one folder per key by atomic renames: the app claims a
+request by renaming it, the supervisor fails a request whose app exits or stalls
+and restarts the app, and it shuts the simulator down when idle. The engine
+draws what the gallery draws, not the system's containers, so StandBy and the
+Smart Stack, the lightened Lock Screen tints and vibrant accessory widgets
+remain Xcode's, through `--xcode`. The engine never ships, and Apple licenses
+the simulator only for developing apps, so rendering for agents through the
+gateway needs its own decision.
 
 **Every started example asks to lock the phone.**
 iOS keeps an app's own Live Activity out of the Dynamic Island and banners

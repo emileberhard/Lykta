@@ -2,11 +2,14 @@
 import argparse
 import concurrent.futures
 import fcntl
+import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -33,6 +36,20 @@ PRESENTATIONS = {
 }
 DEFAULT = "lock,expanded,compact,minimal,small,medium,large,circular,rectangular,inline"
 FAMILIES = {family for family, _, _ in PRESENTATIONS.values() if family}
+ENGINE_PRESENTATIONS = set(DEFAULT.split(","))
+CACHE = Path.home() / "Library" / "Caches" / "lykta"
+ENGINE = CACHE / "render"
+JOBS = ENGINE / "jobs"
+APPS = ENGINE / "apps"
+BUILD = ROOT / ".local" / "build"
+ENGINE_INPUTS = ["Core/Package.swift", "Core/Sources", "iOS/App", "iOS/Avatars", "iOS/Config", "iOS/Lykta.xcodeproj", "iOS/Rendering"]
+DEVICE_TYPE = "iPhone 18 Pro"
+SIMULATOR = "Lykta Render"
+ENGINE_IDLE = 600
+ENGINE_DEADLINE = 300
+ENGINE_STALL = 60
+ENGINE_RESULT_LIFETIME = 600
+KEPT_APPS = 3
 
 
 class RenderError(Exception):
@@ -203,24 +220,333 @@ def summary(message):
     return "\n".join(errors.values()) if errors else message[:2000]
 
 
+def xcode_renders(bodies, presentations, dark):
+    staged = []
+    for name, kind, body in bodies:
+        index = sum(1 for _, other in staged if other == kind)
+        staged.append((index, kind))
+        (STAGE / f"{kind}-{index:03d}-{name}.json").write_text(json.dumps(body))
+    xcode = Xcode()
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+    try:
+        identifier = workspace(xcode)
+        jobs = {(name, index, presentation): OUTPUT / f"{name}-{presentation}.png"
+                for presentation in presentations
+                for (name, kind, body), (index, _) in zip(bodies, staged) if shows(presentation, kind, body["layout"])}
+        failures = {}
+        futures = {pool.submit(render, xcode, identifier, index, presentation, dark, target): target
+                   for (_, index, presentation), target in jobs.items()}
+        for future in concurrent.futures.as_completed(futures):
+            if future.exception():
+                failures.setdefault(summary(str(future.exception())), []).append(futures[future].stem)
+    finally:
+        xcode.close()
+        pool.shutdown(cancel_futures=True)
+    reports = [(name, STAGE / f"{kind}-{index:03d}-{name}.error") for (name, kind, _), (index, _) in zip(bodies, staged)]
+    errors = [{"input": name, "error": report.read_text()} for name, report in reports if report.exists()]
+    rendered = [(name, target) for (name, _, _), target in jobs.items() if target.exists()]
+    return rendered, errors, [{"error": error, "renders": sorted(names)} for error, names in failures.items()]
+
+
+def engine_renders(bodies, presentations, dark):
+    xcode_only = [p for p in presentations if p not in ENGINE_PRESENTATIONS]
+    if xcode_only:
+        raise RenderError(f"{', '.join(xcode_only)} render only through Xcode's previews; add --xcode")
+    key = engine_app()
+    jobs = JOBS / key
+    jobs.mkdir(parents=True, exist_ok=True)
+    start_supervisor()
+    name = f"{time.time_ns()}-{os.getpid()}"
+    request = {"inputs": [{"name": name_, "kind": kind, **body} for name_, kind, body in bodies],
+               "presentations": presentations, "appearance": "dark" if dark else "light"}
+    (jobs / f".{name}.json").write_text(json.dumps(request))
+    (jobs / f".{name}.json").rename(jobs / f"{name}.request")
+    result = jobs / name
+    deadline = time.monotonic() + ENGINE_DEADLINE
+    checked = time.monotonic()
+    while not result.exists():
+        if time.monotonic() - checked > 0.5:
+            checked = time.monotonic()
+            if not supervisor_running():
+                if (jobs / f"{name}.request").exists():
+                    start_supervisor()
+                elif not result.exists():
+                    raise RenderError(f"the render engine stopped before answering:\n{log_tail()}")
+            if checked > deadline:
+                raise RenderError(f"the render engine did not answer within {ENGINE_DEADLINE} seconds:\n{log_tail()}")
+        time.sleep(0.005)
+    try:
+        manifest = json.loads((result / "manifest.json").read_text())
+        if "error" in manifest:
+            raise RenderError(manifest["error"])
+        rendered = []
+        for entry in manifest["renders"]:
+            target = OUTPUT / entry["file"]
+            shutil.move(result / entry["file"], target)
+            rendered.append((entry["input"], target))
+    finally:
+        shutil.rmtree(result, ignore_errors=True)
+    failures = [{"error": "the snapshot is missing image data for some views", "renders": sorted(manifest["incomplete"])}] if manifest["incomplete"] else []
+    return rendered, manifest["layoutErrors"], failures
+
+
+def run(*args, **kwargs):
+    result = subprocess.run([str(arg) for arg in args], text=True, capture_output=True, **kwargs)
+    if result.returncode != 0:
+        raise RenderError(f"{' '.join(map(str, args[:3]))} failed:\n{summary(result.stdout + result.stderr)}")
+    return result.stdout
+
+
+def runtime():
+    runtimes = [r for r in json.loads(run("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
+                if r["platform"] == "iOS" and r["isAvailable"] and any(t["name"] == DEVICE_TYPE for t in r["supportedDeviceTypes"])]
+    if not runtimes:
+        raise RenderError(f"no installed iOS simulator runtime supports the {DEVICE_TYPE}")
+    return max(runtimes, key=lambda r: [int(part) for part in r["version"].split(".")])
+
+
+def simulator(simulator_runtime):
+    devices = json.loads(run("xcrun", "simctl", "list", "devices", "--json"))["devices"].get(simulator_runtime["identifier"], [])
+    existing = next((d["udid"] for d in devices if d["name"] == SIMULATOR and d["isAvailable"]), None)
+    return existing or run("xcrun", "simctl", "create", SIMULATOR, DEVICE_TYPE, simulator_runtime["identifier"]).strip()
+
+
+def engine_key():
+    files = run("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *ENGINE_INPUTS).split("\0")
+    digest = hashlib.sha256()
+    digest.update(run("xcodebuild", "-version").encode() + b"\0")
+    for name in sorted(filter(None, files)):
+        path = ROOT / name
+        if path.is_file():
+            digest.update(name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()[:20]
+
+
+def engine_app():
+    key = engine_key()
+    if (APPS / key).exists():
+        os.utime(APPS / key)
+        return key
+    with open(ROOT / ".local" / "render-build.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if (APPS / key).exists():
+            return key
+        print("Building the render engine for this checkout", file=sys.stderr)
+        run("xcodebuild", "-quiet", "-project", PROJECT, "-scheme", "Lykta", "-configuration", "Debug",
+            "-destination", f"id={simulator(runtime())}", "-derivedDataPath", BUILD,
+            "-disableAutomaticPackageResolution", "-onlyUsePackageVersionsFromResolvedFile", "-skipPackageUpdates",
+            "CODE_SIGNING_ALLOWED=NO", "LYKTA_GATEWAY_HOST=", "build")
+        APPS.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".", dir=APPS) as staging:
+            shutil.copytree(BUILD / "Build" / "Products" / "Debug-iphonesimulator" / "Lykta.app", Path(staging) / key / "Lykta.app", symlinks=True)
+            (Path(staging) / key).rename(APPS / key)
+    stored = sorted((path for path in APPS.iterdir() if not path.name.startswith(".")), key=lambda path: path.stat().st_mtime, reverse=True)
+    for stale in stored[KEPT_APPS:]:
+        shutil.rmtree(stale, ignore_errors=True)
+    return key
+
+
+def supervisor_running():
+    with open(ENGINE / "supervisor.lock", "a") as probe:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        return False
+
+
+def start_supervisor():
+    if supervisor_running():
+        return
+    spawned = subprocess.Popen([sys.executable, __file__, "--supervise"], start_new_session=True,
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.monotonic() + 30
+    while not supervisor_running():
+        if spawned.poll() is not None and not supervisor_running():
+            raise RenderError(f"the render engine exited at start:\n{log_tail()}")
+        if time.monotonic() > deadline:
+            raise RenderError("the render engine did not start within 30 seconds")
+        time.sleep(0.05)
+
+
+def source():
+    path = Path(__file__)
+    return path.stat().st_mtime_ns if path.exists() else None
+
+
+def log_tail():
+    log = ENGINE / "supervisor.log"
+    return "\n".join(log.read_text(errors="replace").splitlines()[-40:]) if log.exists() else "(no engine log)"
+
+
+class Supervisor:
+    def __init__(self, log):
+        self.log = log
+        self.udid = simulator(runtime())
+        self.key = None
+        self.process = None
+        self.bundle = None
+        self.claimed = {}
+        self.source = source()
+
+    def say(self, message):
+        print(f"{time.strftime('%H:%M:%S')} {message}", file=self.log, flush=True)
+
+    def serve(self):
+        self.say(f"booting the {SIMULATOR} simulator {self.udid}")
+        run("xcrun", "simctl", "bootstatus", self.udid, "-b")
+        (ENGINE / "stop").unlink(missing_ok=True)
+        idle = time.monotonic()
+        try:
+            while not (ENGINE / "stop").exists():
+                pending = sorted(JOBS.glob("*/*.request"), key=lambda path: path.name)
+                working = list(JOBS.glob("*/*.working"))
+                if pending or working:
+                    idle = time.monotonic()
+                elif time.monotonic() - idle > ENGINE_IDLE:
+                    self.say(f"idle for {ENGINE_IDLE} seconds")
+                    break
+                elif source() != self.source:
+                    self.say(f"{__file__} changed")
+                    break
+                now = time.monotonic()
+                self.claimed = {request: self.claimed.get(request, now) for request in working}
+                stalled = [request for request, claimed in self.claimed.items() if now - claimed > ENGINE_STALL]
+                if stalled:
+                    self.say(f"the app for {self.key} spent more than {ENGINE_STALL} seconds on one request")
+                    self.terminate()
+                    for request in stalled:
+                        self.fail(request, f"the render engine's app spent more than {ENGINE_STALL} seconds on this request and was restarted")
+                elif self.process and self.process.poll() is not None:
+                    self.say(f"the app for {self.key} exited with {self.process.returncode}")
+                    for request in working or (JOBS / self.key).glob("*.request"):
+                        self.fail(request, f"the render engine's app exited:\n{log_tail()}")
+                    self.process = None
+                elif pending and not working and (self.process is None or pending[0].parent.name != self.key):
+                    self.launch(pending[0].parent.name)
+                self.prune()
+                time.sleep(0.1)
+        finally:
+            self.terminate()
+            self.say("shutting the simulator down")
+            subprocess.run(["xcrun", "simctl", "shutdown", self.udid], capture_output=True)
+            (ENGINE / "stop").unlink(missing_ok=True)
+
+    def launch(self, key):
+        self.terminate()
+        app = APPS / key / "Lykta.app"
+        try:
+            run("xcrun", "simctl", "install", self.udid, app)
+            self.bundle = run("plutil", "-extract", "CFBundleIdentifier", "raw", app / "Info.plist").strip()
+        except RenderError as error:
+            for request in (JOBS / key).glob("*.request"):
+                self.fail(request, f"could not install the render engine's app: {error}")
+            return
+        self.say(f"launching the app for {key}")
+        self.key = key
+        self.process = subprocess.Popen(["xcrun", "simctl", "launch", "--console-pty", "--terminate-running-process", self.udid, self.bundle],
+                                        stdin=subprocess.DEVNULL, stdout=self.log, stderr=subprocess.STDOUT,
+                                        env={**os.environ, "SIMCTL_CHILD_LYKTA_RENDER": str(JOBS / key)})
+
+    def terminate(self):
+        if self.process and self.process.poll() is None:
+            subprocess.run(["xcrun", "simctl", "terminate", self.udid, self.bundle], capture_output=True)
+            try:
+                self.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+        self.process = None
+
+    def fail(self, request, error):
+        result = request.with_suffix("")
+        staging = request.parent / f".{result.name}"
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir()
+        (staging / "manifest.json").write_text(json.dumps({"error": error}))
+        staging.rename(result)
+        request.unlink()
+
+    def prune(self):
+        expired = time.time() - ENGINE_RESULT_LIFETIME
+        for folder in JOBS.iterdir():
+            for entry in folder.iterdir():
+                if entry.suffix not in (".request", ".working") and entry.stat().st_mtime < expired:
+                    shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+            if folder.name != self.key and not (APPS / folder.name).exists() and not any(folder.iterdir()):
+                folder.rmdir()
+
+
+def supervise():
+    ENGINE.mkdir(parents=True, exist_ok=True)
+    JOBS.mkdir(exist_ok=True)
+    with open(ENGINE / "supervisor.lock", "a") as lock:
+        for attempt in range(20):
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(0.05)
+        else:
+            return 0
+        with open(ENGINE / "supervisor.log", "w") as log:
+            try:
+                Supervisor(log).serve()
+            except Exception as error:
+                print(f"render engine failed: {error}", file=log, flush=True)
+                return 1
+    return 0
+
+
+def stop():
+    if not ENGINE.exists() or not supervisor_running():
+        return 0
+    (ENGINE / "stop").touch()
+    deadline = time.monotonic() + 60
+    while supervisor_running():
+        if time.monotonic() > deadline:
+            raise RenderError("the render engine did not stop within 60 seconds")
+        time.sleep(0.1)
+    return 0
+
+
 def sheet(rows, target):
+    source = ROOT / "scripts" / "sheet.swift"
+    binary = CACHE / f"sheet-{hashlib.sha256(source.read_bytes()).hexdigest()[:16]}"
+    if not binary.exists():
+        CACHE.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".sheet-", dir=CACHE) as staging:
+            run("xcrun", "swiftc", "-O", source, "-o", Path(staging) / "sheet")
+            (Path(staging) / "sheet").rename(binary)
+        for stale in CACHE.glob("sheet-*"):
+            if stale != binary:
+                stale.unlink()
     arguments = [str(target)] + ["\t".join([label] + [str(path) for path in paths]) for label, paths in rows]
-    subprocess.run(["xcrun", "swift", str(ROOT / "scripts" / "sheet.swift"), *arguments], check=True,
-                   stdout=subprocess.DEVNULL)
+    run(binary, *arguments)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Render Lykta layouts through Xcode's previews, all at once. Leaves the project open in Xcode "
-                    "so later renders take seconds.")
-    parser.add_argument("inputs", nargs="+",
+        description="Render Lykta layouts in seconds through a resident app on a dedicated simulator, which shuts down "
+                    f"after {ENGINE_IDLE // 60} idle minutes, or through Xcode's previews with --xcode.")
+    parser.add_argument("inputs", nargs="*",
                         help="request bodies ({title, layout, data}) or bare layouts of activities or widgets: files, directories, inline JSON, or - for stdin")
     parser.add_argument("--only", default=DEFAULT,
                         help=f"comma-separated presentations from {', '.join(PRESENTATIONS)}; each input renders those it has "
                              f"(default: {DEFAULT})")
     parser.add_argument("--dark", action="store_true", help="render in dark appearance")
+    parser.add_argument("--xcode", action="store_true",
+                        help="render through Xcode's previews, which draw the system's own Dynamic Island, Lock Screen and StandBy "
+                             "and take seconds per image; needs Xcode 27 with its MCP server enabled")
+    parser.add_argument("--stop", action="store_true", help="shut the render engine and its simulator down now")
+    parser.add_argument("--supervise", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
+        if args.supervise:
+            return supervise()
+        if args.stop:
+            return stop()
+        if not args.inputs:
+            parser.error("give at least one input to render")
         presentations = args.only.split(",")
         unknown = [p for p in presentations if p not in PRESENTATIONS]
         if unknown:
@@ -232,32 +558,10 @@ def main():
             for stale in list(STAGE.iterdir()) + (list(OUTPUT.iterdir()) if OUTPUT.exists() else []):
                 stale.unlink()
             OUTPUT.mkdir(exist_ok=True)
-            staged = []
-            for name, kind, body in bodies:
-                index = sum(1 for _, other in staged if other == kind)
-                staged.append((index, kind))
-                (STAGE / f"{kind}-{index:03d}-{name}.json").write_text(json.dumps(body))
-            xcode = Xcode()
-            pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
-            try:
-                identifier = workspace(xcode)
-                jobs = {(name, index, presentation): OUTPUT / f"{name}-{presentation}.png"
-                        for presentation in presentations
-                        for (name, kind, body), (index, _) in zip(bodies, staged) if shows(presentation, kind, body["layout"])}
-                failures = {}
-                futures = {pool.submit(render, xcode, identifier, index, presentation, args.dark, target): target
-                           for (_, index, presentation), target in jobs.items()}
-                for future in concurrent.futures.as_completed(futures):
-                    if future.exception():
-                        failures.setdefault(summary(str(future.exception())), []).append(futures[future].stem)
-            finally:
-                xcode.close()
-                pool.shutdown(cancel_futures=True)
-            reports = [(name, STAGE / f"{kind}-{index:03d}-{name}.error") for (name, kind, _), (index, _) in zip(bodies, staged)]
-            errors = [{"input": name, "error": report.read_text()} for name, report in reports if report.exists()]
-            rendered = [(name, target) for (name, _, _), target in jobs.items() if target.exists()]
+            renders = xcode_renders if args.xcode else engine_renders
+            rendered, errors, failures = renders(bodies, presentations, args.dark)
             rows = [(name, [target for owner, target in rendered if owner == name]) for name, _, _ in bodies]
-            result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": [{"error": error, "renders": sorted(names)} for error, names in failures.items()]}
+            result = {"renders": [str(target) for _, target in rendered], "layoutErrors": errors, "renderFailures": failures}
             if rendered:
                 sheet([row for row in rows if row[1]], OUTPUT / "sheet.png")
                 result["sheet"] = str(OUTPUT / "sheet.png")
