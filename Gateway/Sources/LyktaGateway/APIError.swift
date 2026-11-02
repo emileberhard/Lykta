@@ -36,7 +36,7 @@ struct APIError: Error, Encodable, Sendable {
             case .unsupportedMedia: 415
             case .tooManyNotifications: 429
             case .internal: 500
-            case .renderFailed: 502
+            case .renderFailed: 422
             case .renderUnavailable: 503
             }
         }

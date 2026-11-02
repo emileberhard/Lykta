@@ -74,9 +74,10 @@ Look at the image, fix what you see and render again, then send the PUT. A
 warning names content the phone will cut off, such as a Lock Screen taller
 than 160 points. Text in the image runs about 2 % wider than on the phone.
 Renders never reach the phone or spend its start budget. They are drawn on a
-Mac the gateway's operator runs, so a render takes a few seconds, and
-`render_unavailable` means none is connected: send the PUT and look at the
-phone, or ask the user to.
+Mac the gateway's operator runs, so a render takes a few seconds.
+`render_unavailable` means that renderer is missing or busy, and its message
+says whether to render again or to send the PUT and look at the phone, or ask
+the user to. `render_failed` says what the renderer could not draw.
 
 ## Saved parts
 

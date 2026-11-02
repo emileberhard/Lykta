@@ -687,6 +687,9 @@ def worker():
     print(f"rendering for {url} at {version[0] if version else 'an untagged commit'}", flush=True)
     engine_app()
     start_supervisor()
+    with tempfile.TemporaryDirectory(prefix="lykta-render-") as folder:
+        engine_renders([("warm", "activity", {"title": "Lykta", "layout": {"lockScreen": "Lykta", "compactLeading": "", "compactTrailing": "", "minimal": ""}, "data": {}})],
+                       ["lock"], False, Path(folder))
     checked = time.monotonic()
     failures = 0
     while True:

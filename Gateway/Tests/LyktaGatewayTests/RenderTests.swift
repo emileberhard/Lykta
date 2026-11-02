@@ -91,7 +91,7 @@ struct RenderTests {
     @Test func passesOnWhatTheRendererCouldNotDraw() async throws {
         let (_, reply) = try await render("/v1/render/widgets/steps", ["title": "Steps", "layout": ["systemSmall": "{{steps}}"], "data": ["steps": "10"]],
                                           answer: ["error": "these presentations draw nothing: steps-small"])
-        #expect(reply.status == 502)
+        #expect(reply.status == 422)
         #expect(try reply.decoded() as Refusal == Refusal(error: "render_failed", message: "The renderer could not draw it: these presentations draw nothing: steps-small"))
     }
 

@@ -259,7 +259,9 @@ struct API: Sendable {
             }
             guard let outcome else {
                 await renders.abandon(id)
-                throw APIError(.renderFailed, "The renderer did not answer within \(RenderQueue.wait) seconds. Render again.")
+                var error = APIError(.renderUnavailable, "The renderer did not answer within \(RenderQueue.wait) seconds. Render again.")
+                error.retryAfter = 5
+                throw error
             }
             return Self.json(200, try outcome.get())
         case ("GET", "v1/render/images/{id}"):
