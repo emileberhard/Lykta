@@ -368,7 +368,7 @@ does the rest, gateway first:
    `scripts/app-store-connect app-store`. Once the build is processed, it
    removes an older version waiting for or in App Review from review, renames
    the App Store version that is still editable to the tag or creates one,
-   released automatically after approval, sets What's New to the tag message,
+   with manual release, sets What's New to the tag message,
    replaces the iPhone screenshots, deletes only the unplaced images this
    release displaced or reserved, except those App Review has seen, which
    Apple keeps, attaches the build and submits the version for App Review,

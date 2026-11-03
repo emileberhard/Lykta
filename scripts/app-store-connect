@@ -94,7 +94,7 @@ def draft_version(app, version, build):
     unreleased = [v for v in versions if v["attributes"]["appVersionState"] not in RELEASED]
     if not unreleased:
         return api("POST", "appStoreVersions", {"type": "appStoreVersions",
-                   "attributes": {"platform": "IOS", "versionString": version, "releaseType": "AFTER_APPROVAL"},
+                   "attributes": {"platform": "IOS", "versionString": version, "releaseType": "MANUAL"},
                    "relationships": {"app": link("apps", app)}})["id"], False
     draft = unreleased[0]
     state, name = draft["attributes"]["appVersionState"], draft["attributes"]["versionString"]
@@ -111,8 +111,8 @@ def draft_version(app, version, build):
         print(f"::notice::App Store version {name} is {state}; preparation of {version} is pending until it is released.", file=sys.stderr)
         return None, False
     updated = api("PATCH", f"appStoreVersions/{draft['id']}", {"type": "appStoreVersions", "id": draft["id"],
-                  "attributes": {"releaseType": "AFTER_APPROVAL"} | ({"versionString": version} if name != version else {})})
-    if (updated["attributes"]["versionString"], updated["attributes"]["releaseType"]) != (version, "AFTER_APPROVAL"):
+                  "attributes": {"releaseType": "MANUAL"} | ({"versionString": version} if name != version else {})})
+    if (updated["attributes"]["versionString"], updated["attributes"]["releaseType"]) != (version, "MANUAL"):
         sys.exit(f"App Store Connect kept {name} as {updated['attributes']['versionString']} with release type {updated['attributes']['releaseType']}.")
     return draft["id"], False
 
@@ -158,7 +158,7 @@ def submit_for_review(app, version_id, version):
         api("POST", "reviewSubmissionItems", {"type": "reviewSubmissionItems", "relationships": {
             "reviewSubmission": link("reviewSubmissions", submission["id"]), "appStoreVersion": link("appStoreVersions", version_id)}})
     api("PATCH", f"reviewSubmissions/{submission['id']}", {"type": "reviewSubmissions", "id": submission["id"], "attributes": {"submitted": True}})
-    print(f"Submitted App Store version {version} for App Review; it is released when Apple approves it.", file=sys.stderr)
+    print(f"Submitted App Store version {version} for App Review.", file=sys.stderr)
 
 
 def upload(library, slide, created):

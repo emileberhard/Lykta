@@ -102,7 +102,7 @@ class ReviewPolicyTests(unittest.TestCase):
             self.assertEqual(("draft", True), asc.draft_version("app", "0.14.3", "build"))
         self.assertEqual(["GET", "GET"], [call.args[0] for call in recorded.call_args_list])
 
-    def test_a_newer_tag_withdraws_only_its_versions_submission_and_releases_after_approval(self):
+    def test_a_newer_tag_withdraws_only_its_versions_submission_and_keeps_manual_release(self):
         writes = []
 
         def api(method, path, data=None, **params):
@@ -115,14 +115,14 @@ class ReviewPolicyTests(unittest.TestCase):
             if path == "appStoreVersions/review" and method == "GET":
                 return {"attributes": {"appVersionState": "DEVELOPER_REJECTED"}}
             if path == "appStoreVersions/review":
-                return {"attributes": {"versionString": "0.14.3", "releaseType": "AFTER_APPROVAL"}}
+                return {"attributes": {"versionString": "0.14.3", "releaseType": "MANUAL"}}
 
         with patch.object(asc, "api", side_effect=api):
             self.assertEqual(("review", False), asc.draft_version("app", "0.14.3", "build"))
         self.assertEqual([
             ("PATCH", "reviewSubmissions/target", {"type": "reviewSubmissions", "id": "target", "attributes": {"canceled": True}}),
             ("PATCH", "appStoreVersions/review", {"type": "appStoreVersions", "id": "review",
-                                                  "attributes": {"releaseType": "AFTER_APPROVAL", "versionString": "0.14.3"}}),
+                                                  "attributes": {"releaseType": "MANUAL", "versionString": "0.14.3"}}),
         ], writes)
 
     def test_a_newer_tag_deletes_its_versions_item_from_an_unsubmitted_draft(self):
