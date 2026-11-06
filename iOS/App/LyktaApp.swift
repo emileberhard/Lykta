@@ -49,6 +49,6 @@ private struct AppView: View {
             }
         }
         .animation(.smooth(duration: 0.6), value: model.isOnboarding)
-        .onOpenURL { model.open($0) }
+        .onOpenURL { model.open(LinkTap(link: $0)) }
     }
 }

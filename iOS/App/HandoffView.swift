@@ -5,6 +5,7 @@ struct HandoffView: View {
     let model: Model
     let handoff: Model.Handoff
     @State private var isCopied = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -12,6 +13,12 @@ struct HandoffView: View {
             case .opening:
                 DelayedProgress()
             case .opened:
+                Color.clear
+                    .task(id: scenePhase) {
+                        guard scenePhase == .active, (try? await Task.sleep(for: .seconds(1))) != nil else { return }
+                        model.leaveHandoff()
+                    }
+            case .away:
                 Color.clear
             case .failed:
                 ContentUnavailableView {
@@ -32,7 +39,10 @@ struct HandoffView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: handoff) { await model.openHandoff() }
+        .task(id: handoff) {
+            isCopied = false
+            await model.openHandoff()
+        }
     }
 }
 

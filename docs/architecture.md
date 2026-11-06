@@ -378,9 +378,12 @@ reach any https or app URL without a gateway round trip. A notification's
 `link` travels in its push and opens the same way when the user taps the
 notification. iOS always brings Lykta forward first, so `Model.handoff`
 replaces HomeView with a screen that matches the launch screen until the link
-opens, and stays while Lykta is in the background so its snapshot shows no
-home; a cold launch from a notification reads the tap from the scene's
-connection options before the first frame.
+opens. UIKit hands over a tap before the scene becomes active, and a cold
+launch reads it from the scene's connection options, so Lykta's first frame is
+already that screen; iOS still animates in the snapshot Lykta left, which shows
+its home when the user last left Lykta there. After the link opens the screen
+stays while Lykta is in the background, so the next snapshot shows no home, and
+the next activation without a tap shows home.
 
 **Widget taps share the action log.** From 0.14.0, widget buttons and toggles
 run an AppIntent in the app and send the device action with a widget UUID.

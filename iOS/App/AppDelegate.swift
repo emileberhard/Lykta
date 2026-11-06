@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        if let tap = options.notificationResponse.flatMap(NotificationTap.init) {
+        if let tap = options.notificationResponse.flatMap(LinkTap.init) ?? options.urlContexts.first.map({ LinkTap(link: $0.url) }) {
             NotificationCenter.default.post(tap, subject: application)
         }
         return UISceneConfiguration(name: nil, sessionRole: session.role)
@@ -31,18 +31,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let tap = NotificationTap(response) {
+        if let tap = LinkTap(response) {
             NotificationCenter.default.post(tap, subject: UIApplication.shared)
         }
         completionHandler()
     }
 }
 
-struct NotificationTap: NotificationCenter.MainActorMessage {
+struct LinkTap: NotificationCenter.MainActorMessage {
     typealias Subject = UIApplication
 
-    let notification: UUID
     let link: URL
+    let notification: UUID?
+
+    init(link: URL) {
+        self.link = link
+        notification = nil
+    }
 
     init?(_ response: UNNotificationResponse) {
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
