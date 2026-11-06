@@ -104,10 +104,10 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         }
         let sound: Sound?
         switch fields["sound"] {
-        case nil: sound = nil
+        case nil, .bool(false)?: sound = nil
         case .bool(true)?: sound = .default
         case let .string(text)? where MediaID(rawValue: text) != nil: sound = .medium(MediaID(rawValue: text)!)
-        default: throw invalid("sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence.")
+        default: throw invalid("sound must be true for the default sound, false for silence or the id of a sound from POST /v1/media.")
         }
         let avatar: Avatar?
         if case let .object(node)? = sender["avatar"] { avatar = .drawing(.object(node)) }

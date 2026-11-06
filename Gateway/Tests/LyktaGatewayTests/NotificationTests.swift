@@ -122,10 +122,8 @@ struct NotificationTests {
     }
 
     @Test(arguments: [
-        (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": .bool(false)],
-         "sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence."),
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": "chime.wav"],
-         "sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence."),
+         "sound must be true for the default sound, false for silence or the id of a sound from POST /v1/media."),
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "title": "Printer"],
          "Unknown key \"title\"; expected body, image, link, sender, sound."),
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "link": "http://printer.local/jobs/42"],
@@ -159,6 +157,14 @@ struct NotificationTests {
         #expect(try alert.payload.value(at: "lykta.sender") == "printer")
         #expect(alert.expiration == Int(created.expires.timeIntervalSince1970))
         #expect(try await status("done") == Notified(state: "sent", error: nil, banners: "temporary"))
+    }
+
+    @Test func soundFalseSendsASilentAlert() async throws {
+        #expect(try await send("PUT", "/v1/notifications/quiet", body: ["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": .bool(false)]).status == 201)
+        try await deliver(at: now)
+        #expect(try #require(push.alerts.first).payload.value(at: "aps") == [
+            "alert": ["title": "Printer", "body": "Done"], "mutable-content": .number(1), "thread-id": "printer",
+        ])
     }
 
     @Test(arguments: ["https://github.com/emileberhard/lykta/pull/42?tab=checks#merge", "shortcuts://run-shortcut?name=Lights%20Off"])

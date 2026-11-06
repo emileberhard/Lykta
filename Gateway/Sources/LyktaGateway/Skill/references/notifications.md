@@ -25,7 +25,7 @@ EOF
 | `sender.name` | The title, up to 64 characters, such as `Printer` or `Deploy bot`. |
 | `sender.avatar` | Optional image id or node object, including `{"use":"name"}` for a saved part. The phone draws nodes once in a 64 pt viewport. |
 | `body` | Up to 500 characters. Say what happened and what the user can do about it. |
-| `sound` | `true` plays the default sound, the id of a sound plays that sound. Leave it out for a silent notification, for news the user can read later. |
+| `sound` | `true` plays the default sound, the id of a sound plays that sound. `false` or no `sound` makes a silent notification, for news the user can read later. |
 | `image` | Optional id of an image shown as a thumbnail and in full when the user expands the notification, such as a photo of the finished print. |
 | `link` | Optional URL the phone opens when the user taps the notification: the https address of what it is about, such as the message, pull request or meeting, which opens in its app when one handles it and in Safari otherwise, or an app URL such as `shortcuts://run-shortcut?name=Lights`. Give one whenever the event has an address. Needs Lykta 0.19.0. |
 
