@@ -16,7 +16,7 @@ A Live Activity's layout:
 | `minimal` | yes | A small circle when several activities share the Dynamic Island. |
 | `expanded` | no | `{"leading", "trailing", "center", "bottom"}`, each optional, when the user presses the Dynamic Island. Leading and trailing move below the camera when they are too wide. |
 | `small` | no | Apple Watch Smart Stack and CarPlay. Defaults to the compact pair side by side. |
-| `background` | no | Lock Screen background color. |
+| `background` | no | Lock Screen background color; for a gradient or drawing, use a `background` modifier on `lockScreen`. |
 | `keyline` | no | Dynamic Island outline color. |
 | `link` | no | A URL that opens when the user taps the activity: `https`, or an app URL such as `shortcuts://run-shortcut?name=Lights`. |
 

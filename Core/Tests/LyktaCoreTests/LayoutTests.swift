@@ -39,6 +39,11 @@ struct LayoutTests {
         #expect(error(in: layoutJSON(#""a""#, extra: #", "link": "shortcuts://run-shortcut?name=Lights""#)) == "no error")
     }
 
+    @Test func pointsAGradientBackgroundToTheLockScreenModifier() {
+        #expect(error(in: layoutJSON(#""a""#, extra: #", "background": {"gradient": ["red", "blue"]}"#))
+            == "background: an activity's background is one color; put a gradient or drawing in a background modifier on lockScreen")
+    }
+
     @Test func placesControlsOnlyWhereTheyWork() {
         let compact = #"{"lockScreen": "a", "compactLeading": {"button": "go", "label": "Go"}, "compactTrailing": "b", "minimal": "c"}"#
         #expect(error(in: compact) == "compactLeading.button: links, buttons and toggles work only in lockScreen and expanded")

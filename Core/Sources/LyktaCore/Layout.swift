@@ -69,6 +69,9 @@ public struct Layout: Decodable, Sendable {
         minimal = try fields.required("minimal")
         expanded = try fields.optional("expanded")
         small = try fields.optional("small")
+        if (try? fields.nestedContainer(keyedBy: Key.self, forKey: Key(stringValue: "background"))) != nil {
+            throw fields.invalid("an activity's background is one color; put a gradient or drawing in a background modifier on lockScreen", at: "background")
+        }
         background = try fields.optional("background")
         keyline = try fields.optional("keyline")
         link = try fields.link("link")
