@@ -359,8 +359,9 @@ public struct NotificationPayload: Codable, Sendable {
     public let drawing: PackedNode?
     public let sound: MediaID?
     public let image: MediaID?
+    public let link: URL?
 
-    public init(id: UUID, sender: String, token: String, avatar: MediaID?, drawing: PackedNode?, sound: MediaID?, image: MediaID?) {
+    public init(id: UUID, sender: String, token: String, avatar: MediaID?, drawing: PackedNode?, sound: MediaID?, image: MediaID?, link: URL?) {
         self.id = id
         self.sender = sender
         self.token = token
@@ -368,6 +369,14 @@ public struct NotificationPayload: Codable, Sendable {
         self.drawing = drawing
         self.sound = sound
         self.image = image
+        self.link = link
+    }
+
+    public init?(userInfo: [AnyHashable: Any]) {
+        guard let object = userInfo[Self.key], JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object),
+              let payload = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        self = payload
     }
 }
 

@@ -76,6 +76,7 @@ struct NotificationRequest: Codable, Equatable, Sendable {
     let body: String
     let sound: Sound?
     let image: MediaID?
+    let link: URL?
 
     var references: [Reference] {
         var references: [Reference] = []
@@ -87,7 +88,7 @@ struct NotificationRequest: Codable, Equatable, Sendable {
 
     static func decode(_ value: JSONValue) throws(APIError) -> NotificationRequest {
         guard case let .object(fields) = value else { throw invalid("Send a JSON object.") }
-        try allowOnly(["sender", "body", "sound", "image"], in: fields, at: nil)
+        try allowOnly(["sender", "body", "sound", "image", "link"], in: fields, at: nil)
         guard case let .object(sender)? = fields["sender"] else {
             throw invalid("sender must be an object with the sender's id and name.")
         }
@@ -112,7 +113,15 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         if case let .object(node)? = sender["avatar"] { avatar = .drawing(.object(node)) }
         else { avatar = try medium(sender["avatar"], at: "sender.avatar").map(Avatar.medium) }
         return NotificationRequest(sender: Sender(id: senderID, name: name, avatar: avatar),
-                                   body: body, sound: sound, image: try medium(fields["image"], at: "image"))
+                                   body: body, sound: sound, image: try medium(fields["image"], at: "image"), link: try link(fields["link"]))
+    }
+
+    private static func link(_ value: JSONValue?) throws(APIError) -> URL? {
+        guard let value else { return nil }
+        guard case let .string(text) = value, let url = URL(link: text) else {
+            throw invalid("link must be an https URL or an app URL such as shortcuts://, which opens when the user taps the notification.")
+        }
+        return url
     }
 
     private static func medium(_ value: JSONValue?, at path: String) throws(APIError) -> MediaID? {
@@ -144,7 +153,8 @@ struct NotificationRequest: Codable, Equatable, Sendable {
         }
         return try encoder.encode(Payload(
             aps: .init(alert: .init(title: sender.name, body: body), sound: sound == nil ? nil : "default", threadID: sender.id.rawValue),
-            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token, avatar: avatar, drawing: drawing, sound: soundMedium, image: image)))
+            lykta: NotificationPayload(id: id, sender: sender.id.rawValue, token: token, avatar: avatar, drawing: drawing, sound: soundMedium,
+                                       image: image, link: link)))
     }
 
     private var soundMedium: MediaID? {

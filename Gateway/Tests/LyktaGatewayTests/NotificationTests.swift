@@ -127,7 +127,11 @@ struct NotificationTests {
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "sound": "chime.wav"],
          "sound must be true for the default sound or the id of a sound from POST /v1/media; leave it out for silence."),
         (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "title": "Printer"],
-         "Unknown key \"title\"; expected body, image, sender, sound."),
+         "Unknown key \"title\"; expected body, image, link, sender, sound."),
+        (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "link": "http://printer.local/jobs/42"],
+         "link must be an https URL or an app URL such as shortcuts://, which opens when the user taps the notification."),
+        (["sender": ["id": "printer", "name": "Printer"], "body": "Done", "link": .number(42)],
+         "link must be an https URL or an app URL such as shortcuts://, which opens when the user taps the notification."),
         (["sender": ["id": "printer", "name": "Printer", "color": "red"], "body": "Done"],
          "Unknown key \"sender.color\"; expected avatar, id, name."),
         (["sender": ["id": "printer", "name": "Printer", "avatar": "printer.png"], "body": "Done"],
@@ -155,6 +159,37 @@ struct NotificationTests {
         #expect(try alert.payload.value(at: "lykta.sender") == "printer")
         #expect(alert.expiration == Int(created.expires.timeIntervalSince1970))
         #expect(try await status("done") == Notified(state: "sent", error: nil, banners: "temporary"))
+    }
+
+    @Test(arguments: ["https://github.com/emileberhard/lykta/pull/42?tab=checks#merge", "shortcuts://run-shortcut?name=Lights%20Off"])
+    func carriesTheLinkToThePhoneAsPartOfTheRequest(_ link: String) async throws {
+        let linked = try Self.printer.setting("link", to: .string(link))
+        #expect(try await send("PUT", "/v1/notifications/done", body: linked).status == 201)
+        #expect(try await send("PUT", "/v1/notifications/done", body: linked).status == 200)
+        #expect(try await send("PUT", "/v1/notifications/done", body: Self.printer).status == 409)
+        try await deliver(at: now)
+        #expect(try #require(push.alerts.first).payload.value(at: "lykta.link") == .string(link))
+    }
+
+    @Test func olderPhonesRefuseALinkButStillGetNotificationsWithoutOne() async throws {
+        let report = DeviceReport(pushToStartToken: nil, appVersion: "0.18.1 (90)", layoutVersion: Version(0, 18, 1), bundleInstance: UUID(),
+                                  activities: [], notifications: Self.allowed)
+        #expect(await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                             body: Array(try JSONEncoder().encode(report)))).status == 200)
+        let linked = try Self.printer.setting("link", to: .string("https://example.com/jobs/42"))
+        let refused = try await send("PUT", "/v1/notifications/linked", body: linked)
+        #expect(refused.status == 409)
+        #expect(try refused.decoded() as Refusal == Refusal(error: "app_update_required", message: "link uses notification.link, which needs Lykta "
+            + "0.19.0 or later, and this phone's Lykta app draws layouts up to 0.18.1. Ask the user to update Lykta and open it once, "
+            + "or send the notification without it."))
+        #expect(try await send("PUT", "/v1/notifications/plain", body: Self.printer).status == 201)
+    }
+
+    @Test func namesTheLinkWhenItIsWhatOverflowsThePush() async throws {
+        let linked = try Self.printer.setting("link", to: .string("https://example.com/" + String(repeating: "a", count: 4000)))
+        let response = try await send("PUT", "/v1/notifications/done", body: linked)
+        #expect(response.status == 413)
+        #expect((try response.decoded() as Refusal).message.hasSuffix("Shorten the link."))
     }
 
     @Test func aFetchTokenOpensOnlyItsOwnNotification() async throws {

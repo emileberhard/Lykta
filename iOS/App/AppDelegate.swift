@@ -17,8 +17,35 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         NotificationCenter.default.post(NotificationRegistration.failed(error.localizedDescription), subject: application)
     }
 
+    func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        if let tap = options.notificationResponse.flatMap(NotificationTap.init) {
+            NotificationCenter.default.post(tap, subject: application)
+        }
+        return UISceneConfiguration(name: nil, sessionRole: session.role)
+    }
+
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let tap = NotificationTap(response) else { return }
+        await MainActor.run { NotificationCenter.default.post(tap, subject: UIApplication.shared) }
+    }
+}
+
+nonisolated struct NotificationTap: NotificationCenter.MainActorMessage, Sendable {
+    typealias Subject = UIApplication
+
+    let notification: UUID
+    let link: URL
+
+    init?(_ response: UNNotificationResponse) {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let payload = NotificationPayload(userInfo: response.notification.request.content.userInfo), let link = payload.link else { return nil }
+        notification = payload.id
+        self.link = link
     }
 }
 

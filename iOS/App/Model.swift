@@ -16,7 +16,18 @@ final class Model {
         case failed(String)
     }
 
+    struct Handoff: Equatable {
+        enum State {
+            case opening, opened, failed
+        }
+
+        let link: URL
+        let notification: UUID?
+        var state: State
+    }
+
     private(set) var phase: Phase
+    private(set) var handoff: Handoff?
     private(set) var activities: [LiveActivity] = []
     private(set) var examples: [Example] = []
     private(set) var notificationExamples: [NotificationExample] = []
@@ -41,6 +52,8 @@ final class Model {
     private var retryTask: Task<Void, Never>?
     private var widgetSync: Task<Void, Never>?
     private var registrationObservation: NotificationCenter.ObservationToken?
+    private var tapObservation: NotificationCenter.ObservationToken?
+    private var lastTappedNotification: UUID?
 
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -57,6 +70,9 @@ final class Model {
         isOnboarding = !defaults.bool(forKey: Self.onboarded)
         registrationObservation = NotificationCenter.default.addObserver(for: NotificationRegistration.self) { [weak self] in
             self?.registered($0)
+        }
+        tapObservation = NotificationCenter.default.addObserver(for: NotificationTap.self) { [weak self] in
+            self?.tapped($0)
         }
     }
 
@@ -84,6 +100,9 @@ final class Model {
         if scenePhase == .background {
             isLockHintPending = false
         }
+        if scenePhase == .active, handoff?.state == .opened {
+            handoff = nil
+        }
         if scenePhase == .active, phase.isReady {
             Task {
                 await refreshNotifications()
@@ -95,6 +114,33 @@ final class Model {
 
     var agentActivity: LiveActivity? {
         activities.first { $0.attributes.name != Example.activityName && [.pending, .active, .stale].contains($0.state) }
+    }
+
+    func open(_ link: URL) {
+        guard handoff != Handoff(link: link, notification: nil, state: .opening) else { return }
+        handoff = Handoff(link: link, notification: nil, state: .opening)
+    }
+
+    private func tapped(_ tap: NotificationTap) {
+        guard tap.notification != lastTappedNotification else { return }
+        lastTappedNotification = tap.notification
+        handoff = Handoff(link: tap.link, notification: tap.notification, state: .opening)
+    }
+
+    func openHandoff() async {
+        guard let handoff, handoff.state == .opening else { return }
+        let opened = await UIApplication.shared.open(handoff.link)
+        telemetry.record("app.openLink", ["notification": handoff.notification.map { .string($0.uuidString) } ?? .null, "opened": .bool(opened)])
+        guard self.handoff == handoff else { return }
+        self.handoff?.state = opened ? .opened : .failed
+    }
+
+    func retryHandoff() {
+        handoff?.state = .opening
+    }
+
+    func leaveHandoff() {
+        handoff = nil
     }
 
     func finishOnboarding() {

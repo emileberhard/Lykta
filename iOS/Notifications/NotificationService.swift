@@ -17,7 +17,7 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let original = request.content
         deliveryLock.withLock { delivery = .pending(original, contentHandler) }
-        guard let payload = Self.payload(of: original), let host = Self.host, let content = original.mutableCopy() as? UNMutableNotificationContent else {
+        guard let payload = NotificationPayload(userInfo: original.userInfo), let host = Self.host, let content = original.mutableCopy() as? UNMutableNotificationContent else {
             return finish()
         }
         let loader = MediaLoader(payload: payload, host: host, cache: .shared)
@@ -75,12 +75,6 @@ nonisolated final class NotificationService: UNNotificationServiceExtension {
     private static var host: String? {
         guard let host = Bundle.main.object(forInfoDictionaryKey: "LyktaGatewayHost") as? String, !host.isEmpty else { return nil }
         return host
-    }
-
-    private static func payload(of content: UNNotificationContent) -> NotificationPayload? {
-        guard let object = content.userInfo[NotificationPayload.key], JSONSerialization.isValidJSONObject(object),
-              let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
-        return try? JSONDecoder().decode(NotificationPayload.self, from: data)
     }
 
     private static func intent(_ content: UNNotificationContent, sender id: String, avatar: Data?) -> INSendMessageIntent {

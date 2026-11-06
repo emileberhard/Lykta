@@ -511,13 +511,18 @@ extension Node.Content.Chart.Mark {
     }
 }
 
+extension URL {
+    public init?(link text: String) {
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
+              !["http", "file", "data", "javascript", "about", "blob"].contains(scheme) else { return nil }
+        self = url
+    }
+}
+
 extension KeyedDecodingContainer<Key> {
     func link(_ key: String) throws -> URL? {
         guard let text: String = try optional(key) else { return nil }
-        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
-              !["http", "file", "data", "javascript", "about", "blob"].contains(scheme) else {
-            throw invalid("expected an https URL or an app URL such as shortcuts://", at: key)
-        }
+        guard let url = URL(link: text) else { throw invalid("expected an https URL or an app URL such as shortcuts://", at: key) }
         return url
     }
 

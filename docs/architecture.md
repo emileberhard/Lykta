@@ -374,7 +374,13 @@ an endpoint and would let a layout make the gateway request arbitrary URLs. An
 agent that writes data a tap may have changed reads the activity and sends
 `ifRevision`, which the gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
 most 1,000 per phone. Links open through the app's URL handler, so a layout can
-reach any https or app URL without a gateway round trip.
+reach any https or app URL without a gateway round trip. A notification's
+`link` travels in its push and opens the same way when the user taps the
+notification. iOS always brings Lykta forward first, so `Model.handoff`
+replaces HomeView with a screen that matches the launch screen until the link
+opens, and stays while Lykta is in the background so its snapshot shows no
+home; a cold launch from a notification reads the tap from the scene's
+connection options before the first frame.
 
 **Widget taps share the action log.** From 0.14.0, widget buttons and toggles
 run an AppIntent in the app and send the device action with a widget UUID.

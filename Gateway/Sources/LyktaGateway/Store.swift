@@ -525,9 +525,11 @@ actor Store {
             let advice: String
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.withoutEscapingSlashes]
-            if let drawing, let bytes = drawing.compressedBytes,
-               try encoder.encode(drawing).count > max(encoder.encode(request.body).count, encoder.encode(request.sender.name).count) {
+            let text = max(try encoder.encode(request.body).count, try encoder.encode(request.sender.name).count)
+            if let drawing, let bytes = drawing.compressedBytes, try encoder.encode(drawing).count > text {
                 advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
+            } else if let link = request.link, try encoder.encode(link).count > text {
+                advice = "Shorten the link."
             } else { advice = "Shorten the body." }
             throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). \(advice)")
         }
@@ -535,6 +537,11 @@ actor Store {
     }
 
     private func prepareNotification(_ request: NotificationRequest, on device: Device) throws -> (NotificationRequest, PackedNode?) {
+        let link = Layout.Requirement.notificationLink
+        if request.link != nil, let draws = Self.draws(link.version, on: device) {
+            throw APIError(.appUpdateRequired, "\(link.path) uses \(link.feature), which needs Lykta \(link.version) or later, and \(draws). "
+                           + "Ask the user to update Lykta and open it once, or send the notification without it.")
+        }
         guard case let .drawing(template)? = request.sender.avatar else { return (request, nil) }
         let (node, admitted) = try expanding(template, on: device) { saved throws(LayoutError) in
             let prepared = try PreparedNode(template, saved: saved, at: "sender.avatar")
@@ -545,7 +552,7 @@ actor Store {
             throw APIError(.appUpdateRequired, "sender.avatar uses \(requirement.feature), which needs Lykta \(requirement.version) or later, and \(draws). Ask the user to update Lykta and open it once.")
         }
         return (NotificationRequest(sender: .init(id: request.sender.id, name: request.sender.name, avatar: .drawing(node)),
-                                    body: request.body, sound: request.sound, image: request.image), admitted.drawing)
+                                    body: request.body, sound: request.sound, image: request.image, link: request.link), admitted.drawing)
     }
 
     func notificationAttempted(_ device: Device, name: Name, now: Int) throws -> Bool {

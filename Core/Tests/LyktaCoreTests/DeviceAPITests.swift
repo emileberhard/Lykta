@@ -34,6 +34,17 @@ struct DeviceAPITests {
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(Action.self, from: Data(both.utf8)) }
     }
 
+    @Test func readsANotificationsLinkFromItsDeliveredContent() throws {
+        let id = UUID()
+        let lykta = try JSONSerialization.jsonObject(with: Data(#"""
+            {"id": "\#(id)", "sender": "ci", "token": "lykta_fetch_x", "link": "shortcuts://run-shortcut?name=Lights%20Off", "future": 1}
+            """#.utf8))
+        let payload = try #require(NotificationPayload(userInfo: ["aps": ["alert": "Done"], "lykta": lykta]))
+        #expect(payload.id == id)
+        #expect(payload.link == URL(string: "shortcuts://run-shortcut?name=Lights%20Off"))
+        #expect(NotificationPayload(userInfo: ["aps": ["alert": "Done"]]) == nil)
+    }
+
     @Test func readsTheSyncAnswerOfAGatewayThatSendsNoTimes() throws {
         let id = UUID()
         let result = try JSONDecoder().decode(SyncResult.self, from: Data(#"{"end": ["\#(id)"]}"#.utf8))

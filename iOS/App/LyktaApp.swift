@@ -34,12 +34,13 @@ struct LyktaApp: App {
 
 private struct AppView: View {
     let model: Model
-    @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            if model.isOnboarding {
+            if let handoff = model.handoff {
+                HandoffView(model: model, handoff: handoff)
+            } else if model.isOnboarding {
                 Onboarding(model: model)
                     .transition(.replace(reduceMotion: reduceMotion))
             } else {
@@ -48,6 +49,6 @@ private struct AppView: View {
             }
         }
         .animation(.smooth(duration: 0.6), value: model.isOnboarding)
-        .onOpenURL { openURL($0) }
+        .onOpenURL { model.open($0) }
     }
 }

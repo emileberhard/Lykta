@@ -27,6 +27,7 @@ EOF
 | `body` | Up to 500 characters. Say what happened and what the user can do about it. |
 | `sound` | `true` plays the default sound, the id of a sound plays that sound. Leave it out for a silent notification, for news the user can read later. |
 | `image` | Optional id of an image shown as a thumbnail and in full when the user expands the notification, such as a photo of the finished print. |
+| `link` | Optional URL the phone opens when the user taps the notification: the https address of what it is about, such as the message, pull request or meeting, which opens in its app when one handles it and in Safari otherwise, or an app URL such as `shortcuts://run-shortcut?name=Lights`. Give one whenever the event has an address. Needs Lykta 0.19.0. |
 
 `lykta put` waits up to 10 seconds for Apple's answer and prints the
 notification's [status](#status), so `state` is `sent`, or says what happened.
@@ -78,7 +79,7 @@ image. The examples in [`examples/notifications`](../examples/notifications)
 show each field: [`print-finished.json`](../examples/notifications/print-finished.json)
 and [`doorbell.json`](../examples/notifications/doorbell.json) name their
 media files next to them where the ids go, so upload each and put its id there;
-[`tests-passed.json`](../examples/notifications/tests-passed.json) uses no media.
+[`tests-passed.json`](../examples/notifications/tests-passed.json) uses no media and links to the CI runs.
 
 ## Status
 

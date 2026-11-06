@@ -12,7 +12,8 @@ agent. For status with no end, such as today's steps, the same layout
 language draws a Home Screen widget that the agent keeps current. For a
 single moment, such as a finished job, the agent sends a
 notification that arrives like a message from a person, with the sender's
-name and picture or drawn avatar, a sound of the agent's choosing and an image.
+name and picture or drawn avatar, a sound of the agent's choosing and an image,
+and a tap opens what it is about, such as the message or pull request.
 
 ```sh
 lykta put activities/build <<'EOF'

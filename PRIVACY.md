@@ -46,8 +46,9 @@ For each widget, until your agents delete it:
 
 For each notification, for one day:
 
-- the name, the sender's ID and name, the text, whether it plays a sound and
-  which uploaded files it uses, as your agents send them
+- the name, the sender's ID and name, the text, whether it plays a sound,
+  which uploaded files it uses and the link a tap opens, as your agents send
+  them
 - an expanded layout node when the sender's avatar is a drawing
 - its delivery state and what the phone reports about how it prepared it,
   such as whether it showed the sender's avatar
@@ -84,6 +85,8 @@ gateway a log of what it observes:
 - the phone model and iOS version
 - which activities appeared and their state, and which ones you ended in the
   app
+- whether a link you tapped opened, and which notification it came from,
+  without the link itself
 - when you finish or skip the introduction, and whether an agent had
   connected by then
 - fingerprints of the content and push tokens it received
@@ -128,7 +131,9 @@ to the phone, and tells its widgets when to reload; widget content travels
 only between the gateway and the phone. Previews travel only between the
 gateway and its operator's renderer. To show a notification as a message from its sender, the app
 shares the sender's name and the text with iOS on the phone, which may suggest
-the sender in Siri and the share sheet; this stays on the phone. The
+the sender in Siri and the share sheet; this stays on the phone. A link you tap
+in a notification, activity or widget opens in the app or website it names,
+which receives the link. The
 App Store app reaches its gateway over HTTPS through Cloudflare's network.
 
 ## Questions

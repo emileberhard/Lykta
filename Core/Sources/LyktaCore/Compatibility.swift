@@ -174,7 +174,12 @@ extension Layout {
         ],
         "0.14.0": ["widget.button", "widget.toggle"],
         "0.17.0": ["notification.avatar.node"],
+        "0.19.0": ["notification.link"],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
+}
+
+extension Layout.Requirement {
+    public static let notificationLink = Layout.Requirement(version: Layout.introduced["notification.link"]!, feature: "notification.link", path: "link")
 }
 
 final class FeatureLog: Sendable {
