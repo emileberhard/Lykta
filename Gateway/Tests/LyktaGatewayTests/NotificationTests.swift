@@ -172,7 +172,7 @@ struct NotificationTests {
     }
 
     @Test func olderPhonesRefuseALinkButStillGetNotificationsWithoutOne() async throws {
-        let report = DeviceReport(pushToStartToken: nil, appVersion: "0.18.1 (90)", layoutVersion: Version(0, 18, 1), bundleInstance: UUID(),
+        let report = DeviceReport(pushToStartToken: nil, appVersion: "0.18.1 (90)", layoutVersion: Version(0, 17, 0), bundleInstance: UUID(),
                                   activities: [], notifications: Self.allowed)
         #expect(await api.handle(HTTPRequest(method: "PUT", target: "/v1/device", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
                                              body: Array(try JSONEncoder().encode(report)))).status == 200)
@@ -180,7 +180,7 @@ struct NotificationTests {
         let refused = try await send("PUT", "/v1/notifications/linked", body: linked)
         #expect(refused.status == 409)
         #expect(try refused.decoded() as Refusal == Refusal(error: "app_update_required", message: "link uses notification.link, which needs Lykta "
-            + "0.19.0 or later, and this phone's Lykta app draws layouts up to 0.18.1. Ask the user to update Lykta and open it once, "
+            + "0.19.0 or later, and this phone's Lykta app draws layouts up to 0.17.0. Ask the user to update Lykta and open it once, "
             + "or send the notification without it."))
         #expect(try await send("PUT", "/v1/notifications/plain", body: Self.printer).status == 201)
     }

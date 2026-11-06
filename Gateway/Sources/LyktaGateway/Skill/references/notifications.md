@@ -107,7 +107,9 @@ should you.
 - `notifications_not_allowed`: the user turned notifications off for Lykta.
   Ask them to turn them on in Lykta or in Settings.
 - `app_update_required`: the phone cannot draw a requested feature or predates
-  notifications. Ask the user to update Lykta and open it once.
+  notifications. Ask the user to update Lykta and open it once. A refused
+  notification keeps nothing, so when only its `link` is too new, send it
+  again under the same name without `link`.
 - `too_many_notifications`: a phone takes at most 60 notifications an hour.
   The `Retry-After` header says how many seconds to wait.
 - `conflict`: another notification used the name in the past day.

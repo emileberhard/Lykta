@@ -118,6 +118,15 @@ struct DrawnAvatarTests {
         #expect(refused.message.contains("sender.avatar compresses to "))
     }
 
+    @Test func aLinkLargerThanTheDrawingIsWhatTheAdviceNames() async throws {
+        try await report(version: Layout.version)
+        let linked = try request(["text": .string(String(repeating: "AB", count: 200))])
+            .setting("link", to: .string("https://example.com/" + String(repeating: "a", count: 4000)))
+        let response = await send("PUT", "/v1/notifications/done", linked)
+        #expect(response.status == 413)
+        #expect((try response.decoded() as Refusal).message.hasSuffix("Shorten the link."))
+    }
+
     @Test(arguments: [NotificationReport.Avatar.image, .initials])
     func oldReadersCanReadThePersistedDrawingRequestAndReport(_ avatar: NotificationReport.Avatar) async throws {
         let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()

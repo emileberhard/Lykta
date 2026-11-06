@@ -45,7 +45,9 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   row with the next minor version; released rows never change, and release
   admission enforces both. Decode enum values through `Choice` or record them
   with `Choice.record`, and mark a new value form explicitly; a feature that is
-  never recorded is never gated. Enum type names are part of feature names, so
+  never recorded is never gated. A request field the layout decoder never
+  sees, such as a notification's `link`, gets its row and a
+  `Layout.Requirement` that `Store` checks. Enum type names are part of feature names, so
   renaming one fails release admission. SVG markup counts as the single feature
   `svg`; when the SVG subset grows, record its new elements and attributes. The
   gateway refuses a layout with `app_update_required` when the phone's reported

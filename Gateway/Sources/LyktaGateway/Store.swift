@@ -526,9 +526,10 @@ actor Store {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.withoutEscapingSlashes]
             let text = max(try encoder.encode(request.body).count, try encoder.encode(request.sender.name).count)
-            if let drawing, let bytes = drawing.compressedBytes, try encoder.encode(drawing).count > text {
+            let link = try request.link.map { try encoder.encode($0).count } ?? 0
+            if let drawing, let bytes = drawing.compressedBytes, try encoder.encode(drawing).count > max(text, link) {
                 advice = "sender.avatar compresses to \(bytes) bytes; simplify its drawing."
-            } else if let link = request.link, try encoder.encode(link).count > text {
+            } else if link > text {
                 advice = "Shorten the link."
             } else { advice = "Shorten the body." }
             throw APIError(.payloadTooLarge, "The push payload would be \(size) bytes; APNs allows \(maximumPayloadBytes). \(advice)")
