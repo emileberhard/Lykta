@@ -214,7 +214,7 @@ private struct IslandRegion: View {
 }
 
 private struct Island: ViewModifier {
-    static let height: CGFloat = 36.67
+    nonisolated static let height: CGFloat = 36.67
     static let camera: CGFloat = 120
     static let sensor: CGFloat = 95
 
