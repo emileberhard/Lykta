@@ -159,8 +159,8 @@
         }
       ],
       "alignment": "leading",
-      "spacing": 8,
-      "modifiers": [{"padding": {"horizontal": 16, "vertical": 13}}, {"foreground": "#3A2A1F"}]
+      "spacing": 7,
+      "modifiers": [{"padding": {"horizontal": 16, "vertical": 12}}, {"foreground": "#3A2A1F"}]
     },
     "compactLeading": {
       "text": "{{step}}",
@@ -306,7 +306,7 @@
             "spacing": 8
           }
         ],
-        "spacing": 8,
+        "spacing": 4,
         "modifiers": [{"animation": {"curve": "smooth", "value": "{{step}}"}}]
       }
     },

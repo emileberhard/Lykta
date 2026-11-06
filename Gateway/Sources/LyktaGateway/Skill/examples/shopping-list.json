@@ -88,9 +88,9 @@
         ],
         "modifiers": [{"frame": {"width": 26, "height": 26}}, {"padding": {"leading": 6, "top": 4}}]
       },
-      "center": {
-        "text": "{{store}} · our list",
-        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"padding": {"top": 4}}]
+      "trailing": {
+        "text": "{{store}}",
+        "modifiers": [{"font": "subheadline"}, {"fontWeight": "semibold"}, {"padding": {"trailing": 6, "top": 4}}]
       },
       "bottom": {
         "hstack": [

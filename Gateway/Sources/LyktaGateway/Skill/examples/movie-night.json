@@ -143,12 +143,24 @@
         "symbol": "popcorn.fill",
         "modifiers": [{"font": "title3"}, {"symbolRenderingMode": "multicolor"}, {"padding": {"leading": 6, "top": 4}}]
       },
+      "trailing": {
+        "timer": ["{{start}}", "{{end}}"],
+        "pausedAt": "{{pausedAt}}",
+        "modifiers": [
+          {"font": "footnote"},
+          {"monospacedDigit": true},
+          {"foreground": "#F2C46D"},
+          {"multilineTextAlignment": "trailing"},
+          {"frame": {"width": 52, "alignment": "trailing"}},
+          {"padding": {"trailing": 6, "top": 6}}
+        ]
+      },
       "center": {
         "vstack": [
           {
             "if": "{{playing}}",
-            "then": {"text": "Now showing · {{room}}"},
-            "else": {"text": "Intermission · {{room}}"},
+            "then": {"text": "Now showing"},
+            "else": {"text": "Intermission"},
             "modifiers": [
               {"font": "caption2"},
               {"fontWeight": "semibold"},
@@ -171,31 +183,14 @@
           }
         ],
         "spacing": 0,
-        "modifiers": [{"foreground": "#FFF3DE"}]
+        "modifiers": [{"foreground": "#FFF3DE"}, {"frame": {"maxWidth": 200}}]
       },
       "bottom": {
         "vstack": [
-          {
-            "hstack": [
-              {"progress": ["{{start}}", "{{end}}"], "pausedAt": "{{pausedAt}}", "modifiers": [{"tint": "#F2C46D"}]},
-              {
-                "timer": ["{{start}}", "{{end}}"],
-                "pausedAt": "{{pausedAt}}",
-                "modifiers": [
-                  {"font": "caption"},
-                  {"monospacedDigit": true},
-                  {"foreground": "secondary"},
-                  {"multilineTextAlignment": "trailing"},
-                  {"frame": {"width": 52, "alignment": "trailing"}}
-                ]
-              }
-            ],
-            "spacing": 8
-          },
+          {"progress": ["{{start}}", "{{end}}"], "pausedAt": "{{pausedAt}}", "modifiers": [{"tint": "#F2C46D"}, {"padding": {"horizontal": 6}}]},
           {"use": "controls"}
         ],
-        "spacing": 8,
-        "modifiers": [{"padding": {"top": 4}}]
+        "spacing": 8
       }
     },
     "background": "#140508",

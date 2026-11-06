@@ -272,7 +272,7 @@
         ],
         "alignment": "leading",
         "spacing": 6,
-        "modifiers": [{"padding": {"top": 6, "horizontal": 6}}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
+        "modifiers": [{"padding": {"top": 2, "horizontal": 6}}, {"frame": {"maxWidth": "infinity", "alignment": "leading"}}]
       }
     },
     "background": "#FFFFFF",

@@ -112,7 +112,7 @@
       ],
       "spacing": 10,
       "modifiers": [
-        {"padding": {"horizontal": 14, "vertical": 14}},
+        {"padding": {"horizontal": 14, "vertical": 12}},
         {"foreground": "white"},
         {"animation": {"curve": "snappy", "value": "{{answered}}"}}
       ]

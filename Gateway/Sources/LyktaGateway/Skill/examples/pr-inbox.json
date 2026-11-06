@@ -103,7 +103,7 @@
         ],
         "alignment": "leading",
         "spacing": 8,
-        "modifiers": [{"padding": {"top": 4}}, {"animation": {"curve": "snappy", "value": "{{count}}"}}]
+        "modifiers": [{"animation": {"curve": "snappy", "value": "{{count}}"}}]
       }
     },
     "background": "#0D1117",
