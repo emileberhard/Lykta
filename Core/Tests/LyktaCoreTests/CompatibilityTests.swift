@@ -13,6 +13,7 @@ struct CompatibilityTests {
         "number": "5",
         "text.number": #"{"text": 5}"#,
         "if.bool": #"{"if": true, "then": "a"}"#,
+        "if.withoutThen": #"{"if": "dark", "else": "a"}"#,
         "modifiers.transition": #"{"text": "a", "modifiers": [{"transition": "opacity"}]}"#,
         "modifiers.animation": #"{"text": "a", "modifiers": [{"animation": {"value": 1}}]}"#,
         "modifiers.id": #"{"text": "a", "modifiers": [{"id": "x"}]}"#,
@@ -52,7 +53,7 @@ struct CompatibilityTests {
         #expect(layout.requirement == .init(version: Version(0, 2, 4), feature: "svg", path: "lockScreen.vstack[1].svg"))
         let baseline = try Layout(json: Array(layoutJSON(##"{"text": "a", "modifiers": [{"foreground": "#AABBCC"}, {"contentTransition": "numericText"}]}"##).utf8))
         #expect(baseline.requirement == nil)
-        #expect(Layout.version == Version(0, 19, 0))
+        #expect(Layout.version == Version(0, 20, 0))
     }
 
     @Test func recordsEveryWayAValueIsNamed() throws {

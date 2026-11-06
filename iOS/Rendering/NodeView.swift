@@ -44,10 +44,8 @@ struct NodeView: View {
         case let .gauge(gauge):
             GaugeNodeView(gauge: gauge)
         case let .conditional(.value(holds), then, otherwise):
-            if holds {
-                NodeView(then)
-            } else if let otherwise {
-                NodeView(otherwise)
+            if let node = holds ? then : otherwise {
+                NodeView(node)
             }
         case let .conditional(.environment(condition), then, otherwise):
             ConditionalNodeView(condition: condition, then: then, otherwise: otherwise)
@@ -280,7 +278,7 @@ private struct CheckboxToggleStyle: ToggleStyle {
 
 private struct ConditionalNodeView: View {
     let condition: Node.Content.Condition.Environment
-    let then: Node
+    let then: Node?
     let otherwise: Node?
     @Environment(\.isActivityStale) private var isStale
     @Environment(\.colorScheme) private var colorScheme
@@ -306,10 +304,8 @@ private struct ConditionalNodeView: View {
         case .vibrant: renderingMode == .vibrant
         case .showsBackground: showsBackground
         }
-        if holds {
-            NodeView(then)
-        } else if let otherwise {
-            NodeView(otherwise)
+        if let node = holds ? then : otherwise {
+            NodeView(node)
         }
     }
 }

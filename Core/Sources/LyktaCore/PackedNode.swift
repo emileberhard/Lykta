@@ -135,7 +135,7 @@ private extension Node {
                 try node?.admitAvatar(at: "\(path).\(key)")
             }
         case let .conditional(.value, then, otherwise):
-            try then.admitAvatar(at: "\(path).then")
+            try then?.admitAvatar(at: "\(path).then")
             try otherwise?.admitAvatar(at: "\(path).else")
         case .text, .symbol, .shape, .svg, .spacer, .divider, .progress(.value, .circular), .date(_, .date), .date(_, .time), .chart, .accessoryBackground: break
         }

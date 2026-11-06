@@ -175,6 +175,7 @@ extension Layout {
         "0.14.0": ["widget.button", "widget.toggle"],
         "0.17.0": ["notification.avatar.node"],
         "0.19.0": ["notification.link"],
+        "0.20.0": ["if.withoutThen"],
     ].flatMap { version, features in features.map { ($0, Version(version)!) } })
 }
 

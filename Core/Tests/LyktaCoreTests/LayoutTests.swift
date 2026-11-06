@@ -25,6 +25,7 @@ struct LayoutTests {
         (#"{"text": "a", "modifiers": [{"animation": {"curve": "spring", "duration": 3, "value": 1}}]}"#, "lockScreen.modifiers[0].animation.duration: must be between 0.05 and 2.0"),
         (#"{"text": "a", "modifiers": [{"transition": [{"move": "top"}, ["opacity", "scale"]]}]}"#, "lockScreen.modifiers[0].transition"),
         (#"{"svg": "<svg viewBox='0 0 9 9'><path d='M0 0' fill='tomato'/></svg>"}"#, "lockScreen.svg: <path> #1: fill: expected none, currentColor"),
+        (#"{"if": true}"#, "lockScreen.if: give then, else or both"),
     ])
     func rejectsInvalidNodesAtTheirPath(lockScreen: String, message: String) {
         #expect(error(in: layoutJSON(lockScreen)).hasPrefix(message))
@@ -52,9 +53,11 @@ struct LayoutTests {
     }
 
     @Test func onlyControlsTheDataShowsCanBePressed() throws {
-        let json = layoutJSON(#"{"if": true, "then": {"button": "pause", "label": "Pause"}, "else": {"button": "play", "label": "Play"}}"#,
-                          extra: #", "expanded": {"bottom": {"if": "dark", "then": {"button": "dim", "label": "Dim"}}}"#)
-        #expect(Set(try Layout(json: Array(json.utf8)).buttons.keys) == ["pause", "dim"])
+        let json = layoutJSON(#"""
+            {"vstack": [{"if": true, "then": {"button": "pause", "label": "Pause"}, "else": {"button": "play", "label": "Play"}},
+                        {"if": true, "else": {"button": "skip", "label": "Skip"}}, {"if": false, "else": {"button": "undo", "label": "Undo"}}]}
+            """#, extra: #", "expanded": {"bottom": {"if": "dark", "then": {"button": "dim", "label": "Dim"}}}"#)
+        #expect(Set(try Layout(json: Array(json.utf8)).buttons.keys) == ["pause", "undo", "dim"])
     }
 
     @Test func buttonsWithOneNameChangeTheDataAlike() {

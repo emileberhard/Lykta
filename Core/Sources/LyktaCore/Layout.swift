@@ -178,7 +178,7 @@ public struct Node: Decodable, Sendable {
         case let .concat(parts):
             let isOneText = !(parts.contains(where: \.content.isSymbol) && parts.contains(where: \.content.isSelfUpdating))
             return lineModifiers.allSatisfy(\.isTextModifier) && (isOneText || parts.count == 2 && parts[0].content.isSymbol)
-        case let .conditional(_, then, otherwise): return lineModifiers.isEmpty && then.fitsOneLine && otherwise?.fitsOneLine != false
+        case let .conditional(_, then, otherwise): return lineModifiers.isEmpty && then?.fitsOneLine != false && otherwise?.fitsOneLine != false
         default: return false
         }
     }
@@ -237,7 +237,7 @@ extension Node {
         case progress(Progress, style: ProgressStyle)
         case gauge(Gauge)
         case viewThatFits([Node], axis: Axis?)
-        case conditional(Condition, then: Node, else: Node?)
+        case conditional(Condition, then: Node?, else: Node?)
         case link(URL, label: Node)
         case button(String, label: Node, style: ButtonStyle, effects: Effects)
         case toggle(String, isOn: Bool, label: Node, style: ToggleStyle)
@@ -453,7 +453,13 @@ extension Node {
                 guard (minimum == nil) == (maximum == nil) else { throw fields.invalid("give both min and max, or neither") }
                 guard minimum.map({ $0 < maximum! }) != false else { throw fields.invalid("min must be less than max", at: "max") }
                 self = .chart(Chart(marks: marks, range: minimum.map { $0...maximum! }, axes: try fields.optional("axes") ?? false))
-            default: self = .conditional(try fields.required(kind), then: try fields.required("then"), else: try fields.optional("else"))
+            default:
+                let condition: Condition = try fields.required(kind)
+                let then: Node? = try fields.optional("then")
+                let otherwise: Node? = try fields.optional("else")
+                guard then != nil || otherwise != nil else { throw fields.invalid("give then, else or both", at: kind) }
+                if then == nil { fields.record("if.withoutThen", at: kind) }
+                self = .conditional(condition, then: then, else: otherwise)
             }
         }
 
@@ -469,7 +475,7 @@ extension Node {
                 nodes
             case let .gauge(gauge):
                 [gauge.label, gauge.currentValueLabel, gauge.minimumValueLabel, gauge.maximumValueLabel].compactMap(\.self)
-            case let .conditional(_, then, otherwise): [then] + [otherwise].compactMap(\.self)
+            case let .conditional(_, then, otherwise): [then, otherwise].compactMap(\.self)
             case let .link(_, label), let .button(_, label, _, _), let .toggle(_, _, label, _): [label]
             case let .grid(rows, _, _, _): rows.flatMap(\.self)
             case .text, .symbol, .timer, .date, .shape, .svg, .spacer, .divider, .progress, .chart, .accessoryBackground: []
