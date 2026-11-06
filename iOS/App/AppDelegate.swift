@@ -29,9 +29,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         [.banner, .list, .sound]
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let tap = NotificationTap(response) else { return }
-        NotificationCenter.default.post(tap, subject: UIApplication.shared)
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let tap = NotificationTap(response) {
+            NotificationCenter.default.post(tap, subject: UIApplication.shared)
+        }
+        completionHandler()
     }
 }
 
