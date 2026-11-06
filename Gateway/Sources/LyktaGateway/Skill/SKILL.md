@@ -71,8 +71,11 @@ lykta render activities/deploy deploy.json
 ```
 
 Look at the image, fix what you see and render again, then send the PUT. A
-warning names content the phone will cut off, such as a Lock Screen taller
-than 160 points. Text in the image runs about 2 % wider than on the phone.
+warning names a presentation too tall for the phone, such as a Lock Screen
+taller than 160 points, which the phone shrinks or cuts off as the image
+shows, or one that draws nothing. Text in the image runs up to 4 % wider than
+on the phone, so text that fits there fits the phone, and its lines differ in
+height by up to a point.
 Renders never reach the phone or spend its start budget. They are drawn on a
 Mac the gateway's operator runs, so a render takes a few seconds.
 `render_unavailable` means that renderer is missing or busy, and its message

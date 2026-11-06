@@ -85,7 +85,7 @@ final class RenderController: UIViewController {
                     continue
                 }
                 result.renders.append(Result.Rendered(input: shot.input, presentation: shot.presentation, width: snapshot.image.size.width,
-                                                      height: snapshot.image.size.height, idealHeight: shot.idealHeight,
+                                                      height: snapshot.image.size.height, overflow: shot.overflow,
                                                       complete: snapshot.complete, png: png))
             }
         }
@@ -107,21 +107,21 @@ final class RenderController: UIViewController {
             return presentations.compactMap { presentation in
                 switch presentation {
                 case .lock:
-                    let ideal = Self.measure(LockScreenView(state: state, activity: nil, isStale: false)
-                        .dynamicTypeSize(LockScreenCard.textSizes), by: .idealSize, in: style)
-                    return Shot(input: input.name, presentation: presentation, idealHeight: ideal,
+                    let height = Self.height(of: LockScreenView(state: state, activity: nil, isStale: false)
+                        .dynamicTypeSize(LockScreenCard.textSizes), in: style)
+                    return Shot(input: input.name, presentation: presentation, overflow: max(height - LockScreenCard.maximumHeight, 0),
                                 host: Self.host(LockCanvas(state: state).frame(width: Self.width), in: style))
                 case .expanded:
-                    let ideal = Self.measure(ExpandedRegions(regions: layout?.expanded).dynamicTypeSize(LockScreenCard.textSizes),
-                                             by: .proposedWidth, in: style)
-                    return Shot(input: input.name, presentation: presentation, idealHeight: ideal,
+                    let height = Self.height(of: ExpandedRegions(regions: layout?.expanded, maximumHeight: .infinity)
+                        .dynamicTypeSize(LockScreenCard.textSizes), in: style)
+                    return Shot(input: input.name, presentation: presentation, overflow: max(height - LockScreenCard.maximumHeight, 0),
                                 host: Self.host(ExpandedIsland(regions: layout?.expanded, keyline: keyline).frame(width: Self.width), in: style))
                 case .compact:
-                    return Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                    return Shot(input: input.name, presentation: presentation, overflow: nil,
                                 host: Self.host(CompactIsland(leading: layout?.compactLeading, trailing: layout?.compactTrailing, keyline: keyline)
                                     .fixedSize(), in: style))
                 case .minimal:
-                    return Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                    return Shot(input: input.name, presentation: presentation, overflow: nil,
                                 host: Self.host(MinimalBubble(node: layout?.minimal, keyline: keyline).fixedSize(), in: style))
                 case .small, .medium, .large, .circular, .rectangular, .inline, .banner, .avatar:
                     return nil
@@ -137,7 +137,7 @@ final class RenderController: UIViewController {
             }
             return presentations.compactMap { presentation in
                 guard let family = presentation.family, layout.presentations[family] != nil else { return nil }
-                return Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                return Shot(input: input.name, presentation: presentation, overflow: nil,
                             host: Self.host(WidgetPreview(layout: layout, family: family).fixedSize(), in: style))
             }
         case let .notification(sender, body, avatar, image):
@@ -156,11 +156,11 @@ final class RenderController: UIViewController {
             return presentations.compactMap { presentation in
                 switch presentation {
                 case .banner:
-                    Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                    Shot(input: input.name, presentation: presentation, overflow: nil,
                          host: Self.host(NotificationCanvas(banner: NotificationBanner(sender: sender.name, text: body, avatar: source, image: image))
                             .frame(width: Self.width), in: style))
                 case .avatar:
-                    Shot(input: input.name, presentation: presentation, idealHeight: nil,
+                    Shot(input: input.name, presentation: presentation, overflow: nil,
                          host: Self.host(NotificationAvatar(avatar: source).fixedSize(), in: style))
                 case .lock, .expanded, .compact, .minimal, .small, .medium, .large, .circular, .rectangular, .inline:
                     nil
@@ -180,9 +180,8 @@ final class RenderController: UIViewController {
         return host
     }
 
-    private static func measure(_ content: some View, by measurement: CappedHeight.Measurement, in style: UIUserInterfaceStyle) -> CGFloat {
-        let capped = CappedHeight(maximum: canvas.height, measurement: measurement)
-        return host(capped { content }.frame(width: width), in: style).view.sizeThatFits(canvas).height
+    private static func height(of content: some View, in style: UIUserInterfaceStyle) -> CGFloat {
+        host(content.frame(width: width).fixedSize(horizontal: false, vertical: true), in: style).view.sizeThatFits(canvas).height
     }
 
     private func snapshot(_ shots: ArraySlice<Shot>) -> [(image: UIImage, complete: Bool)?] {
@@ -228,7 +227,7 @@ final class RenderController: UIViewController {
 private struct Shot {
     let input: String
     let presentation: Presentation
-    let idealHeight: CGFloat?
+    let overflow: CGFloat?
     let host: UIViewController
 }
 
@@ -354,7 +353,7 @@ private struct Result: Encodable {
         let presentation: Presentation
         let width: CGFloat
         let height: CGFloat
-        let idealHeight: CGFloat?
+        let overflow: CGFloat?
         let complete: Bool
         let png: Data
     }

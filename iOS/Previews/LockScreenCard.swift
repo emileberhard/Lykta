@@ -10,8 +10,7 @@ struct LockScreenCard: View {
     let isStale: Bool
 
     var body: some View {
-        let capped = CappedHeight(maximum: Self.maximumHeight, measurement: .idealSize)
-        capped {
+        CappedHeight(maximum: Self.maximumHeight) {
             LockScreenView(state: state, activity: activity, isStale: isStale)
         }
         .frame(maxWidth: .infinity)
@@ -20,30 +19,17 @@ struct LockScreenCard: View {
     }
 }
 
-struct CappedHeight: SwiftUI.Layout {
-    enum Measurement {
-        case idealSize
-        case proposedWidth
-
-        func proposal(for width: CGFloat?) -> ProposedViewSize {
-            switch self {
-            case .idealSize: .unspecified
-            case .proposedWidth: ProposedViewSize(width: width, height: nil)
-            }
-        }
-    }
-
+private struct CappedHeight: SwiftUI.Layout {
     let maximum: CGFloat
-    let measurement: Measurement
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let content = subviews.first else { return .zero }
-        let measured = content.sizeThatFits(measurement.proposal(for: proposal.width))
+        let measured = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
         return CGSize(width: proposal.width ?? measured.width, height: min(measured.height, maximum))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: ProposedViewSize(bounds.size))
     }
 }
 

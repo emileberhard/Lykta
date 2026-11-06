@@ -192,10 +192,22 @@ gateway would need a connection and a listing endpoint, and could show layouts
 newer than the installed app draws. The Dynamic Island previews approximate the
 system's regions and hold text to the sizes Xcode's previews draw: expanded
 between large and xxxLarge like the Lock Screen, compact and minimal at large.
-The Lock Screen card takes its content's ideal height up to 160 points, as the
-system does. The expanded island follows the same rule, as the HIG describes,
-although Xcode's previews always draw it 160 points tall; a phone has yet to
-confirm it. Timers ignore these limits in the app and follow its text size.
+The Lock Screen card takes its content's height at the card's width up to 160
+points and, as a phone does, centers taller content and cuts off its top and
+bottom. The expanded island follows measurements of an iPhone and of Xcode's
+previews, which place its regions as a phone does but not its height: regions
+start 18 points inside the top and sides; `leading` and `trailing` stay beside
+the camera while each is at most 120 points wide, or fits beside `center` with
+default spacing, and otherwise move below `center`, or below the camera
+without one; `center` starts below the camera and `bottom` under whichever
+region ends lowest, with SwiftUI's default spacing. A side is too wide when
+it takes more than that space if offered unlimited width, and two moved sides
+share their row. The island takes its height from the regions' ideal sizes
+plus an 18-point bottom margin, between 84 and 160 points, then offers the
+regions below the camera the rest of it as a `VStack` would: flexible content
+fills a short island, and past 160 points text with a `minimumScaleFactor`
+shrinks and wrapping text loses lines before content more than 147 points
+below the top is cut off. Timers ignore these limits in the app and follow its text size.
 Only a phone shows the real presentation. Sending an example
 is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
@@ -218,8 +230,9 @@ A resident simulator drew within a point of Xcode, but Apple licenses the
 simulator only for developing apps, while a Mac app may serve anyone, so the
 gateway can render for agents with the same engine. Catalyst lays out an iPad
 app at 77% and picks the system font's tracking for that smaller size, so text
-runs about 2% wider than on a phone and can wrap a line earlier; a layout that
-fits the render fits the phone. The engine draws what the gallery draws, not
+runs up to 4% wider than on a phone and can wrap a line earlier, so text that
+fits the render's width fits the phone's; line heights differ by up to a
+point. The engine draws what the gallery draws, not
 the system's containers, so StandBy and the Smart Stack, the lightened Lock
 Screen tints and vibrant accessory widgets remain Xcode's, through `--xcode`.
 

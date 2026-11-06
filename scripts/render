@@ -44,7 +44,6 @@ DEFAULT = "lock,expanded,compact,minimal,small,medium,large,circular,rectangular
 KNOWN = [*PRESENTATIONS, *NOTIFICATION_PRESENTATIONS]
 FAMILIES = {family for family, _, _ in PRESENTATIONS.values() if family}
 ENGINE_PRESENTATIONS = set(DEFAULT.split(","))
-LOCK_SCREEN_HEIGHT = 160
 CACHE = Path.home() / "Library" / "Caches" / "lykta"
 ENGINE = ROOT / ".local" / "engine"
 JOBS = ENGINE / "jobs"
@@ -329,8 +328,10 @@ def engine_renders(bodies, presentations, dark, output):
         failures.append({"error": "the snapshot is missing image data for some views", "renders": incomplete})
     if blank := [f"{entry['input']}-{entry['presentation']}" for entry in manifest["blank"]]:
         failures.append({"error": "these presentations draw nothing", "renders": blank})
-    tall = [f"{entry['input']} {entry['presentation']}: the content is {entry['idealHeight']:.0f} points tall, and the system shows "
-            f"{LOCK_SCREEN_HEIGHT} and cuts off the rest" for entry in manifest["renders"] if (entry.get("idealHeight") or 0) > LOCK_SCREEN_HEIGHT + 0.5]
+    fates = {"lock": "cuts off its top and bottom", "expanded": "shrinks what it can and cuts off the rest at the bottom"}
+    tall = [f"{entry['input']} {entry['presentation']}: the content is {entry['overflow']:.0f} points too tall, and the phone "
+            f"{fates[entry['presentation']]}, as the image shows"
+            for entry in manifest["renders"] if entry.get("overflow", 0) > 0.5]
     return rendered, manifest["layoutErrors"], failures, tall
 
 
@@ -742,10 +743,10 @@ def draw(job):
                 output.mkdir()
                 rendered, errors, failures, tall = engine_renders([(job["name"], kind, body)], job["presentations"], dark, output)
                 problems = [error["error"] for error in errors] + [f"{failure['error']}: {', '.join(failure['renders'])}" for failure in failures]
-                if problems or not rendered:
+                if not rendered:
                     return {"error": "; ".join(problems) or "nothing to draw"}
                 rows.append(("Dark" if dark else "Light", [target for _, target in rendered]))
-                warnings += [] if dark else tall
+                warnings += [warning for warning in problems + tall if warning not in warnings]
             image = Path(folder) / "sheet.png"
             sheet(rows, image)
             width = int(re.search(r"pixelWidth: (\d+)", run("sips", "-g", "pixelWidth", image)).group(1))

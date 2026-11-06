@@ -11,7 +11,7 @@ A Live Activity's layout:
 
 | Key | Required | Shown |
 | --- | --- | --- |
-| `lockScreen` | yes | On the Lock Screen, in banners and in StandBy. Full width; the system may cut off anything taller than 160 points. |
+| `lockScreen` | yes | On the Lock Screen, in banners and in StandBy. Full width and at most 160 points tall; the system centers taller content and cuts off its top and bottom. |
 | `compactLeading`, `compactTrailing` | yes | Beside the camera when this is the only activity. One line each, shrunk to half size before truncating. |
 | `minimal` | yes | A small circle when several activities share the Dynamic Island. |
 | `expanded` | no | `{"leading", "trailing", "center", "bottom"}`, each optional, when the user presses the Dynamic Island. Leading and trailing move below the camera when they are too wide. |
@@ -373,11 +373,13 @@ its shape needs, and build a symmetric mark from one part repeated with
   the drawing but not the space it takes, so pair it with a `frame` of the
   scaled size, as homelab's gauges do; shapes and SVG resize to a smaller
   `frame` on their own.
-- Expanded content clips at about 145 points tall. Add up the rows before
-  adding one, and add `fixedSize: "vertical"` to text that must keep its
+- Expanded regions start 18 points inside the top and sides. `leading` and
+  `trailing` stay beside the camera while at most 120 points wide and clear
+  of `center`, or else move under `center`; `bottom` starts about 8 points
+  under the lowest region. Past 160 points the phone shrinks text that can
+  shrink, drops lines of wrapping text and cuts off the rest; `lykta render`
+  shows it and warns. Add `fixedSize: "vertical"` to text that must keep its
   second line.
-- Expanded `leading` and `trailing` beside the camera hold about 44 points;
-  wider content moves below it.
 - When `{"if": "limitedWidth"}` holds, as in landscape, each compact side and
   the minimal get a 28-point circle: show a symbol, a short number or a ring.
 - Size a circular `progress` with a `frame`, such as 24 points in `minimal`.
