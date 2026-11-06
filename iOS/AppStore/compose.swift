@@ -497,19 +497,26 @@ enum Marks {
 MainActor.assumeIsolated {
     var drawn = Set<Data>()
     for (name, slide) in slides {
-        let renderer = ImageRenderer(content: slide.environment(\.colorScheme, .dark))
-        guard let rendered = renderer.cgImage,
-              let rgba = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: rendered.width * 4,
+        let width = Int(canvas.width), height = Int(canvas.height)
+        guard let rgba = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let context = CGContext(data: nil, width: rendered.width, height: rendered.height, bitsPerComponent: 8, bytesPerRow: 0,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { fail("could not render \(name)") }
-        let bounds = CGRect(x: 0, y: 0, width: rendered.width, height: rendered.height)
+        else { fail("could not allocate \(name) at \(width) × \(height)") }
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
         rgba.clear(bounds)
-        rgba.draw(rendered, in: bounds)
-        let pixels = UnsafeBufferPointer(start: rgba.data!.assumingMemoryBound(to: UInt8.self), count: rendered.width * rendered.height * 4)
-        guard !stride(from: 3, to: pixels.count, by: 4).contains(where: { pixels[$0] != 255 }) else {
-            fail("\(name) rendered with transparent pixels instead of covering its canvas")
+        var size = CGSize.zero
+        ImageRenderer(content: slide.environment(\.colorScheme, .dark)).render { rendered, draw in
+            size = rendered
+            draw(rgba)
+        }
+        guard size == canvas, let rendered = rgba.makeImage() else { fail("could not render \(name) at \(width) × \(height)") }
+        let pixels = UnsafeBufferPointer(start: rgba.data!.assumingMemoryBound(to: UInt8.self), count: width * height * 4)
+        let transparent = stride(from: 3, to: pixels.count, by: 4).filter { pixels[$0] != 255 }.map { $0 / 4 }
+        guard transparent.isEmpty else {
+            let columns = transparent.map { $0 % width }, rows = transparent.map { $0 / width }
+            fail("\(name) rendered \(transparent.count) transparent pixels, alpha down to \(transparent.map { pixels[$0 * 4 + 3] }.min()!), "
+                 + "in x \(columns.min()!)...\(columns.max()!), y \(rows.min()!)...\(rows.max()!), instead of covering its canvas")
         }
         guard drawn.insert(Data(pixels)).inserted else { fail("\(name) rendered the same pixels as an earlier slide") }
         context.draw(rendered, in: bounds)
