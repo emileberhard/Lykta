@@ -380,7 +380,7 @@ does the rest, gateway first:
    succeeds with a notice and leaves that version alone: withdrawing it would
    restart its review, and App Store Connect creates no new version until it
    is released. Rerun the job once that version is released; the maintainer's
-   `lykta-app-store-resume` automation does so.
+   `app-store-release` automation does so.
 
 CI and releases select the Xcode pinned in `.xcode-version`; builds use only
 committed package resolutions. CI also checks the release tools on Linux.

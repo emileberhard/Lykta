@@ -750,7 +750,7 @@ Store version for review, released automatically on approval. While an older
 version waits for or is in App Review, or waits for release, the newer tag
 still ships its gateway, TestFlight build and GitHub release, and its
 `app-store` job succeeds with a notice; the maintainer's
-`lykta-app-store-resume` automation reruns that job once the older version is
+`app-store-release` automation reruns that job once the older version is
 released. Withdrawing the older version instead would restart Apple's review,
 which a burst of releases repeated until the last one was reviewed, and App
 Store Connect creates no new version until the current one is ready for
