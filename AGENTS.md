@@ -368,16 +368,19 @@ does the rest, gateway first:
    When App Store Connect rejects the upload, it fails with Apple's errors.
 7. Alongside it, `app-store` composes the screenshots and runs
    `scripts/app-store-connect app-store`. Once the build is processed, it
-   removes an older version waiting for or in App Review from review, renames
+   takes an older version out of an unsent review submission, renames
    the App Store version that is still editable to the tag or creates one,
    with manual release, sets What's New to the tag message,
    replaces the iPhone screenshots, deletes only the unplaced images this
    release displaced or reserved, except those App Review has seen, which
    Apple keeps, attaches the build and submits the version for App Review,
    resolving its rejected item. A rerun resumes a draft that already carries
-   the tag and build. When the tag's own version is already in review, or a
-   version waits for release, this job succeeds with a notice and leaves that
-   version alone.
+   the tag and build. When the tag's own version is already in review, or an
+   older version waits for or is in App Review or waits for release, this job
+   succeeds with a notice and leaves that version alone: withdrawing it would
+   restart its review, and App Store Connect creates no new version until it
+   is released. Rerun the job once that version is released; the maintainer's
+   `lykta-app-store-resume` automation does so.
 
 CI and releases select the Xcode pinned in `.xcode-version`; builds use only
 committed package resolutions. CI also checks the release tools on Linux.

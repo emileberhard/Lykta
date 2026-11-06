@@ -105,7 +105,7 @@ def draft_version(app, version, build):
         return None, False
     if state == "READY_FOR_REVIEW" and name == version and (api("GET", f"appStoreVersions/{draft['id']}/build") or {}).get("id") == build:
         return draft["id"], True
-    if state in IN_REVIEW | {"READY_FOR_REVIEW"}:
+    if state == "READY_FOR_REVIEW":
         withdraw(app, draft["id"], name)
     elif state not in EDITABLE:
         print(f"::notice::App Store version {name} is {state}; preparation of {version} is pending until it is released.", file=sys.stderr)
@@ -140,12 +140,10 @@ def withdraw(app, version_id, name):
     elif state == "UNRESOLVED_ISSUES":
         for item in version_items(submission["id"], version_id):
             api("PATCH", f"reviewSubmissionItems/{item['id']}", {"type": "reviewSubmissionItems", "id": item["id"], "attributes": {"removed": True}})
-    elif state in IN_REVIEW:
-        api("PATCH", f"reviewSubmissions/{submission['id']}", {"type": "reviewSubmissions", "id": submission["id"], "attributes": {"canceled": True}})
-    elif state != "CANCELING":
-        sys.exit(f"App Store version {name} is in review, but its review submission is {state or 'missing'}; inspect App Review.")
-    wait(f"Removing {name} from review", lambda: api("GET", f"appStoreVersions/{version_id}")["attributes"]["appVersionState"] in EDITABLE or None)
-    print(f"Removed App Store version {name} from review.", file=sys.stderr)
+    else:
+        sys.exit(f"App Store version {name} is ready for review, but its review submission is {state or 'missing'}; inspect App Review.")
+    wait(f"Withdrawing {name} from its unsent submission", lambda: api("GET", f"appStoreVersions/{version_id}")["attributes"]["appVersionState"] in EDITABLE or None)
+    print(f"Withdrew App Store version {name} from its unsent submission.", file=sys.stderr)
 
 
 def submit_for_review(app, version_id, version):

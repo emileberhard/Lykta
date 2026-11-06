@@ -745,15 +745,20 @@ recorded before transfer, workers finish before cleanup, and cleanup touches
 only the release's unplaced reservations and displaced images. A whole-library
 sweep could delete another release's work.
 
-**The newest tag goes to App Review.** Each release submits its App Store
-version for review, released automatically on approval. An older version still
-in review is withdrawn only after the new build has processed, so a failed
-build never empties the queue, and only that version's own review submission
-is canceled or emptied. App Review locks screenshots once a version is ready
-for review, so a rerun resumes a draft that already carries its tag and build
-instead of preparing it again, and waits for a cancellation already underway.
-Withdrawing restarts Apple's review, which a burst of releases repeats until
-the last one is reviewed.
+**A version in App Review keeps its place.** Each release submits its App
+Store version for review, released automatically on approval. While an older
+version waits for or is in App Review, or waits for release, the newer tag
+still ships its gateway, TestFlight build and GitHub release, and its
+`app-store` job succeeds with a notice; the maintainer's
+`lykta-app-store-resume` automation reruns that job once the older version is
+released. Withdrawing the older version instead would restart Apple's review,
+which a burst of releases repeated until the last one was reviewed, and App
+Store Connect creates no new version until the current one is ready for
+distribution, so the newer version cannot wait as a draft. An unsent review
+submission still gives way to the newer tag, and only that version's own item
+is removed from it. App Review locks screenshots once a version is ready for
+review, so a rerun resumes a draft that already carries its tag and build
+instead of preparing it again.
 
 **Credentials.** Each phone gets a device secret and an agent token, both 256
 random bits stored as SHA-256 hashes. Registration needs proof, so a script
