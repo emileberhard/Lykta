@@ -191,10 +191,12 @@ still a small slice of what the nodes and SVG can do, one answer each to one
 subject, so treat them as a vocabulary of techniques rather than templates:
 combine them, go beyond them, and let your own subject decide the design.
 [Fitting](references/layout.md#fitting) gives margins and sizes. Before
-sending, [render](#preview) it and check every presentation: does each show something live, do related
-elements share a leading edge, does text clear every drawing, do the expanded
-rows add up to less than about 145 points, and would it be recognizable
-without its title?
+sending, [render](#preview) it and look at the image as a strong designer
+would: does it look good, and what would you change to make it better? Make
+that change and render again for as long as each round still improves the
+design. Then check every presentation: does each show something live, do
+related elements share a leading edge, does text clear every drawing, is the
+render free of warnings, and would it be recognizable without its title?
 
 ## Start or update
 
