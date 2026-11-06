@@ -29,13 +29,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         [.banner, .list, .sound]
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard let tap = NotificationTap(response) else { return }
-        await MainActor.run { NotificationCenter.default.post(tap, subject: UIApplication.shared) }
+        NotificationCenter.default.post(tap, subject: UIApplication.shared)
     }
 }
 
-nonisolated struct NotificationTap: NotificationCenter.MainActorMessage, Sendable {
+struct NotificationTap: NotificationCenter.MainActorMessage {
     typealias Subject = UIApplication
 
     let notification: UUID
