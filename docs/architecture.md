@@ -577,7 +577,8 @@ overwrite a newer revision with an older one. A 410 leaves a fence no later
 answer can lift, and a 401 empties the cache; a transient failure or a gateway older than widgets draws the cached content as
 stale and retries in 15 minutes, then hourly. A timeline asks for its reload
 at the stale time or after three hours, whichever comes first, and iOS decides
-when it happens. A fetch names the cached revision only when that content
+when it happens. The app reloads every timeline whenever it becomes active,
+which WidgetKit leaves out of the budget. A fetch names the cached revision only when that content
 decodes, so an updated app replaces a cached `requires` answer. The cache
 belongs to one widget credential, kept as its hash: an answer is recorded only
 while the credential that fetched it is still the keychain's, and a cache

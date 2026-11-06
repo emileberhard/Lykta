@@ -47,8 +47,9 @@ The gateway tells the phone that its widgets changed with a push, at most once
 every 20 minutes, and iOS then reloads every Lykta widget when its budget
 allows. Updates in between collapse into the latest data. Each widget also
 asks iOS to reload it at its stale time, or after three hours at the latest,
-and iOS decides when it does. A widget therefore suits values that change over
-hours; for something that changes
+and iOS decides when it does. Opening the Lykta app reloads every Lykta widget
+at once, so a user who wants a change now can open it. A widget therefore
+suits values that change over hours; for something that changes
 from minute to minute, use a Live Activity. Timers and relative `date` nodes
 keep counting on the phone between reloads, so send a deadline once instead
 of a countdown.

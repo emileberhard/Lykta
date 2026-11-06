@@ -43,7 +43,7 @@ activity, the gateway validates the layout with the same Swift code the widget
 renders it with, then starts it through APNs and updates it over a broadcast
 channel. Timers and progress run on the phone, so agents only send changes.
 Widgets reload when the gateway sends a contentless widget push, at most every
-20 minutes, and then fetch their content from the gateway with a credential
+20 minutes, or when the app opens, and then fetch their content from the gateway with a credential
 that can only read them. Notifications go out as alert pushes, and the app's notification extension
 fetches the sender's picture, the sound and the image the agent uploaded, and
 tells the gateway what it showed.

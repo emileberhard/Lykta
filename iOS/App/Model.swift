@@ -114,6 +114,7 @@ final class Model {
                 await sync()
             }
             syncWidgets()
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
