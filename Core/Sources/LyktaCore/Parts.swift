@@ -62,9 +62,6 @@ struct Parts: Sendable {
                 fields[key] = try node(fields[key]!, at: key, source: key, stack: [])
             }
         }
-        if let unused = (definitions ?? [:]).keys.sorted().first(where: { !used.contains($0) }) {
-            throw LayoutError("parts.\(unused): part is not used")
-        }
         return .object(fields)
     }
 

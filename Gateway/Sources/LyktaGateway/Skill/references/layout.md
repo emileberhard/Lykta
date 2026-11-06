@@ -47,8 +47,8 @@ Define a repeated node once in the layout's root `parts` object, then place
 {"layout":{"parts":{"icon":{"symbol":"bolt.fill","modifiers":[{"foreground":"yellow"}]}},"lockScreen":{"hstack":[{"use":"icon"},"Charging"]},"compactLeading":{"use":"icon"},"compactTrailing":"80%","minimal":{"use":"icon","modifiers":[{"font":"caption"}]}}}
 ```
 
-Parts may use other parts, but cycles, unknown names and unused body definitions
-are errors. Expansion is bounded by the layout's 256-node budget. It happens before
+Parts may use other parts, but cycles and unknown names are errors; unused
+definitions are dropped. Expansion is bounded by the layout's 256-node budget. It happens before
 placeholders and `each` are filled: a part reads data and `each` variables at
 its use site exactly as copied JSON would, with no parameters or separate scope.
 The gateway stores the expanded template, so parts cost no phone compatibility.

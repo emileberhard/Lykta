@@ -68,10 +68,13 @@ struct PartsTests {
         """#))
     }
 
+    @Test func dropsUnusedDefinitions() throws {
+        #expect(try expanded(json(#"{"parts":{"used":"A","unused":{"txt":"B"}},"minimal":{"use":"used"}}"#)) == json(#"{"minimal":"A"}"#))
+    }
+
     @Test(arguments: [
         (#"{"parts":[],"minimal":""}"#, "parts: expected an object of named nodes"),
         (#"{"parts":{"z":"Z","a":"A"},"minimal":{"use":"missing"}}"#, #"minimal: unknown part "missing"; defined parts: a, z"#),
-        (#"{"parts":{"unused":"A"},"minimal":""}"#, "parts.unused: part is not used"),
         (#"{"parts":{"a":{"use":"b"},"b":{"use":"a"}},"minimal":{"use":"a"}}"#, "parts.b: part cycle: a -> b -> a"),
         (#"{"parts":{"a":"A"},"minimal":{"use":"a","with":{}}}"#, #"minimal: expected {"use": "name"} with optional modifiers"#),
         (#"{"parts":{"a":"A"},"minimal":{"use":"a","modifiers":4}}"#, "minimal.modifiers: expected an array"),
