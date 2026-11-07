@@ -54,6 +54,7 @@ ENGINE_IDLE = 600
 ENGINE_DEADLINE = 300
 ENGINE_START = 30
 ENGINE_STALL = 60
+WORKER_STALL = 10
 ENGINE_RESULT_LIFETIME = 600
 ENGINE_LOG_LIMIT = 1 << 20
 KEPT_APPS = 2
@@ -433,9 +434,23 @@ def say(log, message):
     print(f"{time.strftime('%H:%M:%S')} {message}", file=log, flush=True)
 
 
+def evict(key):
+    needed = {request.parent.name for request in JOBS.glob("*/*.request")} | {key}
+    apps = sorted((path for path in APPS.iterdir() if path.is_dir() and not path.name.startswith(".")),
+                  key=lambda path: path.stat().st_mtime, reverse=True)
+    for app in apps[KEPT_APPS:]:
+        if app.name in needed:
+            continue
+        with locked(APPS / f".{app.name}.lock", blocking=False) as acquired:
+            if acquired:
+                shutil.rmtree(app, ignore_errors=True)
+                (APPS / f".{app.name}.lock").unlink(missing_ok=True)
+
+
 class Renderer:
-    def __init__(self, key, log):
+    def __init__(self, key, log, stall):
         self.key = key
+        self.stall = stall
         self.process = subprocess.Popen([str(APPS / key / "LyktaRender.app" / "Contents" / "MacOS" / "LyktaRender")],
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, start_new_session=True)
         self.lines = queue.Queue()
@@ -452,7 +467,7 @@ class Renderer:
 
     def draw(self, job):
         threading.Thread(target=self.write, args=((json.dumps(job) + "\n").encode(),), daemon=True).start()
-        return self.answer(ENGINE_STALL, "answer")
+        return self.answer(self.stall, "answer")
 
     def write(self, line):
         try:
@@ -551,22 +566,10 @@ class Supervisor:
             raise RenderError("the renderer for this checkout was removed from the cache; render again to rebuild it")
         os.utime(APPS / key)
         say(self.log, f"starting the renderer for {key}")
-        self.renderer = Renderer(key, self.log)
+        self.renderer = Renderer(key, self.log, ENGINE_STALL)
         say(self.log, f"the renderer for {key} is ready")
-        self.evict()
+        evict(key)
         return self.renderer
-
-    def evict(self):
-        needed = {request.parent.name for request in JOBS.glob("*/*.request")} | {self.renderer.key}
-        apps = sorted((path for path in APPS.iterdir() if path.is_dir() and not path.name.startswith(".")),
-                      key=lambda path: path.stat().st_mtime, reverse=True)
-        for app in apps[KEPT_APPS:]:
-            if app.name in needed:
-                continue
-            with locked(APPS / f".{app.name}.lock", blocking=False) as acquired:
-                if acquired:
-                    shutil.rmtree(app, ignore_errors=True)
-                    (APPS / f".{app.name}.lock").unlink(missing_ok=True)
 
     def prune(self):
         expired = time.time() - ENGINE_RESULT_LIFETIME
@@ -614,7 +617,7 @@ def stop():
     if not ENGINE.exists() or not supervisor_running():
         return 0
     (ENGINE / "stop").touch()
-    deadline = time.monotonic() + ENGINE_STALL + 10
+    deadline = time.monotonic() + ENGINE_START + ENGINE_STALL + 10
     while supervisor_running():
         if time.monotonic() > deadline:
             raise RenderError("the render engine did not stop in time")
@@ -646,18 +649,12 @@ def worker():
     version = run("git", "-C", ROOT, "tag", "--points-at", "HEAD", "--list", "[0-9]*.[0-9]*.[0-9]*").split()
     say(sys.stdout, f"rendering for {url} at {version[0] if version else 'an untagged commit'}")
     key = engine_app()
+    evict(key)
     renderer = None
     checked = time.monotonic()
     failures = 0
     while True:
-        if renderer is None or not renderer.running():
-            if renderer:
-                renderer.stop()
-            say(sys.stdout, f"starting the renderer for {key}")
-            renderer = Renderer(key, sys.stderr)
-            draw(renderer, {"name": "warm", "presentations": ["lock"],
-                            "input": {"kind": "activity", "title": "Lykta", "data": {},
-                                      "layout": {"lockScreen": "Lykta", "compactLeading": "", "compactTrailing": "", "minimal": ""}}})
+        renderer = warmed(renderer, key)
         if time.monotonic() - checked > WORKER_UPDATE_CHECK:
             checked = time.monotonic()
             try:
@@ -683,6 +680,7 @@ def worker():
             os.truncate(ENGINE / "worker.log", 0)
         started = time.monotonic()
         try:
+            renderer = warmed(renderer, key)
             result = draw(renderer, job)
         except RenderError as error:
             result = {"error": str(error)}
@@ -691,6 +689,19 @@ def worker():
             say(sys.stdout, f"answered {job['id']} in {time.monotonic() - started:.1f} s{': ' + result['error'] if 'error' in result else ''}")
         except (urllib.error.URLError, OSError) as error:
             say(sys.stdout, f"answering {job['id']} failed: {error}")
+
+
+def warmed(renderer, key):
+    if renderer and renderer.running():
+        return renderer
+    if renderer:
+        renderer.stop()
+    say(sys.stdout, f"starting the renderer for {key}")
+    renderer = Renderer(key, sys.stderr, WORKER_STALL)
+    draw(renderer, {"name": "warm", "presentations": ["lock"],
+                    "input": {"kind": "activity", "title": "Lykta", "data": {},
+                              "layout": {"lockScreen": "Lykta", "compactLeading": "", "compactTrailing": "", "minimal": ""}}})
+    return renderer
 
 
 def call(method, url, token, body=None):

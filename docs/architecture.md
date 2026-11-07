@@ -251,9 +251,10 @@ and dark, and answers with one sheet and a warning for content taller than
 the system shows. The worker is the only client of its checkout's renderer, so
 it owns the app itself rather than going through a supervisor: it builds the
 app and draws once before it claims a job, keeps it running for as long as it
-runs, and starts it again before the next job when it exits or stalls. A job
-therefore never waits for the app to start, which the gateway's 25-second
-answer window cannot absorb, and an idle worker costs about 70 MB and no CPU. The worker reaches out, so the Mac
+runs, starts it again before a job when it has exited, and fails a job whose
+app stalls for ten seconds, well inside the gateway's 25-second answer window,
+then starts it again before the next one. A job therefore never waits for a
+cold start after a quiet spell, and an idle worker costs about 70 MB and no CPU. The worker reaches out, so the Mac
 needs no inbound port, and the gateway's `RenderQueue` holds jobs and images
 in memory only: at most 16 waiting, two per phone, each image for ten minutes
 and only for the phone that asked. The worker follows the release its gateway
