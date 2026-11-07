@@ -281,21 +281,41 @@ def xcode_renders(bodies, presentations, dark, output):
     return rendered, errors, [{"error": error, "renders": sorted(names)} for error, names in failures.items()], []
 
 
+def engine_job(bodies, presentations, dark):
+    return {"id": "", "inputs": [{"name": name, "kind": kind, **body} for name, kind, body in bodies],
+            "presentations": presentations, "appearance": "dark" if dark else "light"}
+
+
+def outcome(answer, output):
+    rendered = []
+    for entry in answer["renders"]:
+        target = output / f"{entry['input']}-{entry['presentation']}.png"
+        target.write_bytes(base64.b64decode(entry["png"]))
+        rendered.append((entry["input"], target))
+    failures = []
+    if incomplete := [f"{entry['input']}-{entry['presentation']}.png" for entry in answer["renders"] if not entry["complete"]]:
+        failures.append({"error": "the snapshot is missing image data for some views", "renders": incomplete})
+    if blank := [f"{entry['input']}-{entry['presentation']}" for entry in answer["blank"]]:
+        failures.append({"error": "these presentations draw nothing", "renders": blank})
+    fates = {"lock": "cuts off its top and bottom", "expanded": "shrinks what it can and cuts off the rest at the bottom"}
+    tall = [f"{entry['input']} {entry['presentation']}: the content is {entry['overflow']:.0f} points too tall, and the phone "
+            f"{fates[entry['presentation']]}, as the image shows"
+            for entry in answer["renders"] if entry.get("overflow", 0) > 0.5]
+    return rendered, answer["layoutErrors"], failures, tall
+
+
 def engine_renders(bodies, presentations, dark, output):
     xcode_only = [p for p in presentations if p not in ENGINE_PRESENTATIONS]
     if xcode_only:
         raise RenderError(f"{', '.join(xcode_only)} render only through Xcode's previews; add --xcode")
-    key = engine_app()
-    jobs = JOBS / key
+    jobs = JOBS / engine_app()
     jobs.mkdir(parents=True, exist_ok=True)
     start_supervisor()
     name = f"{time.time_ns()}-{os.getpid()}"
     request = jobs / f"{name}.request"
-    body = {"inputs": [{"name": name_, "kind": kind, **body} for name_, kind, body in bodies],
-            "presentations": presentations, "appearance": "dark" if dark else "light"}
-    (jobs / f".{name}.json").write_text(json.dumps(body))
+    (jobs / f".{name}.json").write_text(json.dumps(engine_job(bodies, presentations, dark)))
     (jobs / f".{name}.json").rename(request)
-    result = jobs / name
+    result = jobs / f"{name}.answer"
     deadline = time.monotonic() + ENGINE_DEADLINE
     checked = time.monotonic()
     try:
@@ -313,26 +333,12 @@ def engine_renders(bodies, presentations, dark, output):
     finally:
         request.unlink(missing_ok=True)
     try:
-        manifest = json.loads((result / "manifest.json").read_text())
-        if "error" in manifest:
-            raise RenderError(manifest["error"])
-        rendered = []
-        for entry in manifest["renders"]:
-            target = output / entry["file"]
-            shutil.move(result / entry["file"], target)
-            rendered.append((entry["input"], target))
+        answer = json.loads(result.read_text())
     finally:
-        shutil.rmtree(result, ignore_errors=True)
-    failures = []
-    if incomplete := [entry["file"] for entry in manifest["renders"] if not entry["complete"]]:
-        failures.append({"error": "the snapshot is missing image data for some views", "renders": incomplete})
-    if blank := [f"{entry['input']}-{entry['presentation']}" for entry in manifest["blank"]]:
-        failures.append({"error": "these presentations draw nothing", "renders": blank})
-    fates = {"lock": "cuts off its top and bottom", "expanded": "shrinks what it can and cuts off the rest at the bottom"}
-    tall = [f"{entry['input']} {entry['presentation']}: the content is {entry['overflow']:.0f} points too tall, and the phone "
-            f"{fates[entry['presentation']]}, as the image shows"
-            for entry in manifest["renders"] if entry.get("overflow", 0) > 0.5]
-    return rendered, manifest["layoutErrors"], failures, tall
+        result.unlink(missing_ok=True)
+    if "error" in answer:
+        raise RenderError(answer["error"])
+    return outcome(answer, output)
 
 
 def run(*args, timeout=120):
@@ -423,22 +429,30 @@ def log_tail():
     return "\n".join(log.read_text(errors="replace").splitlines()[-40:]) if log.exists() else "(no engine log)"
 
 
+def say(log, message):
+    print(f"{time.strftime('%H:%M:%S')} {message}", file=log, flush=True)
+
+
 class Renderer:
     def __init__(self, key, log):
         self.key = key
         self.process = subprocess.Popen([str(APPS / key / "LyktaRender.app" / "Contents" / "MacOS" / "LyktaRender")],
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, start_new_session=True)
-        self.started = time.monotonic()
-        self.ready = False
         self.lines = queue.Queue()
         threading.Thread(target=self.read, daemon=True).start()
+        self.answer(ENGINE_START, "start")
 
     def read(self):
         for line in self.process.stdout:
             self.lines.put(line)
+        self.lines.put(None)
 
-    def send(self, line):
-        threading.Thread(target=self.write, args=(line,), daemon=True).start()
+    def running(self):
+        return self.process.poll() is None
+
+    def draw(self, job):
+        threading.Thread(target=self.write, args=((json.dumps(job) + "\n").encode(),), daemon=True).start()
+        return self.answer(ENGINE_STALL, "answer")
 
     def write(self, line):
         try:
@@ -447,45 +461,51 @@ class Renderer:
         except (BrokenPipeError, ValueError):
             pass
 
+    def answer(self, seconds, doing):
+        try:
+            line = self.lines.get(timeout=seconds)
+        except queue.Empty:
+            self.stop()
+            raise RenderError(f"the renderer did not {doing} within {seconds} seconds")
+        if line is None:
+            self.stop()
+            raise RenderError(f"the renderer exited with {self.process.returncode}")
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            self.stop()
+            raise RenderError(f"the renderer wrote {line[:200]!r}")
+
     def stop(self):
-        if self.process.poll() is None:
+        if self.running():
             self.process.kill()
         self.process.wait()
+        with contextlib.suppress(OSError):
+            self.process.stdin.close()
 
 
 class Supervisor:
     def __init__(self, log):
         self.log = log
         self.renderer = None
-        self.inflight = None
-
-    def say(self, message):
-        print(f"{time.strftime('%H:%M:%S')} {message}", file=self.log, flush=True)
 
     def serve(self):
-        self.say(f"serving with {__file__}")
+        say(self.log, f"serving with {__file__}")
         idle = time.monotonic()
         try:
-            while True:
-                stopping = (ENGINE / "stop").exists()
-                self.collect()
-                self.check()
-                pending = [] if stopping else self.pending()
-                if pending or self.inflight:
+            while not (ENGINE / "stop").exists():
+                if requests := self.pending():
+                    self.handle(requests[0])
                     idle = time.monotonic()
-                elif stopping:
-                    self.say("stopping")
-                    break
                 elif time.monotonic() - idle > ENGINE_IDLE:
-                    self.say(f"idle for {ENGINE_IDLE} seconds")
-                    break
-                if pending and not self.inflight:
-                    self.dispatch(pending[0])
-                self.prune()
-                self.trim()
+                    say(self.log, f"idle for {ENGINE_IDLE} seconds")
+                    return
+                else:
+                    self.prune()
+                    self.trim()
+                    time.sleep(0.02)
+            say(self.log, "stopping")
         finally:
-            if self.inflight:
-                self.fail(self.inflight[0], "the render engine stopped while drawing this request")
             if self.renderer:
                 self.renderer.stop()
             (ENGINE / "stop").unlink(missing_ok=True)
@@ -503,99 +523,38 @@ class Supervisor:
                 pass
         return requests
 
-    def collect(self):
-        if self.renderer is None:
-            time.sleep(0.02)
-            return
-        try:
-            line = self.renderer.lines.get(timeout=0.02)
-        except queue.Empty:
-            return
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError:
-            self.say(f"the renderer wrote {line[:200]!r}")
-            return
-        if message.get("ready"):
-            self.renderer.ready = True
-            self.say(f"the renderer for {self.renderer.key} is ready")
-        elif self.inflight and message.get("id") == self.inflight[0].stem:
-            self.complete(self.inflight[0], message)
-            self.inflight = None
-
-    def check(self):
-        renderer = self.renderer
-        if renderer is None:
-            return
-        if renderer.process.poll() is not None:
-            self.say(f"the renderer for {renderer.key} exited with {renderer.process.returncode}")
-            if self.inflight:
-                self.fail(self.inflight[0], f"the renderer exited while drawing this request:\n{log_tail()}")
-                self.inflight = None
-            elif not renderer.ready:
-                for request in (JOBS / renderer.key).glob("*.request"):
-                    self.fail(request, f"the renderer exited at start:\n{log_tail()}")
-            self.renderer = None
-        elif not renderer.ready and time.monotonic() - renderer.started > ENGINE_START:
-            self.say(f"the renderer for {renderer.key} did not start within {ENGINE_START} seconds")
-            renderer.stop()
-            self.renderer = None
-            for request in (JOBS / renderer.key).glob("*.request"):
-                self.fail(request, f"the renderer did not start within {ENGINE_START} seconds:\n{log_tail()}")
-        elif self.inflight and time.monotonic() - self.inflight[1] > ENGINE_STALL:
-            self.say(f"the renderer for {renderer.key} spent more than {ENGINE_STALL} seconds on one request")
-            renderer.stop()
-            self.renderer = None
-            self.fail(self.inflight[0], f"the renderer spent more than {ENGINE_STALL} seconds on this request and was restarted")
-            self.inflight = None
-
-    def dispatch(self, request):
-        key = request.parent.name
-        if self.renderer is None or self.renderer.key != key:
-            if self.renderer:
-                self.renderer.stop()
-                self.renderer = None
-            if not (APPS / key).exists():
-                self.fail(request, "the renderer for this checkout was removed from the cache; render again to rebuild it")
-                return
-            os.utime(APPS / key)
-            self.say(f"starting the renderer for {key}")
-            self.renderer = Renderer(key, self.log)
-            self.evict()
-            return
-        if not self.renderer.ready:
-            return
+    def handle(self, request):
         working = request.with_suffix(".working")
         try:
             request.rename(working)
         except FileNotFoundError:
             return
-        body = json.loads(working.read_text())
-        self.renderer.send((json.dumps({"id": working.stem, **body}) + "\n").encode())
-        self.inflight = (working, time.monotonic())
-
-    def complete(self, working, message):
-        result = working.with_suffix("")
-        staging = working.parent / f".{result.name}"
-        shutil.rmtree(staging, ignore_errors=True)
-        staging.mkdir()
-        renders = []
-        for entry in message["renders"]:
-            file = f"{entry['input']}-{entry['presentation']}.png"
-            (staging / file).write_bytes(base64.b64decode(entry.pop("png")))
-            renders.append({**entry, "file": file})
-        (staging / "manifest.json").write_text(json.dumps({"renders": renders, "blank": message["blank"], "layoutErrors": message["layoutErrors"]}))
-        staging.rename(result)
+        try:
+            answer = self.renderer_for(request.parent.name).draw(json.loads(working.read_text()))
+        except RenderError as error:
+            say(self.log, str(error))
+            answer = {"error": f"{error}:\n{log_tail()}"}
+        partial = working.parent / f".{working.stem}.answer"
+        partial.write_text(json.dumps(answer))
+        partial.rename(working.with_suffix(".answer"))
         working.unlink()
 
-    def fail(self, request, error):
-        result = request.with_suffix("")
-        staging = request.parent / f".{result.name}"
-        shutil.rmtree(staging, ignore_errors=True)
-        staging.mkdir()
-        (staging / "manifest.json").write_text(json.dumps({"error": error}))
-        staging.rename(result)
-        request.unlink(missing_ok=True)
+    def renderer_for(self, key):
+        if self.renderer and self.renderer.key == key and self.renderer.running():
+            return self.renderer
+        if self.renderer:
+            if not self.renderer.running():
+                say(self.log, f"the renderer for {self.renderer.key} exited with {self.renderer.process.returncode}")
+            self.renderer.stop()
+            self.renderer = None
+        if not (APPS / key).exists():
+            raise RenderError("the renderer for this checkout was removed from the cache; render again to rebuild it")
+        os.utime(APPS / key)
+        say(self.log, f"starting the renderer for {key}")
+        self.renderer = Renderer(key, self.log)
+        say(self.log, f"the renderer for {key} is ready")
+        self.evict()
+        return self.renderer
 
     def evict(self):
         needed = {request.parent.name for request in JOBS.glob("*/*.request")} | {self.renderer.key}
@@ -614,7 +573,7 @@ class Supervisor:
         for folder in list(JOBS.iterdir()):
             try:
                 for entry in list(folder.iterdir()):
-                    if entry != (self.inflight or (None,))[0] and entry.stat().st_mtime < expired:
+                    if entry.stat().st_mtime < expired:
                         shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
                 if not (APPS / folder.name).exists() and not any(folder.iterdir()):
                     folder.rmdir()
@@ -624,7 +583,7 @@ class Supervisor:
     def trim(self):
         if os.fstat(self.log.fileno()).st_size > ENGINE_LOG_LIMIT:
             self.log.truncate(0)
-            self.say(f"cleared the log at {ENGINE_LOG_LIMIT} bytes")
+            say(self.log, f"cleared the log at {ENGINE_LOG_LIMIT} bytes")
 
 
 def supervise():
@@ -685,31 +644,37 @@ def worker():
     except (OSError, KeyError) as error:
         raise RenderError(f"set LYKTA_URL and LYKTA_RENDER_TOKEN in {WORKER_SETTINGS}: {error}")
     version = run("git", "-C", ROOT, "tag", "--points-at", "HEAD", "--list", "[0-9]*.[0-9]*.[0-9]*").split()
-    print(f"rendering for {url} at {version[0] if version else 'an untagged commit'}", flush=True)
-    engine_app()
-    start_supervisor()
-    with tempfile.TemporaryDirectory(prefix="lykta-render-") as folder:
-        engine_renders([("warm", "activity", {"title": "Lykta", "layout": {"lockScreen": "Lykta", "compactLeading": "", "compactTrailing": "", "minimal": ""}, "data": {}})],
-                       ["lock"], False, Path(folder))
+    say(sys.stdout, f"rendering for {url} at {version[0] if version else 'an untagged commit'}")
+    key = engine_app()
+    renderer = None
     checked = time.monotonic()
     failures = 0
     while True:
+        if renderer is None or not renderer.running():
+            if renderer:
+                renderer.stop()
+            say(sys.stdout, f"starting the renderer for {key}")
+            renderer = Renderer(key, sys.stderr)
+            draw(renderer, {"name": "warm", "presentations": ["lock"],
+                            "input": {"kind": "activity", "title": "Lykta", "data": {},
+                                      "layout": {"lockScreen": "Lykta", "compactLeading": "", "compactTrailing": "", "minimal": ""}}})
         if time.monotonic() - checked > WORKER_UPDATE_CHECK:
             checked = time.monotonic()
             try:
                 served = call("GET", f"{url}/v1/version", token)["version"]
             except (urllib.error.URLError, OSError, TypeError, KeyError) as error:
-                print(f"reading the gateway's version failed: {error}", flush=True)
+                say(sys.stdout, f"reading the gateway's version failed: {error}")
             else:
                 if served not in version:
-                    print(f"the gateway runs {served}; exiting to follow it", flush=True)
+                    say(sys.stdout, f"the gateway runs {served}; exiting to follow it")
+                    renderer.stop()
                     return 0
         try:
             job = call("GET", f"{url}/v1/render/jobs?wait=25", token)
             failures = 0
         except (urllib.error.URLError, OSError) as error:
             failures += 1
-            print(f"polling failed: {error}", flush=True)
+            say(sys.stdout, f"polling failed: {error}")
             time.sleep(min(60, 2 ** min(failures, 6)))
             continue
         if job is None:
@@ -717,12 +682,15 @@ def worker():
         if (ENGINE / "worker.log").exists() and (ENGINE / "worker.log").stat().st_size > ENGINE_LOG_LIMIT:
             os.truncate(ENGINE / "worker.log", 0)
         started = time.monotonic()
-        result = draw(job)
+        try:
+            result = draw(renderer, job)
+        except RenderError as error:
+            result = {"error": str(error)}
         try:
             call("PUT", f"{url}/v1/render/jobs/{job['id']}", token, json.dumps(result).encode())
-            print(f"answered {job['id']} in {time.monotonic() - started:.1f} s{': ' + result['error'] if 'error' in result else ''}", flush=True)
+            say(sys.stdout, f"answered {job['id']} in {time.monotonic() - started:.1f} s{': ' + result['error'] if 'error' in result else ''}")
         except (urllib.error.URLError, OSError) as error:
-            print(f"answering {job['id']} failed: {error}", flush=True)
+            say(sys.stdout, f"answering {job['id']} failed: {error}")
 
 
 def call(method, url, token, body=None):
@@ -732,28 +700,24 @@ def call(method, url, token, body=None):
         return json.loads(response.read()) if response.status == 200 else None
 
 
-def draw(job):
+def draw(renderer, job):
     body = dict(job["input"])
     kind = body.pop("kind")
-    try:
-        with tempfile.TemporaryDirectory(prefix="lykta-render-") as folder:
-            rows, warnings = [], []
-            for dark in (False, True):
-                output = Path(folder) / ("dark" if dark else "light")
-                output.mkdir()
-                rendered, errors, failures, tall = engine_renders([(job["name"], kind, body)], job["presentations"], dark, output)
-                problems = [error["error"] for error in errors] + [f"{failure['error']}: {', '.join(failure['renders'])}" for failure in failures]
-                if not rendered:
-                    return {"error": "; ".join(problems) or "nothing to draw"}
-                rows.append(("Dark" if dark else "Light", [target for _, target in rendered]))
-                warnings += [warning for warning in problems + tall if warning not in warnings]
-            image = Path(folder) / "sheet.png"
-            sheet(rows, image)
-            width = int(re.search(r"pixelWidth: (\d+)", run("sips", "-g", "pixelWidth", image)).group(1))
-            run("sips", "--resampleWidth", str(width * 2 // 3), image)
-            return {"image": base64.b64encode(image.read_bytes()).decode(), "warnings": warnings}
-    except RenderError as error:
-        return {"error": str(error)}
+    with tempfile.TemporaryDirectory(prefix="lykta-render-") as folder:
+        rows, warnings = [], []
+        for dark in (False, True):
+            output = Path(folder) / ("dark" if dark else "light")
+            output.mkdir()
+            answer = renderer.draw(engine_job([(job["name"], kind, body)], job["presentations"], dark))
+            rendered, errors, failures, tall = outcome(answer, output)
+            problems = [error["error"] for error in errors] + [f"{failure['error']}: {', '.join(failure['renders'])}" for failure in failures]
+            if not rendered:
+                return {"error": "; ".join(problems) or "nothing to draw"}
+            rows.append(("Dark" if dark else "Light", [target for _, target in rendered]))
+            warnings += [warning for warning in problems + tall if warning not in warnings]
+        image = Path(folder) / "sheet.png"
+        sheet(rows, image)
+        return {"image": base64.b64encode(image.read_bytes()).decode(), "warnings": warnings}
 
 
 def main():

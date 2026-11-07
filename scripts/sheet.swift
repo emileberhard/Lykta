@@ -14,11 +14,13 @@ let rows = arguments.dropFirst().map { row in
     return (label: fields[0], images: images)
 }
 
-let gap = 48, label = 72
+let gap = 48, label = 72, scale = 2.0 / 3
 let width = rows.map { $0.images.reduce(gap) { $0 + $1.width + gap } }.max()!
 let height = rows.reduce(gap) { $0 + label + $1.images.map(\.height).max()! + gap }
-let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+let context = CGContext(data: nil, width: Int(Double(width) * scale), height: Int(Double(height) * scale), bitsPerComponent: 8, bytesPerRow: 0,
                         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+context.scaleBy(x: scale, y: scale)
+context.interpolationQuality = .high
 context.setFillColor(CGColor(red: 0.56, green: 0.56, blue: 0.58, alpha: 1))
 context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 

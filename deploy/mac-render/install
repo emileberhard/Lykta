@@ -34,6 +34,5 @@ cat >"$agent" <<PLIST
 </plist>
 PLIST
 launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || :
-"$checkout/scripts/render" --stop
 launchctl bootstrap "gui/$(id -u)" "$agent"
 echo "install: $label renders for the gateway in $settings from the release it runs, in $checkout; its log is $log"

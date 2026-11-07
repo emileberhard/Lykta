@@ -224,8 +224,10 @@ reads one line of PNGs per request from its standard output, and the app orders
 its window out so nothing appears on screen. It captures with `drawHierarchy`,
 because ImageRenderer draws placeholders for UIKit-backed views such as linear
 progress and switches. `scripts/render` keys the built app by the sources that
-draw it and the Xcode version, and its supervisor owns the app's lifetime,
-fails a request whose app exits or stalls and restarts it, and stops when idle.
+draw it and the Xcode version. For `just render`, a supervisor per checkout
+owns the app's lifetime, so concurrent runs share one app: it draws one request
+at a time, fails a request whose app exits or stalls and restarts it, and stops
+after ten idle minutes, so worktrees leave nothing running.
 A resident simulator drew within a point of Xcode, but Apple licenses the
 simulator only for developing apps, while a Mac app may serve anyone, so the
 gateway can render for agents with the same engine. Catalyst lays out an iPad
@@ -244,9 +246,14 @@ which runs the PUT's own preparation in `Store`, saved parts, `now`, version
 and size checks included, but stores and pushes nothing, so a preview that
 draws is a PUT that the gateway accepts. SwiftUI does not run on the Linux gateway, so a
 worker on a Mac, `scripts/render --worker` kept running by `deploy/mac-render`,
-long-polls `GET /v1/render/jobs` with its own token, draws each job through the
-render engine in light and dark, and answers with one sheet and a warning for
-content taller than the system shows. The worker reaches out, so the Mac
+long-polls `GET /v1/render/jobs` with its own token, draws each job in light
+and dark, and answers with one sheet and a warning for content taller than
+the system shows. The worker is the only client of its checkout's renderer, so
+it owns the app itself rather than going through a supervisor: it builds the
+app and draws once before it claims a job, keeps it running for as long as it
+runs, and starts it again before the next job when it exits or stalls. A job
+therefore never waits for the app to start, which the gateway's 25-second
+answer window cannot absorb, and an idle worker costs about 70 MB and no CPU. The worker reaches out, so the Mac
 needs no inbound port, and the gateway's `RenderQueue` holds jobs and images
 in memory only: at most 16 waiting, two per phone, each image for ten minutes
 and only for the phone that asked. The worker follows the release its gateway
