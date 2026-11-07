@@ -19,6 +19,8 @@ final class RenderController: UIViewController {
     private static let batch = 32
 
     private let output: FileHandle
+    private let awake = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep,
+                                                              reason: "LyktaRender answers render requests as they arrive")
     private var serving: Task<Void, Never>?
 
     init(output: FileHandle) {
