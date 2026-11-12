@@ -330,11 +330,13 @@ that was offline keeps its old content until the next change. Most Recent
 Message Stored would hand such a phone the newest content when it returns, and
 0.20.6 created every channel with it. Apple gives a storing channel a much
 lower publishing budget and publishes neither figure. Measured on 2026-11-12
-in the development environment, a new storing channel took ten updates in ten
-seconds and then one about every two minutes, while cards such as a remote
-control or a print's progress had sent sixteen in ten minutes without storage
-and never been throttled. 0.20.7 therefore went back to No Message Stored; a
-channel 0.20.6 created keeps its policy and budget until its activity ends.
+in the development environment, at one update a second, a new storing channel
+took ten updates and then one about every two minutes, and a new channel
+without storage took thirty and the next one a minute after the first. Cards
+such as a remote control or a print's progress had sent sixteen in ten minutes
+without storage and never been throttled. 0.20.7 therefore went back to No
+Message Stored; a channel 0.20.6 created keeps its policy and budget until its
+activity ends.
 When Apple answers 429, the gateway backs off, up to five minutes between
 attempts, and keeps trying until Apple accepts the latest revision or the
 activity's eight hours are over. Only other errors count toward the five
