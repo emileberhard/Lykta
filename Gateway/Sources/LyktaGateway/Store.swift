@@ -57,7 +57,7 @@ actor Store {
     static let maximumActionsPerDevice = 1000
     static let inviteLifetime = 3600
     static let activityLifetime = 8 * 3600
-    static let latestActivityEnd = activityLifetime - 60
+    private static let latestActivityEnd = activityLifetime - 60
     static let notificationLifetime = 86400
     static let maximumNotificationsPerHour = 60
     static let mediaRetention = 86400
@@ -921,7 +921,7 @@ actor Store {
     }
 
     func setChannel(_ channel: String, environment: PushEnvironment, for activityID: UUID) throws -> Bool {
-        try db.run("UPDATE activities SET channel = ?1, storing_channel = ?1, channel_environment = ?2 WHERE id = ?3", channel, environment, activityID)
+        try db.run("UPDATE activities SET channel = ?, channel_environment = ? WHERE id = ?", channel, environment, activityID)
         return try !db.query("SELECT 1 FROM activities WHERE id = ?", activityID).isEmpty
     }
 
