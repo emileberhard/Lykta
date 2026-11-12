@@ -212,8 +212,8 @@ struct GatewayTests {
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
-    @Test(arguments: [(2, Store.activityLifetime), (Store.activityLifetime + 30, Store.activityLifetime + 90)])
-    func updatesAndEndsWaitAtAppleForAnOfflinePhoneWhileIOSKeepsTheActivity(endedAfter: Int, expiresAfter: Int) async throws {
+    @Test(arguments: [(2, Store.latestActivityEnd), (Store.activityLifetime + 30, Store.activityLifetime + 90)])
+    func updatesAndEndsWaitAtAppleForAnOfflinePhoneWhileTheActivityCanLast(endedAfter: Int, expiresAfter: Int) async throws {
         try await put("build", Self.start)
         try await deliver(at: now)
         let started = try await startedAt("build")
@@ -222,9 +222,29 @@ struct GatewayTests {
         #expect(try await send("DELETE", "/v1/activities/build").status == 200)
         try await deliver(at: started + endedAfter)
         #expect(push.sent == ["createChannel", "start", "update 5", "end 10"])
-        #expect(push.broadcastExpirations == [started + Store.activityLifetime, started + expiresAfter])
+        #expect(push.broadcastExpirations == [started + Store.latestActivityEnd, started + expiresAfter])
         let events: Events = try await send("GET", "/v1/events").decoded()
         #expect(events.events.filter { $0.name == "push.update" || $0.name == "push.end" }.map { $0.detail["stored"] } == [.bool(true), .bool(true)])
+    }
+
+    @Test(arguments: ["update", "end"])
+    func keepsRetryingAThrottledUpdateOrEndUntilAppleAcceptsIt(_ call: String) async throws {
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        if call == "update" {
+            try await put("build", ["data": ["step": "Test"]])
+        } else {
+            #expect(try await send("DELETE", "/v1/activities/build").status == 200)
+        }
+        var time = now + 1
+        for _ in 0..<Store.maximumAttempts + 2 {
+            push.fail(call, .rejected(status: 429, reason: "TooManyRequests"))
+            try await deliver(at: time)
+            #expect(try await status("build").delivery == "throttled")
+            time += 301
+        }
+        try await deliver(at: time)
+        #expect(try await status("build") == Status(state: call == "update" ? "live" : "ended", delivery: "accepted", error: nil))
     }
 
     @Test func aChannelAnotherGatewayCreatedWithoutStorageGetsNoExpiration() async throws {

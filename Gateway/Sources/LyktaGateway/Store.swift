@@ -57,7 +57,7 @@ actor Store {
     static let maximumActionsPerDevice = 1000
     static let inviteLifetime = 3600
     static let activityLifetime = 8 * 3600
-    private static let latestActivityEnd = activityLifetime - 60
+    static let latestActivityEnd = activityLifetime - 60
     static let notificationLifetime = 86400
     static let maximumNotificationsPerHour = 60
     static let mediaRetention = 86400
@@ -985,7 +985,7 @@ actor Store {
     private func finish(_ job: ActivityJob, _ attempt: Attempt, now: Int) throws {
         var outcome = attempt.outcome
         if case let .unknown(error) = outcome, job.kind != .start { outcome = .retry(error, throttled: false) }
-        if case let .retry(error, _) = outcome, job.activity.failures + 1 >= Self.maximumAttempts {
+        if case let .retry(error, throttled) = outcome, job.kind == .start || !throttled, job.activity.failures + 1 >= Self.maximumAttempts {
             outcome = .failed(error, clearsPushToken: false)
         }
         let id = job.activity.id
@@ -1007,7 +1007,7 @@ actor Store {
             case let (_, .retry(error, throttled)):
                 try db.run("""
                     UPDATE activities SET retry_at = ?, failures = failures + 1, delivery = ?, error = ?, alert = COALESCE(alert, ?) WHERE id = ?
-                    """, now + min(1 << (job.activity.failures + 1), 300), throttled ? DeliveryState.throttled : .pending, error, alert, id)
+                    """, now + min(1 << min(job.activity.failures + 1, 9), 300), throttled ? DeliveryState.throttled : .pending, error, alert, id)
             case (.deleteChannel, _):
                 try db.run("UPDATE activities SET channel = NULL WHERE id = ?", id)
             case (.start, .accepted):

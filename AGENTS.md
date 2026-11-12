@@ -108,8 +108,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   environment.
 - A broadcast push carries an `apns-expiration` only on the channel its
   activity's `storing_channel` names, which this gateway created with message
-  storage; APNs rejects one on any other channel. Write `channel` and
-  `storing_channel` together.
+  storage; APNs rejects one on any other channel. Set `storing_channel`
+  whenever this gateway sets `channel` to a channel it created.
 - Stored layout templates are expanded: `parts` and node `use` never reach
   database layouts or the phone. Expand before filling, with copy-paste scope and errors at authored use sites,
   and bound expansion while copying by `Layout.maximumNodes`. `Parts` expands

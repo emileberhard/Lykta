@@ -162,7 +162,7 @@ struct Activity: Sendable {
 
     func broadcastExpiration(now: Int) -> Int {
         guard let channel, channel == storingChannel else { return 0 }
-        return max(createdAt + Store.activityLifetime, now + 60)
+        return max(createdAt + Store.latestActivityEnd, now + 60)
     }
 
     func contentState() throws -> LyktaActivity.ContentState {
