@@ -86,6 +86,7 @@ final class FakePush: PushService {
         var sent: [String] = []
         var failures: [String: APNsError] = [:]
         var alerts: [(payload: JSONValue, expiration: Int)] = []
+        var broadcastExpirations: [Int] = []
         var startAlerts: [String] = []
         var layouts: [String] = []
         var tokenEnvironments: Set<PushEnvironment> = [.development]
@@ -96,6 +97,8 @@ final class FakePush: PushService {
     var sent: [String] { state.withLock { $0.sent } }
 
     var alerts: [(payload: JSONValue, expiration: Int)] { state.withLock { $0.alerts } }
+
+    var broadcastExpirations: [Int] { state.withLock { $0.broadcastExpirations } }
 
     var startAlerts: [String] { state.withLock { $0.startAlerts } }
 
@@ -130,7 +133,7 @@ final class FakePush: PushService {
         return "unique-\(id)"
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func broadcast(_ payload: Data, channel: String, priority: Int, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         struct Sent: Decodable {
             struct APS: Decodable {
                 let event: String
@@ -146,6 +149,7 @@ final class FakePush: PushService {
         try check(payload)
         let aps = try? JSONDecoder().decode(Sent.self, from: payload).aps
         let dismissed = aps.flatMap { aps in aps.dismissal.map { $0 <= aps.timestamp } } == true
+        state.withLock { $0.broadcastExpirations.append(expiration) }
         try record(aps?.event ?? "malformed", detail: " \(priority)" + (dismissed ? " dismissed" : ""))
         return nil
     }

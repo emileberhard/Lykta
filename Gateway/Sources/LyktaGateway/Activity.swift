@@ -112,6 +112,7 @@ struct Activity: Sendable {
     let sentRevision: Int
     let channel: String?
     let channelEnvironment: PushEnvironment?
+    let storingChannel: String?
     let failures: Int
     let delivery: DeliveryState
     let error: String?
@@ -138,6 +139,7 @@ struct Activity: Sendable {
         sentRevision = Int(try row.integer("sent_revision"))
         channel = try row.optionalString("channel")
         channelEnvironment = try row.optionalText("channel_environment", as: PushEnvironment.init(rawValue:))
+        storingChannel = try row.optionalString("storing_channel")
         failures = Int(try row.integer("failures"))
         delivery = try row.text("delivery", as: DeliveryState.init(rawValue:))
         error = try row.optionalString("error")
@@ -156,6 +158,11 @@ struct Activity: Sendable {
         return ActivityStatus(name: name, id: id, title: title, state: phase, revision: revision, delivery: superseded ? .pending : delivery,
                               device: deviceState, error: superseded ? nil : error, layoutReadable: layoutReadable,
                               startedAt: Date(timeIntervalSince1970: Double(createdAt)), endedAt: endedAt.map { Date(timeIntervalSince1970: Double($0)) })
+    }
+
+    func broadcastExpiration(now: Int) -> Int {
+        guard let channel, channel == storingChannel else { return 0 }
+        return max(createdAt + Store.activityLifetime, now + 60)
     }
 
     func contentState() throws -> LyktaActivity.ContentState {

@@ -150,7 +150,7 @@ final class SimulatedPhone: PushService {
         return id.uuidString.lowercased()
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func broadcast(_ payload: Data, channel: String, priority: Int, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
         if let activity = channels.withLock({ $0[channel] }) {
             pushes.yield(Push(aps: Self.decode(payload), activity: activity, received: .now))
         }

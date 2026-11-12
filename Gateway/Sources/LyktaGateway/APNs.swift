@@ -43,7 +43,7 @@ protocol PushService: Sendable {
     func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func reloadWidgets(deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
+    func broadcast(_ payload: Data, channel: String, priority: Int, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError)
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String]
@@ -88,9 +88,9 @@ final class APNs: PushService {
         return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
-        let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority), "apns-expiration": "0",
-                       "apns-request-id": id.uuidString.lowercased()]
+    func broadcast(_ payload: Data, channel: String, priority: Int, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+        let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority),
+                       "apns-expiration": String(expiration), "apns-request-id": id.uuidString.lowercased()]
         let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "4/broadcasts/apps/\(bundleID)"), environment,
                                            headers: headers, body: payload)
         return response.value(forHTTPHeaderField: "apns-unique-id")
@@ -105,7 +105,7 @@ final class APNs: PushService {
     }
 
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String {
-        let body = Data(#"{"message-storage-policy":0,"push-type":"LiveActivity"}"#.utf8)
+        let body = Data(#"{"message-storage-policy":1,"push-type":"LiveActivity"}"#.utf8)
         let (response, _) = try await send("POST", environment.channelOrigin.appending(path: "1/apps/\(bundleID)/channels"), environment, headers: [:], body: body)
         guard let channel = response.value(forHTTPHeaderField: "apns-channel-id"), !channel.isEmpty else {
             throw .unknown("channel created without apns-channel-id")

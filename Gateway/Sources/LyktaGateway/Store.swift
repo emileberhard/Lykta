@@ -921,7 +921,7 @@ actor Store {
     }
 
     func setChannel(_ channel: String, environment: PushEnvironment, for activityID: UUID) throws -> Bool {
-        try db.run("UPDATE activities SET channel = ?, channel_environment = ? WHERE id = ?", channel, environment, activityID)
+        try db.run("UPDATE activities SET channel = ?1, storing_channel = ?1, channel_environment = ?2 WHERE id = ?3", channel, environment, activityID)
         return try !db.query("SELECT 1 FROM activities WHERE id = ?", activityID).isEmpty
     }
 

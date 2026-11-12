@@ -128,7 +128,8 @@ app deletes them.
 Apple's Push Notification service delivers activity content and notifications,
 including an inline avatar drawing when one is supplied,
 to the phone, and tells its widgets when to reload; widget content travels
-only between the gateway and the phone. Previews travel only between the
+only between the gateway and the phone. While a phone is offline, Apple keeps
+an activity's newest update for it, for at most eight hours. Previews travel only between the
 gateway and its operator's renderer. To show a notification as a message from its sender, the app
 shares the sender's name and the text with iOS on the phone, which may suggest
 the sender in Siri and the share sheet; this stays on the phone. A link you tap

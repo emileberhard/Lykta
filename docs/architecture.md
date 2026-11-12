@@ -323,6 +323,24 @@ creates per activity, so the app never has to run to forward update tokens.
 The cost is the Broadcast capability and channel cleanup: the gateway deletes a
 channel five minutes after its activity ends and sweeps orphans at startup.
 
+**Channels keep the newest message.** The gateway creates each channel with
+Apple's Most Recent Message Stored policy and gives every update and end an
+`apns-expiration` at the time iOS would end the activity itself, eight hours
+after it started, and at least a minute ahead. A phone that was offline or
+asleep when a push was sent therefore gets the newest content when it returns.
+With No Message Stored, APNs reaches only the phones connected at that moment,
+so an agent that sends only when its data changes left such a phone on old
+content until the next change. Apple gives a storing channel a lower
+publishing budget and publishes neither figure; when it answers 429 the
+gateway backs off and then sends the latest revision. A channel's policy is
+fixed when it is created, and APNs rejects an expiration on a channel without
+storage, so `storing_channel` names the channel this gateway created with
+storage and only a push to that channel carries one. A channel from before
+0.20.6, or one an older gateway creates after a rollback, which replaces
+`channel` and leaves `storing_channel` behind, keeps expiration 0. An older
+gateway sends expiration 0 on every channel, which both policies accept, so a
+rollback needs no cleanup.
+
 **Each token finds its APNs environment.** A token works only in the
 environment of the build that obtained it, and a phone can move between Xcode,
 TestFlight and App Store builds while staying registered. iOS keeps an

@@ -12,7 +12,11 @@ struct GatewayTests {
     let bundleInstance = UUID()
 
     init() async throws {
-        store = try Store(path: ":memory:")
+        try await self.init(path: ":memory:")
+    }
+
+    private init(path: String) async throws {
+        store = try Store(path: path)
         api = API(store: store, maximumDevices: 2, maximumLiveActivities: 2, environments: [.development],
                   enrolment: Enrolment(appID: AppAttestTests.appID), version: Version(9, 9, 9), shutdown: Shutdown(), renders: RenderQueue(workerTokenHash: nil))
         credentials = try await api.handle(Self.registration(.invite(try await store.invite(now: now)))).decoded()
@@ -206,6 +210,36 @@ struct GatewayTests {
         try await deliver(at: now + 302)
         #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed", "deleteChannel"])
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
+    }
+
+    @Test(arguments: [(2, Store.activityLifetime), (Store.activityLifetime + 30, Store.activityLifetime + 90)])
+    func updatesAndEndsWaitAtAppleForAnOfflinePhoneWhileIOSKeepsTheActivity(endedAfter: Int, expiresAfter: Int) async throws {
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        let started = try await startedAt("build")
+        try await put("build", ["data": ["step": "Test"]])
+        try await deliver(at: started + 1)
+        #expect(try await send("DELETE", "/v1/activities/build").status == 200)
+        try await deliver(at: started + endedAfter)
+        #expect(push.sent == ["createChannel", "start", "update 5", "end 10"])
+        #expect(push.broadcastExpirations == [started + Store.activityLifetime, started + expiresAfter])
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.filter { $0.name == "push.update" || $0.name == "push.end" }.map { $0.detail["stored"] } == [.bool(true), .bool(true)])
+    }
+
+    @Test func aChannelAnotherGatewayCreatedWithoutStorageGetsNoExpiration() async throws {
+        let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+        let phone = try await Self(path: path)
+        try await phone.put("build", Self.start)
+        try await phone.deliver(at: phone.now)
+        try Database(path: path).run("UPDATE activities SET channel = 'created-by-an-older-gateway'")
+        try await phone.put("build", ["data": ["step": "Test"]])
+        try await phone.deliver(at: phone.now + 1)
+        #expect(phone.push.sent == ["createChannel", "start", "update 5"])
+        #expect(phone.push.broadcastExpirations == [0])
+        let events: Events = try await phone.send("GET", "/v1/events").decoded()
+        #expect(events.events.first { $0.name == "push.update" }?.detail["stored"] == .bool(false))
     }
 
     @Test(arguments: [(60, 60), (28_800, 28_740)])
@@ -699,6 +733,12 @@ struct GatewayTests {
 
     private func status(_ name: String) async throws -> Status {
         try await send("GET", "/v1/activities/\(name)").decoded()
+    }
+
+    private func startedAt(_ name: String) async throws -> Int {
+        struct Started: Decodable { let startedAt: String }
+        let activity: Started = try await send("GET", "/v1/activities/\(name)").decoded()
+        return Int(try #require(ISO8601DateFormatter().date(from: activity.startedAt)).timeIntervalSince1970)
     }
 
     private func pushEvents() async throws -> [[JSONValue?]] {

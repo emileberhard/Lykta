@@ -320,7 +320,8 @@ recent ones:
 | `error` | Why delivery failed or the activity ended, or `null` |
 | `layoutReadable` | Whether the phone could draw the current content, or `null` before it reports. `false` means it shows only the title |
 
-Accepted means Apple took the push, not that the phone displayed it.
+Accepted means Apple took the push, not that the phone displayed it. A phone
+that is offline gets the activity's newest update when it returns.
 
 ## Debug
 

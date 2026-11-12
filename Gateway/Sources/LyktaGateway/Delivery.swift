@@ -157,13 +157,15 @@ struct Delivery: Sendable {
                 guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
                 let priority = job.kind == .end || activity.alert != nil ? 10 : 5
+                let expiration = activity.broadcastExpiration(now: now)
                 let payload = try activity.payload(event, now: now, layoutVersion: job.layoutVersion)
                 detail["channel"] = .string(channel)
                 detail["priority"] = .number(Double(priority))
+                detail["stored"] = .bool(expiration != 0)
                 detail["alert"] = .bool(activity.alert != nil)
                 detail["payloadBytes"] = .number(Double(payload.count))
-                detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, environment: job.environment, id: id)
-                    .map(JSONValue.string)
+                detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, expiration: expiration,
+                                                              environment: job.environment, id: id).map(JSONValue.string)
             case .deleteChannel:
                 guard let channel = activity.channel else { return Attempt(outcome: .accepted, detail: detail) }
                 detail["channel"] = .string(channel)
