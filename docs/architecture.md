@@ -334,7 +334,8 @@ left such a phone on old content until the next change. Apple gives a storing
 channel a lower publishing budget and publishes neither figure; when it answers
 429 the gateway backs off, up to five minutes between attempts, and keeps
 trying until Apple accepts the latest revision or the activity's eight hours
-are over, instead of giving up after five attempts as it does for other errors.
+are over. Only other errors count toward the five attempts after which it
+gives up, starting again from none once the throttling stops.
 A channel's policy is fixed when it is created, and APNs rejects an expiration
 on a channel without storage, so `storing_channel` names the channel this
 gateway created with storage and only a push to that channel carries one. A

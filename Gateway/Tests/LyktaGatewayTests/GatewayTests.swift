@@ -228,7 +228,7 @@ struct GatewayTests {
     }
 
     @Test(arguments: ["update", "end"])
-    func keepsRetryingAThrottledUpdateOrEndUntilAppleAcceptsIt(_ call: String) async throws {
+    func throttlingNeverCountsTowardGivingUpOnAnUpdateOrEnd(_ call: String) async throws {
         try await put("build", Self.start)
         try await deliver(at: now)
         if call == "update" {
@@ -241,6 +241,12 @@ struct GatewayTests {
             push.fail(call, .rejected(status: 429, reason: "TooManyRequests"))
             try await deliver(at: time)
             #expect(try await status("build").delivery == "throttled")
+            time += 301
+        }
+        for _ in 0..<Store.maximumAttempts - 1 {
+            push.fail(call, .rejected(status: 503, reason: "ServiceUnavailable"))
+            try await deliver(at: time)
+            #expect(try await status("build").delivery == "pending")
             time += 301
         }
         try await deliver(at: time)

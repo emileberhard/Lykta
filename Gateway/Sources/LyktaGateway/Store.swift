@@ -985,8 +985,13 @@ actor Store {
     private func finish(_ job: ActivityJob, _ attempt: Attempt, now: Int) throws {
         var outcome = attempt.outcome
         if case let .unknown(error) = outcome, job.kind != .start { outcome = .retry(error, throttled: false) }
-        if case let .retry(error, throttled) = outcome, job.kind == .start || !throttled, job.activity.failures + 1 >= Self.maximumAttempts {
-            outcome = .failed(error, clearsPushToken: false)
+        let outlastsThrottling = job.kind == .update || job.kind == .end
+        var failures = job.activity.failures
+        var throttlingEnded = false
+        if case let .retry(error, throttled) = outcome {
+            throttlingEnded = outlastsThrottling && !throttled && job.activity.delivery == .throttled
+            if throttlingEnded { failures = 0 }
+            if !(outlastsThrottling && throttled), failures + 1 >= Self.maximumAttempts { outcome = .failed(error, clearsPushToken: false) }
         }
         let id = job.activity.id
         let revision = job.activity.revision
@@ -1006,8 +1011,9 @@ actor Store {
             switch (job.kind, outcome) {
             case let (_, .retry(error, throttled)):
                 try db.run("""
-                    UPDATE activities SET retry_at = ?, failures = failures + 1, delivery = ?, error = ?, alert = COALESCE(alert, ?) WHERE id = ?
-                    """, now + min(1 << min(job.activity.failures + 1, 9), 300), throttled ? DeliveryState.throttled : .pending, error, alert, id)
+                    UPDATE activities SET retry_at = ?, failures = CASE WHEN ? THEN 1 ELSE failures + 1 END, delivery = ?, error = ?,
+                      alert = COALESCE(alert, ?) WHERE id = ?
+                    """, now + min(1 << min(failures + 1, 9), 300), throttlingEnded, throttled ? DeliveryState.throttled : .pending, error, alert, id)
             case (.deleteChannel, _):
                 try db.run("UPDATE activities SET channel = NULL WHERE id = ?", id)
             case (.start, .accepted):
