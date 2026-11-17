@@ -50,6 +50,7 @@ extension StoredEvent {
 
 actor Store {
     static let maximumAttempts = 5
+    static let immediateUpdateInterval = 30
     static let maximumPayloadBytes = 4096
     static let eventRetention = 14 * 86400
     static let maximumEventBytesPerDevice = 8 << 20
@@ -911,7 +912,8 @@ actor Store {
                 let token = try row.optionalText("push_token", as: PushToken.init(hex:))
                 let movedHash = try row.optionalString("moved_push_token_hash")
                 let moved = token.map { Self.hash($0.description) == movedHash } ?? false
-                return Job.activity(ActivityJob(kind: kind, activity: activity,
+                let immediate = kind != .update || activity.alert != nil || now - activity.immediateAt >= Self.immediateUpdateInterval
+                return Job.activity(ActivityJob(kind: kind, immediate: immediate, activity: activity,
                                                 environment: kind == .start ? (moved ? device.other : device) : activity.channelEnvironment ?? device,
                                                 pushToken: token, tokenMoved: moved,
                                                 layoutVersion: try row.optionalText("layout_version", as: Version.init)))
@@ -1027,7 +1029,10 @@ actor Store {
                       sent_revision = ?, error = ? WHERE id = ?
                     """, revision, error, id)
             case (.update, .accepted):
-                try db.run("UPDATE activities SET delivery = 'accepted', sent_revision = ?, failures = 0, error = NULL WHERE id = ?", revision, id)
+                try db.run("""
+                    UPDATE activities SET delivery = 'accepted', sent_revision = ?, failures = 0, error = NULL,
+                      immediate_at = CASE WHEN ? THEN ? ELSE immediate_at END WHERE id = ?
+                    """, revision, job.immediate, now, id)
             case let (.update, .failed(error, _)):
                 try db.run("UPDATE activities SET delivery = 'failed', sent_revision = ?, failures = 0, error = ? WHERE id = ?", revision, error, id)
             case (.end, .accepted):

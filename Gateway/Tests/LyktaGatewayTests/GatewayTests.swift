@@ -39,7 +39,7 @@ struct GatewayTests {
         try await deliver(at: now + 2)
         #expect(try await send("DELETE", "/v1/activities/\(name)").status == 200)
         try await deliver(at: now + 4)
-        #expect(push.sent.suffix(2) == ["update 5", "end 10"])
+        #expect(push.sent.suffix(2) == ["update 10", "end 10"])
         #expect(try await status(name) == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
@@ -204,7 +204,7 @@ struct GatewayTests {
         #expect(ended.state == "ending")
         try await deliver(at: now + 2)
         try await deliver(at: now + 302)
-        #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed", "deleteChannel"])
+        #expect(push.sent == ["createChannel", "start", "update 10", "end 10 dismissed", "deleteChannel"])
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
@@ -244,7 +244,7 @@ struct GatewayTests {
         try await deliver(at: now + deadline - 2)
         #expect(try await status("build").state == "live")
         try await deliver(at: now + deadline + 2)
-        #expect(push.sent == ["createChannel", "start", "update 5", "end 10 dismissed"])
+        #expect(push.sent == ["createChannel", "start", "update 10", "end 10 dismissed"])
         #expect(try await status("build") == Status(state: "ended", delivery: "accepted", error: nil))
     }
 
@@ -268,6 +268,32 @@ struct GatewayTests {
         try await deliver(at: now + 3)
         #expect(push.sent == ["createChannel", "start", "update 10", "update 10"])
         #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
+    }
+
+    @Test func sendsAnActivitysUpdatesImmediatelyOnceInEachIntervalAndWithEveryAlert() async throws {
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        let updates: [(JSONValue, Int)] = [
+            (["data": ["step": "Test"]], 1), (["data": ["step": "Sign"]], 2), (["data": ["step": "Upload"]], 30),
+            (["data": ["step": "Publish"]], 31), (["alert": ["body": "Published"]], 32), (["data": ["step": "Done"]], 61),
+        ]
+        for (update, time) in updates {
+            try await put("build", update)
+            try await deliver(at: now + time)
+        }
+        #expect(push.sent.suffix(6) == ["update 10", "update 5", "update 5", "update 10", "update 10", "update 5"])
+    }
+
+    @Test func aThrottledUpdateStaysImmediateUntilAppleAcceptsIt() async throws {
+        try await put("build", Self.start)
+        try await deliver(at: now)
+        push.fail("update", .rejected(status: 429, reason: "TooManyRequests"))
+        try await put("build", ["data": ["step": "Test"]])
+        try await deliver(at: now + 1)
+        try await deliver(at: now + 3)
+        try await put("build", ["data": ["step": "Sign"]])
+        try await deliver(at: now + 4)
+        #expect(push.sent.suffix(3) == ["update 10", "update 10", "update 5"])
     }
 
     @Test func enforcesTheDeviceAndActivityLimits() async throws {
@@ -302,7 +328,7 @@ struct GatewayTests {
         try await deliver(at: now + 1)
         try await put("deploy", Self.start)
         try await deliver(at: now + 2)
-        #expect(push.sent == ["createChannel", "start", "createChannel", "start", "update 5", "createChannel", "start"])
+        #expect(push.sent == ["createChannel", "start", "createChannel", "start", "update 10", "createChannel", "start"])
         #expect(push.startAlerts == ["Compiling", "Compiling", "Live Activity started"])
         #expect(try await status("build") == Status(state: "live", delivery: "accepted", error: nil))
         let pushes = try await pushEvents()
@@ -469,7 +495,7 @@ struct GatewayTests {
         #expect(detail.revision == 2)
         #expect(detail.data == ["items": .array([["name": "Milk", "done": .bool(true)]])])
         try await deliver(at: now + 1)
-        #expect(push.sent == ["createChannel", "start", "update 5"])
+        #expect(push.sent == ["createChannel", "start", "update 10"])
         let stale = await act(Action(id: UUID(), target: .activity(started.id), input: .toggle("items.1.done", isOn: true)))
         #expect(stale.status == 409)
     }
@@ -485,7 +511,7 @@ struct GatewayTests {
         #expect(abs(try detail.data.number(at: "pausedAt") - Double(now)) < 5)
         #expect(try detail.data.value(at: "playing") == .bool(false))
         try await deliver(at: now + 1)
-        #expect(push.sent == ["createChannel", "start", "update 5"])
+        #expect(push.sent == ["createChannel", "start", "update 10"])
         #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("play"))).status == 204)
         detail = try await send("GET", "/v1/activities/film").decoded()
         #expect(detail.revision == 3)
@@ -544,7 +570,7 @@ struct GatewayTests {
         let answer: Status = try await throttled.decoded()
         #expect(answer.delivery == "throttled")
         #expect(answer.error == "APNs 429 TooManyRequests")
-        #expect(push.sent == ["createChannel", "start", "update 5"])
+        #expect(push.sent == ["createChannel", "start", "update 10"])
     }
 
     @Test func aWaitingPutAnswersForItsOwnActivityAfterAnotherTakesItsName() async throws {

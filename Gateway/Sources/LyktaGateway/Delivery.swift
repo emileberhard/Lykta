@@ -11,6 +11,7 @@ struct ActivityJob: Sendable {
     enum Kind: String, Sendable { case start, update, end, deleteChannel }
 
     let kind: Kind
+    let immediate: Bool
     let activity: Activity
     let environment: PushEnvironment
     let pushToken: PushToken?
@@ -156,7 +157,7 @@ struct Delivery: Sendable {
             case .update, .end:
                 guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
-                let priority = job.kind == .end || activity.alert != nil ? 10 : 5
+                let priority = job.immediate ? 10 : 5
                 let payload = try activity.payload(event, now: now, layoutVersion: job.layoutVersion)
                 detail["channel"] = .string(channel)
                 detail["priority"] = .number(Double(priority))
