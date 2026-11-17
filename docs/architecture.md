@@ -343,8 +343,7 @@ activity's eight hours are over. Only other errors count toward the five
 attempts after which it gives up on an update or end, starting again from none
 once the throttling stops.
 
-**An update goes out immediately, at most once per activity every half
-minute.** Apple delivers a priority 10 push at once and counts it toward an
+**Immediate updates are paced per activity.** Apple delivers a priority 10 push at once and counts it toward an
 hourly budget it does not publish, which the app's
 `NSSupportsLiveActivitiesFrequentUpdates` raises; a priority 5 push costs no
 budget, and iOS may group, delay or drop it to save power. Until 0.20.7 only
@@ -357,9 +356,9 @@ priority 10 when it carries an alert or when the activity's last accepted
 priority 10 update is at least `Store.immediateUpdateInterval` old, and at 5
 otherwise. A card that changes once a minute goes entirely at 10, and a
 burst, such as taps on a remote control, spends one such push per half minute
-while the rest arrive as before on a phone that is awake. The cost is that
-the last update of a burst is not sent again at 10, so it can be late as
-every update could before. `Store` decides when it claims the update and
+while the rest keep priority 5's best effort. The cost is that the last
+update of a burst is not sent again at 10, so it can be late or lost as every
+update could before. `Store` decides when it claims the update and
 records the time only when Apple accepts it, so an update Apple throttles
 keeps its priority. Unmeasured: the size of the budget, and what iOS does
 with priority 10 pushes beyond it.
