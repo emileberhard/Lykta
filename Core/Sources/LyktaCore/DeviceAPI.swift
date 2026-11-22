@@ -265,11 +265,11 @@ public struct Action: Codable, Equatable, Sendable {
 public struct ActionUpdate: Codable, Equatable, Sendable {
     public let from: String
     public let contentState: LyktaActivity.ContentState
-    public let timestamp: Int
+    public let timestamp: Double
     public let staleDate: Int?
     public let relevanceScore: Double?
 
-    public init(from: String, contentState: LyktaActivity.ContentState, timestamp: Int, staleDate: Int?, relevanceScore: Double?) {
+    public init(from: String, contentState: LyktaActivity.ContentState, timestamp: Double, staleDate: Int?, relevanceScore: Double?) {
         self.from = from
         self.contentState = contentState
         self.timestamp = timestamp

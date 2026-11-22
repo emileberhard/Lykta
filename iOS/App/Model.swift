@@ -290,15 +290,20 @@ final class Model {
             detail["widget"] = .string(id.uuidString)
         }
         telemetry.record(event, activity: activity, detail)
-        let update: ActionUpdate?
+        let reply: ActionResult
         do {
-            update = try await gateway.act(action, secret: credentials.deviceSecret)
+            reply = try await gateway.act(action, secret: credentials.deviceSecret)
         } catch {
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
-        if case let .activity(id) = action.target, let update {
+        switch (action.target, reply) {
+        case let (.activity(id), .update(update)):
             await apply(update, to: id)
+        case let (_, .unreadable(error)):
+            telemetry.record("app.error", activity: activity, ["operation": .string("actionUpdate"), "error": .string(error)])
+        default:
+            break
         }
         if case let .widget(id) = action.target, let configurations = try? await WidgetCenter.shared.currentConfigurations(),
            WidgetSelection.places(in: configurations).count(where: { $0.widget == id }) > 1 {
@@ -309,12 +314,12 @@ final class Model {
     private func apply(_ update: ActionUpdate, to id: UUID) async {
         let next = update.contentState.fingerprint
         switch await TapUpdate.apply(update, to: id) {
-        case .applied:
+        case .updated:
             refreshActivities()
             telemetry.record("activity.tapUpdate", activity: id, [
-                "outcome": .string("applied"),
+                "outcome": .string("updated"),
                 "from": .string(update.from), "to": .string(next),
-                "timestamp": .number(Double(update.timestamp)),
+                "timestamp": .number(update.timestamp),
             ])
         case let .skipped(reason, current):
             var detail: [String: JSONValue] = [
@@ -696,7 +701,7 @@ extension Model {
 
 private nonisolated enum TapUpdate: Sendable {
     enum Outcome: Sendable {
-        case applied
+        case updated
         case skipped(reason: String, current: String?)
     }
 
@@ -714,8 +719,8 @@ private nonisolated enum TapUpdate: Sendable {
         let content = ActivityContent(state: update.contentState,
                                       staleDate: update.staleDate.map { Date(timeIntervalSince1970: Double($0)) },
                                       relevanceScore: update.relevanceScore ?? 0)
-        await shown.update(content, timestamp: Date(timeIntervalSince1970: Double(update.timestamp)))
-        return .applied
+        await shown.update(content, timestamp: Date(timeIntervalSince1970: update.timestamp))
+        return .updated
     }
 }
 

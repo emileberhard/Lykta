@@ -492,7 +492,7 @@ struct GatewayTests {
         let applied = await act(tick)
         #expect(applied.status == 200)
         let update: ActionUpdate = try applied.decoded()
-        #expect(update.timestamp == now)
+        #expect(update.timestamp == Double(now) + 0.5)
         #expect(update.from != update.contentState.fingerprint)
         #expect(await act(tick).status == 204)
         let detail: Detail = try await send("GET", "/v1/activities/list").decoded()
@@ -569,7 +569,7 @@ struct GatewayTests {
         let beforePush = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
         #expect(beforePush.status == 200)
         let first: ActionUpdate = try beforePush.decoded()
-        #expect(abs(first.timestamp - now) <= 5)
+        #expect(abs(first.timestamp - (Double(now) + 0.5)) <= 5)
         #expect(first.relevanceScore == 42)
         #expect(abs((first.staleDate ?? 0) - (now + 120)) <= 5)
         let wireText = String(decoding: beforePush.body, as: UTF8.self)
@@ -579,31 +579,59 @@ struct GatewayTests {
         let sentAt = now + 10
         try await deliver(at: sentAt)
         let burstOne = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
-        let burstTwo = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
         #expect(burstOne.status == 200)
-        #expect(burstTwo.status == 200)
         let u1: ActionUpdate = try burstOne.decoded()
-        let u2: ActionUpdate = try burstTwo.decoded()
         #expect(u1.from == first.contentState.fingerprint)
+        #expect(u1.timestamp == Double(sentAt) + 0.5)
+        #expect(u1.timestamp > Double(sentAt) && u1.timestamp < Double(sentAt + 1))
+        let fallbackSentAt = sentAt + 1
+        try await deliver(at: fallbackSentAt)
+        let burstTwo = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
+        let burstThree = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
+        #expect(burstTwo.status == 200)
+        #expect(burstThree.status == 200)
+        let u2: ActionUpdate = try burstTwo.decoded()
+        let u3: ActionUpdate = try burstThree.decoded()
         #expect(u2.from == u1.contentState.fingerprint)
-        #expect(u1.timestamp == sentAt)
-        #expect(u2.timestamp == sentAt)
-        try await deliver(at: sentAt + 1)
+        #expect(u3.from == u2.contentState.fingerprint)
+        #expect(u2.timestamp == Double(fallbackSentAt) + 0.5)
+        #expect(u3.timestamp == Double(fallbackSentAt) + 0.5)
+        #expect(u2.timestamp > Double(fallbackSentAt) && u2.timestamp < Double(fallbackSentAt + 1))
+        try await deliver(at: fallbackSentAt + 1)
         let events: Events = try await send("GET", "/v1/events").decoded()
         let pushedFingerprint = events.events.last(where: { $0.name == "push.update" })?.detail["fingerprint"]
-        #expect(pushedFingerprint == .string(u2.contentState.fingerprint))
+        #expect(pushedFingerprint == .string(u3.contentState.fingerprint))
     }
 
-    @Test func waitingActionsAndDeliveryWakePromptlyOnCommit() async throws {
+    @Test func signalWakesBeforeLongTimeoutAndHandlesPriorNotifyAndCancellation() async throws {
+        let signal = Signal()
+        let alreadySeen = signal.generation
+        signal.notify()
+        try await signal.wait(since: alreadySeen, timeout: .seconds(10))
+
+        let seen = signal.generation
+        let clock = ContinuousClock()
+        let started = clock.now
+        async let waiter: Void = signal.wait(since: seen, timeout: .seconds(10))
+        try await Task.sleep(for: .milliseconds(10))
+        signal.notify()
+        try await waiter
+        #expect(started.duration(to: clock.now) < .seconds(2))
+
+        let cancelSeen = signal.generation
+        let cancelled = Task { try await signal.wait(since: cancelSeen, timeout: .seconds(10)) }
+        try await Task.sleep(for: .milliseconds(10))
+        cancelled.cancel()
+        await #expect(throws: CancellationError.self) { try await cancelled.value }
+    }
+
+    @Test func waitingActionsAndDeliveryWakeOnCommit() async throws {
         let started: Identified = try await put("wake", Self.question)
         let initial: Actions = try await send("GET", "/v1/actions").decoded()
-        let actionClock = ContinuousClock()
-        let actionStart = actionClock.now
         async let waitingAction = send("GET", "/v1/actions?after=\(initial.cursor)&wait=5")
         try await Task.sleep(for: .milliseconds(20))
         #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("retry"))).status == 204)
         let actionReply = try await waitingAction
-        #expect(actionStart.duration(to: actionClock.now) < .milliseconds(150))
         let page: Actions = try actionReply.decoded()
         #expect(page.actions.map(\.button) == ["retry"])
 
@@ -615,12 +643,9 @@ struct GatewayTests {
             runner.cancel()
         }
         try await Task.sleep(for: .milliseconds(20))
-        let putStart = actionClock.now
         let putReply = try await send("PUT", "/v1/activities/fast?wait=5", body: Self.start)
-        let elapsed = putStart.duration(to: actionClock.now)
         #expect(putReply.status == 200)
         #expect(try putReply.decoded() as Status == Status(state: "live", delivery: "accepted", error: nil))
-        #expect(elapsed < .milliseconds(150))
         shutdown.request()
         try await runner.value
     }

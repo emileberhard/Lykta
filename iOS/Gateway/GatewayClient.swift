@@ -13,6 +13,12 @@ nonisolated enum WidgetAnswer: Sendable {
     case signedOut
 }
 
+nonisolated enum ActionResult: Sendable {
+    case update(ActionUpdate)
+    case none
+    case unreadable(String)
+}
+
 nonisolated struct GatewayClient: Sendable {
     let url: URL
     let timeout: TimeInterval
@@ -38,12 +44,14 @@ nonisolated struct GatewayClient: Sendable {
         _ = try await send("POST", url.appending(path: "v1/device/events"), token: secret, body: batch)
     }
 
-    func act(_ action: Action, secret: String) async throws -> ActionUpdate? {
+    func act(_ action: Action, secret: String) async throws -> ActionResult {
         let (data, status) = try await exchange("POST", url.appending(path: "v1/device/actions"), token: secret,
                                                 body: try JSONEncoder().encode(action), type: "application/json")
         switch status {
-        case 200: return try JSONDecoder().decode(ActionUpdate.self, from: data)
-        case 204: return nil
+        case 200:
+            do { return .update(try JSONDecoder().decode(ActionUpdate.self, from: data)) }
+            catch { return .unreadable(error.localizedDescription) }
+        case 204: return .none
         default: throw Self.failure(status, data)
         }
     }

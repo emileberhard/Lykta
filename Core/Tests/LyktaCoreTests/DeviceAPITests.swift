@@ -70,13 +70,13 @@ struct DeviceAPITests {
     }
 
     @Test(arguments: [Version(0, 7, 1), Layout.version])
-    func actionUpdateRoundTripsBothWireForms(layoutVersion: Version) throws {
+    func actionUpdateDecodesExactWireKeysForBothForms(layoutVersion: Version) throws {
         let filled = JSONValue.object(["lockScreen": .string("Step 2"), "compactLeading": .string(""), "compactTrailing": .string(""), "minimal": .string("")])
         let state = try LyktaActivity.ContentState(title: "Build", layout: filled.json).encoded(for: layoutVersion)
-        let update = ActionUpdate(from: "1234abcd", contentState: state, timestamp: 1_793_000_000, staleDate: 1_793_000_300, relevanceScore: 75)
-        let data = try JSONEncoder().encode(update)
-        let decoded = try JSONDecoder().decode(ActionUpdate.self, from: data)
-        #expect(decoded == update)
+        let stateJSON = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+        let wire = #"{"from":"1234abcd","contentState":\#(stateJSON),"timestamp":1793000000.5,"staleDate":1793000300,"relevanceScore":75}"#
+        let decoded = try JSONDecoder().decode(ActionUpdate.self, from: Data(wire.utf8))
+        #expect(decoded == ActionUpdate(from: "1234abcd", contentState: state, timestamp: 1_793_000_000.5, staleDate: 1_793_000_300, relevanceScore: 75))
         #expect(decoded.contentState.fingerprint == state.fingerprint)
         #expect(decoded.contentState.layout != nil)
     }

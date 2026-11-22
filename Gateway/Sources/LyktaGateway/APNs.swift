@@ -201,7 +201,8 @@ extension Activity {
 
     func actionUpdate(from previous: String, contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> ActionUpdate {
         let state = try contentState.encoded(for: layoutVersion)
-        return ActionUpdate(from: previous, contentState: state, timestamp: lastSentAt > 0 ? lastSentAt : createdAt,
+        let base = lastSentAt > 0 ? lastSentAt : createdAt
+        return ActionUpdate(from: previous, contentState: state, timestamp: Double(base) + 0.5,
                             staleDate: staleDate(at: now), relevanceScore: relevance)
     }
 

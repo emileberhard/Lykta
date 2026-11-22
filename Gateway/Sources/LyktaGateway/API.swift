@@ -170,7 +170,7 @@ struct API: Sendable {
             let wait = try Self.wait(request)
             let created = try await store.putNotification(device, name: name, request: try NotificationRequest.decode(try Self.decode(request.body)),
                                                           now: now)
-            try await waiting(wait, on: store.delivery) { try await store.notificationAttempted(device, name: name, now: Self.now()) }
+            try await waiting(wait, on: store.changes) { try await store.notificationAttempted(device, name: name, now: Self.now()) }
             return Self.json(created ? 201 : 200, try await store.notification(device, name: name, now: Self.now()))
         case ("GET", "v1/notifications/{name}"):
             return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
@@ -218,7 +218,7 @@ struct API: Sendable {
             let name = try Self.name(path[2])
             let wait = try Self.wait(request)
             let result = try await store.putWidget(device, name: name, request: try Self.decode(request.body), now: now)
-            try await waiting(wait, on: store.delivery) { try await store.widgetAttempted(device, id: result.id, deadline: now + wait, now: Self.now()) }
+            try await waiting(wait, on: store.changes) { try await store.widgetAttempted(device, id: result.id, deadline: now + wait, now: Self.now()) }
             return Self.json(result.created ? 201 : 200, try await store.widgetDetail(device, name: name, now: Self.now()))
         case ("DELETE", "v1/widgets/{name}"):
             try await store.deleteWidget(try await agent(request), name: try Self.name(path[2]))
@@ -292,7 +292,7 @@ struct API: Sendable {
             let wait = try Self.wait(request)
             let (activity, payloadBytes) = try await store.put(device, name: name, request: try Self.activityRequest(request.body),
                                                                maximumLiveActivities: maximumLiveActivities, now: now)
-            try await waiting(wait, on: store.delivery) { try await store.attempted(activity, now: Self.now()) }
+            try await waiting(wait, on: store.changes) { try await store.attempted(activity, now: Self.now()) }
             return Self.json(200, ActivityPut(detail: try await store.detail(device, id: activity.id), payloadBytes: payloadBytes))
         case ("DELETE", "v1/activities/{name}"):
             let device = try await agent(request)

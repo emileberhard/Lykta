@@ -211,7 +211,7 @@ below the top is cut off. Timers ignore these limits in the app and follow its t
 Only a phone shows the real presentation. Sending an example
 is an ordinary PUT with the agent token to one activity named `example`, so
 trying several updates one activity instead of spending the push-to-start
-budget, and the gateway stays the only content writer.
+budget, and the gateway stays the only content authority.
 
 **`just render` draws through a resident Mac app.** Xcode's previews build and
 launch a preview host for every image, about eight seconds each, although a
@@ -427,23 +427,30 @@ switch stays right with no agent listening and the gateway remains the only
 content authority. A button applies its declared changes the same way: `set`,
 `add` and `now` read the data from before the press, and a press whose result
 the layout cannot fill, or that would outgrow the push or the phone's decoder,
-changes nothing. When an activity tap changes data, `POST /v1/device/actions`
-answers `200 OK` with an `ActionUpdate` (`from`, `contentState` in the phone's
-wire form, pre-tap `timestamp`, `staleDate` and `relevanceScore`), while
+changes nothing. When an activity tap changes data, `POST /v1/device/actions` answers `200 OK`
+with an `ActionUpdate` (`from`, `contentState` in the phone's wire form,
+`timestamp` as `last_sent_at + 0.5`, `staleDate` and `relevanceScore`), while
 unchanged taps, duplicate `action.id` retries and widget taps answer
 `204 No Content`. The phone applies that update through ActivityKit only when
-the activity is still live and its shown fingerprint matches `from`, passing the
-pre-tap `timestamp` (`last_sent_at`, or `created_at` before the first push) so
-any later APNs push or end always outranks the local apply; the gateway still
-sends the broadcast push as fallback. That covers steppers, resets and pause
+the activity is still live and its shown fingerprint matches `from`. Measured on
+2026-11-22 on an iPhone 14 Plus running iOS 27, ActivityKit applies equal
+timestamps and drops strictly older ones down to sub-second precision
+(`S` after `S + 0.5`, `S + 0.5` after `S + 0.501`, and `S + 0.501` after
+`S + 1.0`). Because `Store.claim` enforces whole-second pacing
+(`last_sent_at < now`), `last_sent_at + 0.5` outranks an in-flight fallback push
+at `last_sent_at`, allows same-second burst taps to chain, and yields to any
+later APNs push or end at `last_sent_at + 1` or later; the gateway still sends
+the broadcast push on its 250 ms delivery tick so burst taps and fast agent
+replies coalesce into one push. That covers steppers, resets and pause
 buttons without a scripting language or an agent; anything richer stays with
 agents. A press counts only for a control the current data shows, so a stale
 second tap on a button an `if` has since hidden is refused. Buttons and toggles
 both join a per-phone action log that agents read with `GET /v1/actions`,
-long-polling from a cursor. `Store` and `RenderQueue` signal `Delivery` and
-waiting HTTP requests right after durable commits, keeping a bounded fallback
-wait for time-based eligibility and shutdown, so pushes, action long-polls and
-waiting PUTs wake immediately instead of polling fixed intervals. The gateway
+long-polling from a cursor. `Store` commits and `RenderQueue` state changes
+signal `Delivery` and waiting HTTP requests directly, keeping a 250 ms fallback
+wait for time-based eligibility, tap push coalescing and shutdown, so pushes,
+action long-polls, waiting PUTs and previews wake immediately instead of polling
+fixed intervals. The gateway
 never calls out: webhooks would need every agent to expose an endpoint and
 would let a layout make the gateway request arbitrary URLs. An agent that writes
 data a tap may have changed reads the activity and sends `ifRevision`, which the

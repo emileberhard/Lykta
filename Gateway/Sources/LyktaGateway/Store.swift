@@ -64,8 +64,7 @@ actor Store {
     static let mediaRetention = 86400
     static let maximumMediaBytesPerDevice = 32 << 20
 
-    nonisolated let work = Signal()
-    nonisolated let delivery = Signal()
+    nonisolated let changes = Signal()
     nonisolated let action = Signal()
     private let db: Database
 
@@ -196,8 +195,7 @@ actor Store {
                 .map { Self.times(of: try Activity($0)) }
             return SyncResult(end: tombstones, activities: times)
         }
-        work.notify()
-        delivery.notify()
+        changes.notify()
         return result
     }
 
@@ -213,7 +211,7 @@ actor Store {
 
     func deleteDevice(_ device: Device) throws {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
-        delivery.notify()
+        changes.notify()
     }
 
     struct SavedPart: Encodable {
@@ -277,7 +275,7 @@ actor Store {
     func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
         let result = try db.transaction { try putting(device, name: name, request: request, maximumLiveActivities: maximumLiveActivities, now: now) }
         if result.activity.phase == .starting || result.activity.revision > result.activity.sentRevision {
-            work.notify()
+            changes.notify()
         }
         return result
     }
@@ -388,8 +386,7 @@ actor Store {
             return try end(current, dismissAt: dismissAfter.map { now + $0 }, now: now,
                            ["dismissAfter": dismissAfter.map { .number(Double($0)) } ?? .null]).status
         }
-        work.notify()
-        delivery.notify()
+        changes.notify()
         return status
     }
 
@@ -403,10 +400,7 @@ actor Store {
             _ = try end(activity, dismissAt: now, now: now, ["dismissAfter": .number(0)])
             return true
         }
-        if ended {
-            work.notify()
-            delivery.notify()
-        }
+        if ended { changes.notify() }
     }
 
     func detail(_ device: Device, name: Name) throws -> ActivityDetail {
@@ -504,7 +498,7 @@ actor Store {
             try record("notification.put", device: device.id, activity: nil, detail)
             return true
         }
-        if created { work.notify() }
+        if created { changes.notify() }
         return created
     }
 
@@ -772,7 +766,6 @@ actor Store {
             return (true, update)
         }
         if result.recorded { self.action.notify() }
-        if result.update != nil { work.notify() }
         return result.update
     }
 
@@ -968,8 +961,7 @@ actor Store {
         case let .notification(job): try finish(job, attempt, now: now)
         case let .widgets(job): try finish(job, attempt, now: now)
         }
-        work.notify()
-        delivery.notify()
+        changes.notify()
     }
 
     private func finish(_ job: NotificationJob, _ attempt: Attempt, now: Int) throws {
@@ -1303,7 +1295,7 @@ extension Store {
             }
             return (id, current == nil, changed)
         }
-        if changed { work.notify() }
+        if changed { changes.notify() }
         return (id, created)
     }
 
@@ -1389,7 +1381,7 @@ extension Store {
                        ["widget": .string(widget.id.uuidString), "revision": .number(Double(widget.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
             return generation != nil
         }
-        if notified { work.notify() }
+        if notified { changes.notify() }
     }
 
     func widgetList(_ device: Device, now: Int) throws -> [WidgetStatus] {
@@ -1489,8 +1481,7 @@ extension Store {
             }
             try db.run("UPDATE widget_phones SET places_known = 1 WHERE device_id = ?", device.id)
         }
-        work.notify()
-        delivery.notify()
+        changes.notify()
     }
 
     func widgetSummaries(_ device: Device) throws -> [WidgetSummary] {
@@ -1524,7 +1515,7 @@ extension Store {
                                   staleAt: widget.staleAfter.map { Date(timeIntervalSince1970: Double(widget.updatedAt) + Double($0)) },
                                   content: layout >= widget.requires ? .layout(widget.content) : .requires(widget.requires))
         }
-        delivery.notify()
+        changes.notify()
         return snapshot
     }
 

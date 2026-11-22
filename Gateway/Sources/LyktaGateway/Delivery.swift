@@ -65,7 +65,7 @@ struct Delivery: Sendable {
         var lastHousekeep = 0
         try await withThrowingDiscardingTaskGroup { group in
             while !shutdown.isRequested {
-                let seen = store.work.generation
+                let seen = store.changes.generation
                 let now = Int(Date().timeIntervalSince1970)
                 if now - lastHousekeep >= 60 {
                     try await store.housekeep(now: now)
@@ -77,7 +77,7 @@ struct Delivery: Sendable {
                     }
                 }
                 guard !shutdown.isRequested else { return }
-                try await store.work.wait(since: seen, timeout: .milliseconds(250))
+                try await store.changes.wait(since: seen, timeout: .milliseconds(250))
             }
         }
     }
