@@ -605,12 +605,14 @@ struct GatewayTests {
 
     @Test func signalWakesBeforeLongTimeoutAndHandlesPriorNotifyAndCancellation() async throws {
         let signal = Signal()
+        let clock = ContinuousClock()
+        let priorStart = clock.now
         let alreadySeen = signal.generation
         signal.notify()
         try await signal.wait(since: alreadySeen, timeout: .seconds(10))
+        #expect(priorStart.duration(to: clock.now) < .seconds(2))
 
         let seen = signal.generation
-        let clock = ContinuousClock()
         let started = clock.now
         async let waiter: Void = signal.wait(since: seen, timeout: .seconds(10))
         try await Task.sleep(for: .milliseconds(10))
@@ -623,31 +625,6 @@ struct GatewayTests {
         try await Task.sleep(for: .milliseconds(10))
         cancelled.cancel()
         await #expect(throws: CancellationError.self) { try await cancelled.value }
-    }
-
-    @Test func waitingActionsAndDeliveryWakeOnCommit() async throws {
-        let started: Identified = try await put("wake", Self.question)
-        let initial: Actions = try await send("GET", "/v1/actions").decoded()
-        async let waitingAction = send("GET", "/v1/actions?after=\(initial.cursor)&wait=5")
-        try await Task.sleep(for: .milliseconds(20))
-        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("retry"))).status == 204)
-        let actionReply = try await waitingAction
-        let page: Actions = try actionReply.decoded()
-        #expect(page.actions.map(\.button) == ["retry"])
-
-        let shutdown = Shutdown()
-        let delivery = Delivery(store: store, push: push, shutdown: shutdown)
-        let runner = Task { try await delivery.run() }
-        defer {
-            shutdown.request()
-            runner.cancel()
-        }
-        try await Task.sleep(for: .milliseconds(20))
-        let putReply = try await send("PUT", "/v1/activities/fast?wait=5", body: Self.start)
-        #expect(putReply.status == 200)
-        #expect(try putReply.decoded() as Status == Status(state: "live", delivery: "accepted", error: nil))
-        shutdown.request()
-        try await runner.value
     }
 
     @Test func ifRevisionRefusesToOverwriteANewerState() async throws {

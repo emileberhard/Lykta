@@ -433,24 +433,28 @@ with an `ActionUpdate` (`from`, `contentState` in the phone's wire form,
 unchanged taps, duplicate `action.id` retries and widget taps answer
 `204 No Content`. The phone applies that update through ActivityKit only when
 the activity is still live and its shown fingerprint matches `from`. Measured on
-2026-11-22 on an iPhone 14 Plus running iOS 27, ActivityKit applies equal
-timestamps and drops strictly older ones down to sub-second precision
-(`S` after `S + 0.5`, `S + 0.5` after `S + 0.501`, and `S + 0.501` after
-`S + 1.0`). Because `Store.claim` enforces whole-second pacing
-(`last_sent_at < now`), `last_sent_at + 0.5` outranks an in-flight fallback push
-at `last_sent_at`, allows same-second burst taps to chain, and yields to any
-later APNs push or end at `last_sent_at + 1` or later; the gateway still sends
-the broadcast push on its 250 ms delivery tick so burst taps and fast agent
-replies coalesce into one push. That covers steppers, resets and pause
-buttons without a scripting language or an agent; anything richer stays with
-agents. A press counts only for a control the current data shows, so a stale
-second tap on a button an `if` has since hidden is refused. Buttons and toggles
-both join a per-phone action log that agents read with `GET /v1/actions`,
-long-polling from a cursor. `Store` commits and `RenderQueue` state changes
-signal `Delivery` and waiting HTTP requests directly, keeping a 250 ms fallback
-wait for time-based eligibility, tap push coalescing and shutdown, so pushes,
-action long-polls, waiting PUTs and previews wake immediately instead of polling
-fixed intervals. The gateway
+2026-11-22 on an iPhone 14 Plus running iOS 27 with local
+`activity.update(_:timestamp:)` calls, ActivityKit applies equal timestamps and
+drops strictly older ones down to sub-second precision (`S` after `S + 0.5`,
+`S + 0.5` after `S + 0.501`, and `S + 0.501` after `S + 1.0`). Because
+`Store.claim` enforces whole-second pacing (`last_sent_at < now`) on update and
+end pushes, `last_sent_at + 0.5` lets same-second burst taps chain and sits
+strictly between an earlier push at `last_sent_at` and any later update or end
+push at `last_sent_at + 1` or later; unmeasured: whether iOS also drops an
+in-flight APNs push stamped `S` that arrives after a local update stamped
+`S + 0.5`, or how untimestamped local `end` calls compare against a timestamp
+up to 0.5 s ahead of the clock. The gateway still sends the broadcast push at
+most 250 ms later (sooner if another commit such as `Store.sync` wakes
+delivery), keeping a short coalescing window for burst taps and fast agent
+replies. That covers steppers, resets and pause buttons without a scripting
+language or an agent; anything richer stays with agents. A press counts only
+for a control the current data shows, so a stale second tap on a button an `if`
+has since hidden is refused. Buttons and toggles both join a per-phone action
+log that agents read with `GET /v1/actions`, long-polling from a cursor.
+`Store` commits and `RenderQueue` state changes signal `Delivery` and waiting
+HTTP requests directly, keeping a 250 ms fallback wait for time-based
+eligibility, tap push coalescing and shutdown, so pushes, action long-polls,
+waiting PUTs and previews wake immediately instead of polling fixed intervals. The gateway
 never calls out: webhooks would need every agent to expose an endpoint and
 would let a layout make the gateway request arbitrary URLs. An agent that writes
 data a tap may have changed reads the activity and sends `ifRevision`, which the
@@ -886,7 +890,7 @@ limit bounds.
 - `GET /v1/version`, which the release workflow waits on before uploading an
   app build.
 - The device API in `DeviceAPI.swift`, shared by installed apps and gateways,
-  including the action report that installed apps send.
+  including the action report and the `ActionUpdate` answer.
 - The `GET /v1/actions` cursor and record format, which agents poll.
 - The `lykta` commands, their output and exit codes and the setup in
   `~/.config/lykta`, which installed copies, agents' instructions and their

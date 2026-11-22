@@ -92,11 +92,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `Activity.request`, authors content or schedules local notifications; it
   applies a gateway-computed `ActionUpdate` to a live activity only when its
   shown content matches `from`, using `last_sent_at + 0.5` as ActivityKit's
-  `timestamp` so it ranks above the preceding whole-second APNs push and below
-  any later push (`Store.claim` requires `last_sent_at < now`, so never relax
-  activity push pacing below one second), and ends an activity only when the
-  gateway reports it ended, or on Reset. The gateway's answer to End Activity,
-  which names the activity by its id, is such a report.
+  `timestamp` so it sits above the preceding whole-second APNs push and below
+  any later update or end push (`Store.claim` requires `last_sent_at < now` for
+  update and end pushes, so never relax activity push pacing below one second),
+  and ends an activity only when the gateway reports it ended, or on Reset. The
+  gateway's answer to End Activity, which names the activity by its id, is such
+  a report.
 - An activity or widget tap changes data only through the gateway, in the
   transaction that logs it: a toggle sets its boolean and a button applies its
   `set`, `add` and `now`, all read from the data before the tap. A tap counts
