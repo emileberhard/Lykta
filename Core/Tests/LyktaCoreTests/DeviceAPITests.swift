@@ -69,6 +69,18 @@ struct DeviceAPITests {
         #expect(decoded.content == content && decoded.staleAt == snapshot.staleAt && decoded.revision == 3)
     }
 
+    @Test(arguments: [Version(0, 7, 1), Layout.version])
+    func actionUpdateRoundTripsBothWireForms(layoutVersion: Version) throws {
+        let filled = JSONValue.object(["lockScreen": .string("Step 2"), "compactLeading": .string(""), "compactTrailing": .string(""), "minimal": .string("")])
+        let state = try LyktaActivity.ContentState(title: "Build", layout: filled.json).encoded(for: layoutVersion)
+        let update = ActionUpdate(from: "1234abcd", contentState: state, timestamp: 1_793_000_000, staleDate: 1_793_000_300, relevanceScore: 75)
+        let data = try JSONEncoder().encode(update)
+        let decoded = try JSONDecoder().decode(ActionUpdate.self, from: data)
+        #expect(decoded == update)
+        #expect(decoded.contentState.fingerprint == state.fingerprint)
+        #expect(decoded.contentState.layout != nil)
+    }
+
     private func decode(_ fields: [String: JSONValue]) throws(LayoutError) -> DeviceReport {
         do {
             return try JSONDecoder().decode(DeviceReport.self, from: Data(JSONValue.object(fields).json))

@@ -424,18 +424,30 @@ longer update or end by push and stays until iOS removes it.
 device secret. The gateway applies a toggle itself: it flips the boolean at the
 toggle's data path, raises the revision and pushes the new content, so the
 switch stays right with no agent listening and the gateway remains the only
-content writer. A button applies its declared changes the same way: `set`,
+content authority. A button applies its declared changes the same way: `set`,
 `add` and `now` read the data from before the press, and a press whose result
 the layout cannot fill, or that would outgrow the push or the phone's decoder,
-changes nothing. That covers steppers, resets and pause buttons without a
-scripting language or an agent; anything richer stays with agents. A press
-counts only for a control the current data shows, so a stale second tap on a
-button an `if` has since hidden is refused. Buttons and toggles both join a
-per-phone action log that agents read with `GET /v1/actions`, long-polling from
-a cursor. The gateway never calls out: webhooks would need every agent to expose
-an endpoint and would let a layout make the gateway request arbitrary URLs. An
-agent that writes data a tap may have changed reads the activity and sends
-`ifRevision`, which the gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
+changes nothing. When an activity tap changes data, `POST /v1/device/actions`
+answers `200 OK` with an `ActionUpdate` (`from`, `contentState` in the phone's
+wire form, pre-tap `timestamp`, `staleDate` and `relevanceScore`), while
+unchanged taps, duplicate `action.id` retries and widget taps answer
+`204 No Content`. The phone applies that update through ActivityKit only when
+the activity is still live and its shown fingerprint matches `from`, passing the
+pre-tap `timestamp` (`last_sent_at`, or `created_at` before the first push) so
+any later APNs push or end always outranks the local apply; the gateway still
+sends the broadcast push as fallback. That covers steppers, resets and pause
+buttons without a scripting language or an agent; anything richer stays with
+agents. A press counts only for a control the current data shows, so a stale
+second tap on a button an `if` has since hidden is refused. Buttons and toggles
+both join a per-phone action log that agents read with `GET /v1/actions`,
+long-polling from a cursor. `Store` and `RenderQueue` signal `Delivery` and
+waiting HTTP requests right after durable commits, keeping a bounded fallback
+wait for time-based eligibility and shutdown, so pushes, action long-polls and
+waiting PUTs wake immediately instead of polling fixed intervals. The gateway
+never calls out: webhooks would need every agent to expose an endpoint and
+would let a layout make the gateway request arbitrary URLs. An agent that writes
+data a tap may have changed reads the activity and sends `ifRevision`, which the
+gateway refuses with 409 if a tap landed in between. Actions are kept a day, at
 most 1,000 per phone. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip. A notification's
 `link` travels in its push and opens the same way when the user taps the

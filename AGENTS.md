@@ -88,11 +88,13 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   `just render`. The App Store cards in `iOS/AppStore/cards` keep the same
   folder layout and time window; a card joins the skill's `examples` only
   when it teaches a technique the examples lack.
-- The gateway is the only content writer. The app never calls
-  `Activity.request`, updates content or schedules local notifications; it
-  ends an activity only when the gateway reports it ended, or on Reset. The
-  gateway's answer to End Activity, which names the activity by its id, is
-  such a report.
+- The gateway is the only content authority. The app never calls
+  `Activity.request`, authors content or schedules local notifications; it
+  applies a gateway-computed `ActionUpdate` to a live activity only when its
+  shown content matches `from`, using the gateway's pre-tap `timestamp` so
+  later APNs pushes always take precedence, and ends an activity only when the
+  gateway reports it ended, or on Reset. The gateway's answer to End Activity,
+  which names the activity by its id, is such a report.
 - An activity or widget tap changes data only through the gateway, in the
   transaction that logs it: a toggle sets its boolean and a button applies its
   `set`, `add` and `now`, all read from the data before the tap. A tap counts

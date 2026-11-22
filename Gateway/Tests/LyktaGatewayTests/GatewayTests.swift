@@ -489,7 +489,11 @@ struct GatewayTests {
         let started: Identified = try await put("list", Self.checklist)
         try await deliver(at: now)
         let tick = Action(id: UUID(), target: .activity(started.id), input: .toggle("items.0.done", isOn: true))
-        #expect(await act(tick).status == 204)
+        let applied = await act(tick)
+        #expect(applied.status == 200)
+        let update: ActionUpdate = try applied.decoded()
+        #expect(update.timestamp == now)
+        #expect(update.from != update.contentState.fingerprint)
         #expect(await act(tick).status == 204)
         let detail: Detail = try await send("GET", "/v1/activities/list").decoded()
         #expect(detail.revision == 2)
@@ -504,7 +508,7 @@ struct GatewayTests {
         let started: Identified = try await put("film", Self.film)
         try await deliver(at: now)
         #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("play"))).status == 409)
-        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("pause"))).status == 204)
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("pause"))).status == 200)
         #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("pause"))).status == 409)
         var detail: Detail = try await send("GET", "/v1/activities/film").decoded()
         #expect(detail.revision == 2)
@@ -512,7 +516,7 @@ struct GatewayTests {
         #expect(try detail.data.value(at: "playing") == .bool(false))
         try await deliver(at: now + 1)
         #expect(push.sent == ["createChannel", "start", "update 10"])
-        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("play"))).status == 204)
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("play"))).status == 200)
         detail = try await send("GET", "/v1/activities/film").decoded()
         #expect(detail.revision == 3)
         #expect(try detail.data.value(at: "pausedAt") == .null)
@@ -522,7 +526,7 @@ struct GatewayTests {
 
     @Test func aPressTheLayoutCannotShowChangesNothing() async throws {
         let started: Identified = try await put("recipe", Self.recipe)
-        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("next"))).status == 204)
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("next"))).status == 200)
         let refused = await act(Action(id: UUID(), target: .activity(started.id), input: .button("next")))
         #expect(refused.status == 409)
         #expect(try refused.decoded() as Failure == Failure(error: "conflict"))
@@ -548,6 +552,77 @@ struct GatewayTests {
         try await store.housekeep(now: now + Store.actionRetention + 60)
         let expired: Actions = try await send("GET", "/v1/actions?after=0").decoded()
         #expect(expired.actions.isEmpty)
+    }
+
+    @Test(arguments: [Version(0, 7, 1), Layout.version])
+    func mutatingActivityTapsReturnWireMatchedActionUpdatesAndChainBursts(layoutVersion: Version) async throws {
+        try await reportVersion(layoutVersion.description, layoutVersion: layoutVersion)
+        let body: JSONValue = [
+            "title": "Stepper",
+            "layout": Self.layout(["hstack": .array(["{{count}}", ["button": "up", "label": "+", "add": ["count": .number(1)]],
+                                                     ["toggle": "done", "label": "Done"]])]),
+            "data": ["count": .number(0), "done": .bool(false)],
+            "staleAfter": .number(120),
+            "relevance": .number(42),
+        ]
+        let started: Identified = try await put("stepper", body)
+        let beforePush = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
+        #expect(beforePush.status == 200)
+        let first: ActionUpdate = try beforePush.decoded()
+        #expect(abs(first.timestamp - now) <= 5)
+        #expect(first.relevanceScore == 42)
+        #expect(abs((first.staleDate ?? 0) - (now + 120)) <= 5)
+        let wireText = String(decoding: beforePush.body, as: UTF8.self)
+        #expect(wireText.contains("\"layout\":\"~1") == LyktaActivity.ContentState.isCompact(for: layoutVersion))
+        let unchangedToggle = Action(id: UUID(), target: .activity(started.id), input: .toggle("done", isOn: false))
+        #expect(await act(unchangedToggle).status == 204)
+        let sentAt = now + 10
+        try await deliver(at: sentAt)
+        let burstOne = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
+        let burstTwo = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")))
+        #expect(burstOne.status == 200)
+        #expect(burstTwo.status == 200)
+        let u1: ActionUpdate = try burstOne.decoded()
+        let u2: ActionUpdate = try burstTwo.decoded()
+        #expect(u1.from == first.contentState.fingerprint)
+        #expect(u2.from == u1.contentState.fingerprint)
+        #expect(u1.timestamp == sentAt)
+        #expect(u2.timestamp == sentAt)
+        try await deliver(at: sentAt + 1)
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        let pushedFingerprint = events.events.last(where: { $0.name == "push.update" })?.detail["fingerprint"]
+        #expect(pushedFingerprint == .string(u2.contentState.fingerprint))
+    }
+
+    @Test func waitingActionsAndDeliveryWakePromptlyOnCommit() async throws {
+        let started: Identified = try await put("wake", Self.question)
+        let initial: Actions = try await send("GET", "/v1/actions").decoded()
+        let actionClock = ContinuousClock()
+        let actionStart = actionClock.now
+        async let waitingAction = send("GET", "/v1/actions?after=\(initial.cursor)&wait=5")
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("retry"))).status == 204)
+        let actionReply = try await waitingAction
+        #expect(actionStart.duration(to: actionClock.now) < .milliseconds(150))
+        let page: Actions = try actionReply.decoded()
+        #expect(page.actions.map(\.button) == ["retry"])
+
+        let shutdown = Shutdown()
+        let delivery = Delivery(store: store, push: push, shutdown: shutdown)
+        let runner = Task { try await delivery.run() }
+        defer {
+            shutdown.request()
+            runner.cancel()
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        let putStart = actionClock.now
+        let putReply = try await send("PUT", "/v1/activities/fast?wait=5", body: Self.start)
+        let elapsed = putStart.duration(to: actionClock.now)
+        #expect(putReply.status == 200)
+        #expect(try putReply.decoded() as Status == Status(state: "live", delivery: "accepted", error: nil))
+        #expect(elapsed < .milliseconds(150))
+        shutdown.request()
+        try await runner.value
     }
 
     @Test func ifRevisionRefusesToOverwriteANewerState() async throws {

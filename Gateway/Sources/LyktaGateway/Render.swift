@@ -101,6 +101,7 @@ actor RenderQueue {
         let expires: ContinuousClock.Instant
     }
 
+    nonisolated let signal = Signal()
     private let workerTokenHash: String?
     private var pending: [RenderJob] = []
     private var claimed: [UUID: RenderJob] = [:]
@@ -129,6 +130,7 @@ actor RenderQueue {
         }
         let job = RenderJob(id: UUID(), name: name, input: input, presentations: presentations, device: device)
         pending.append(job)
+        signal.notify()
         return job.id
     }
 
@@ -166,6 +168,7 @@ actor RenderQueue {
         case let .failure(message):
             finished[id] = .failure(APIError(.renderFailed, "The renderer could not draw it: \(message)"))
         }
+        signal.notify()
     }
 
     func image(_ id: UUID, device: UUID) throws(APIError) -> [UInt8] {

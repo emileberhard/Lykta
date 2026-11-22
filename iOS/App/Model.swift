@@ -290,15 +290,39 @@ final class Model {
             detail["widget"] = .string(id.uuidString)
         }
         telemetry.record(event, activity: activity, detail)
+        let update: ActionUpdate?
         do {
-            try await gateway.act(action, secret: credentials.deviceSecret)
+            update = try await gateway.act(action, secret: credentials.deviceSecret)
         } catch {
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
+        if case let .activity(id) = action.target, let update {
+            await apply(update, to: id)
+        }
         if case let .widget(id) = action.target, let configurations = try? await WidgetCenter.shared.currentConfigurations(),
            WidgetSelection.places(in: configurations).count(where: { $0.widget == id }) > 1 {
             WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    private func apply(_ update: ActionUpdate, to id: UUID) async {
+        let next = update.contentState.fingerprint
+        switch await TapUpdate.apply(update, to: id) {
+        case .applied:
+            refreshActivities()
+            telemetry.record("activity.tapUpdate", activity: id, [
+                "outcome": .string("applied"),
+                "from": .string(update.from), "to": .string(next),
+                "timestamp": .number(Double(update.timestamp)),
+            ])
+        case let .skipped(reason, current):
+            var detail: [String: JSONValue] = [
+                "outcome": .string("skipped"), "reason": .string(reason),
+                "from": .string(update.from), "to": .string(next),
+            ]
+            if let current { detail["current"] = .string(current) }
+            telemetry.record("activity.tapUpdate", activity: id, detail)
         }
     }
 
@@ -670,8 +694,33 @@ extension Model {
 }
 #endif
 
+private nonisolated enum TapUpdate: Sendable {
+    enum Outcome: Sendable {
+        case applied
+        case skipped(reason: String, current: String?)
+    }
+
+    @concurrent static func apply(_ update: ActionUpdate, to id: UUID) async -> Outcome {
+        guard let shown = Activity<LyktaActivity>.activities.first(where: { $0.attributes.id == id }) else {
+            return .skipped(reason: "missing", current: nil)
+        }
+        guard [.pending, .active, .stale].contains(shown.activityState) else {
+            return .skipped(reason: ObservedState(shown.activityState).rawValue, current: nil)
+        }
+        let current = shown.content.state.fingerprint
+        guard current == update.from else {
+            return .skipped(reason: "stale", current: current)
+        }
+        let content = ActivityContent(state: update.contentState,
+                                      staleDate: update.staleDate.map { Date(timeIntervalSince1970: Double($0)) },
+                                      relevanceScore: update.relevanceScore ?? 0)
+        await shown.update(content, timestamp: Date(timeIntervalSince1970: Double(update.timestamp)))
+        return .applied
+    }
+}
+
 private extension ObservedState {
-    init(_ state: ActivityState) {
+    nonisolated init(_ state: ActivityState) {
         self = switch state {
         case .pending: .pending
         case .active: .active

@@ -43,10 +43,15 @@ struct PartsStorageTests {
             try await store.finish(job, try await delivery.send(job, now: now), now: now)
         }
         #expect(await send("PUT", ["data": ["name": "Updated", "done": .bool(false), "count": .number(3)]]).status == 200)
+        var previous: String?
         for input: Action.Input in [.toggle("done", isOn: true), .button("increment")] {
             let action = Action(id: UUID(), target: .activity(activity.id), input: input)
-            #expect(await api.handle(HTTPRequest(method: "POST", target: "/v1/device/actions", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
-                                                 body: Array(try JSONEncoder().encode(action)))).status == 204)
+            let reply = await api.handle(HTTPRequest(method: "POST", target: "/v1/device/actions", headers: ["authorization": "Bearer \(credentials.deviceSecret)"],
+                                                     body: Array(try JSONEncoder().encode(action))))
+            #expect(reply.status == 200)
+            let update: ActionUpdate = try reply.decoded()
+            if let previous { #expect(update.from == previous) }
+            previous = update.contentState.fingerprint
         }
         let detail: Detail = try await send("GET", nil).decoded()
         #expect(detail.revision == 4)

@@ -262,6 +262,22 @@ public struct Action: Codable, Equatable, Sendable {
     }
 }
 
+public struct ActionUpdate: Codable, Equatable, Sendable {
+    public let from: String
+    public let contentState: LyktaActivity.ContentState
+    public let timestamp: Int
+    public let staleDate: Int?
+    public let relevanceScore: Double?
+
+    public init(from: String, contentState: LyktaActivity.ContentState, timestamp: Int, staleDate: Int?, relevanceScore: Double?) {
+        self.from = from
+        self.contentState = contentState
+        self.timestamp = timestamp
+        self.staleDate = staleDate
+        self.relevanceScore = relevanceScore
+    }
+}
+
 public struct NotificationSettings: Codable, Equatable, Sendable {
     public static let maximumRegistrationErrorLength = 256
 

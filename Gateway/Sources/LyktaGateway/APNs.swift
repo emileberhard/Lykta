@@ -199,6 +199,12 @@ extension Activity {
         return try Self.encoder().encode(envelope(event, now: now, channel: channel, contentState: state))
     }
 
+    func actionUpdate(from previous: String, contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> ActionUpdate {
+        let state = try contentState.encoded(for: layoutVersion)
+        return ActionUpdate(from: previous, contentState: state, timestamp: lastSentAt > 0 ? lastSentAt : createdAt,
+                            staleDate: staleDate(at: now), relevanceScore: relevance)
+    }
+
     func admissionBytes(contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> (push: Int, activityKit: Int) {
         let encoder = Self.encoder()
         let state = try contentState.encoded(for: layoutVersion)
@@ -208,6 +214,10 @@ extension Activity {
         let escaping = JSONEncoder()
         let stored = try escaping.encode(LyktaActivity(id: id, name: name.rawValue)).count + escaping.encode(current.aps.contentState).count
         return (max(try encoder.encode(current).count, try encoder.encode(end).count), stored)
+    }
+
+    private func staleDate(at now: Int) -> Int? {
+        staleAfter.map { now + $0 }
     }
 
     private static func encoder() -> JSONEncoder {
@@ -227,7 +237,7 @@ extension Activity {
             aps.alert = Payload.Alert(title: alert.title ?? title, body: alert.body,
                                       sound: alert.sound == true ? "default" : nil)
         }
-        if event != .end { aps.staleDate = staleAfter.map { now + $0 } }
+        if event != .end { aps.staleDate = staleDate(at: now) }
         aps.relevanceScore = relevance
         aps.dismissalDate = event == .end ? dismissAt : nil
         return Payload(aps: aps)

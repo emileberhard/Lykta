@@ -38,8 +38,14 @@ nonisolated struct GatewayClient: Sendable {
         _ = try await send("POST", url.appending(path: "v1/device/events"), token: secret, body: batch)
     }
 
-    func act(_ action: Action, secret: String) async throws {
-        _ = try await send("POST", url.appending(path: "v1/device/actions"), token: secret, body: action)
+    func act(_ action: Action, secret: String) async throws -> ActionUpdate? {
+        let (data, status) = try await exchange("POST", url.appending(path: "v1/device/actions"), token: secret,
+                                                body: try JSONEncoder().encode(action), type: "application/json")
+        switch status {
+        case 200: return try JSONDecoder().decode(ActionUpdate.self, from: data)
+        case 204: return nil
+        default: throw Self.failure(status, data)
+        }
     }
 
     func end(_ activity: UUID, secret: String) async throws {

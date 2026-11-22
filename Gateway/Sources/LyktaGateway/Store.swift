@@ -64,6 +64,9 @@ actor Store {
     static let mediaRetention = 86400
     static let maximumMediaBytesPerDevice = 32 << 20
 
+    nonisolated let work = Signal()
+    nonisolated let delivery = Signal()
+    nonisolated let action = Signal()
     private let db: Database
 
     init(path: String) throws {
@@ -126,7 +129,7 @@ actor Store {
     }
 
     func sync(_ device: Device, report: DeviceReport, now: Int) throws -> SyncResult {
-        try db.transaction {
+        let result = try db.transaction {
             let previous = try db.query("SELECT bundle_instance FROM devices WHERE id = ?", device.id).first?
                 .optionalText("bundle_instance", as: UUID.init(uuidString:))
             try db.run("UPDATE devices SET push_token = COALESCE(?, push_token), app_version = ?, layout_version = ?, bundle_instance = ? WHERE id = ?",
@@ -193,6 +196,9 @@ actor Store {
                 .map { Self.times(of: try Activity($0)) }
             return SyncResult(end: tombstones, activities: times)
         }
+        work.notify()
+        delivery.notify()
+        return result
     }
 
     private static func times(of activity: Activity) -> ActivityTimes {
@@ -207,6 +213,7 @@ actor Store {
 
     func deleteDevice(_ device: Device) throws {
         try db.run("DELETE FROM devices WHERE id = ?", device.id)
+        delivery.notify()
     }
 
     struct SavedPart: Encodable {
@@ -268,7 +275,11 @@ actor Store {
     }
 
     func put(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> (activity: Activity, payloadBytes: Int) {
-        try db.transaction { try putting(device, name: name, request: request, maximumLiveActivities: maximumLiveActivities, now: now) }
+        let result = try db.transaction { try putting(device, name: name, request: request, maximumLiveActivities: maximumLiveActivities, now: now) }
+        if result.activity.phase == .starting || result.activity.revision > result.activity.sentRevision {
+            work.notify()
+        }
+        return result
     }
 
     func renderActivity(_ device: Device, name: Name, request: ActivityRequest, maximumLiveActivities: Int, now: Int) throws -> RenderInput {
@@ -370,23 +381,31 @@ actor Store {
     }
 
     func end(_ device: Device, name: Name, dismissAfter: Int?, now: Int) throws -> ActivityStatus {
-        try db.transaction {
+        let status = try db.transaction {
             guard let current = try liveActivity(device, name: name) else {
                 throw APIError(.notFound, "No live activity is named \(name).")
             }
             return try end(current, dismissAt: dismissAfter.map { now + $0 }, now: now,
                            ["dismissAfter": dismissAfter.map { .number(Double($0)) } ?? .null]).status
         }
+        work.notify()
+        delivery.notify()
+        return status
     }
 
     func end(_ device: Device, id: UUID, now: Int) throws {
-        try db.transaction {
+        let ended = try db.transaction {
             guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ?", id, device.id).first else {
                 throw APIError(.notFound, "No activity has the id \(id).")
             }
             let activity = try Activity(row)
-            guard [.starting, .live].contains(activity.phase) else { return }
+            guard [.starting, .live].contains(activity.phase) else { return false }
             _ = try end(activity, dismissAt: now, now: now, ["dismissAfter": .number(0)])
+            return true
+        }
+        if ended {
+            work.notify()
+            delivery.notify()
         }
     }
 
@@ -434,7 +453,7 @@ actor Store {
     }
 
     func putNotification(_ device: Device, name: Name, request: NotificationRequest, now: Int) throws -> Bool {
-        try db.transaction {
+        let created = try db.transaction {
             try expireNotifications(now: now)
             try db.run("DELETE FROM notifications WHERE device_id = ? AND name = ? AND expires_at <= ? AND in_flight = 0", device.id, name, now)
             let (request, drawing) = try prepareNotification(request, on: device)
@@ -485,6 +504,8 @@ actor Store {
             try record("notification.put", device: device.id, activity: nil, detail)
             return true
         }
+        if created { work.notify() }
+        return created
     }
 
     func renderNotification(_ device: Device, request: NotificationRequest) throws -> RenderInput {
@@ -695,14 +716,14 @@ actor Store {
         }
     }
 
-    func act(_ device: Device, _ action: Action, now: Int) throws {
-        try db.transaction {
-            guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return }
+    func act(_ device: Device, _ action: Action, now: Int) throws -> ActionUpdate? {
+        let result: (recorded: Bool, update: ActionUpdate?) = try db.transaction {
+            guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return (false, nil) }
             let activityID: UUID
             switch action.target {
             case let .widget(id):
                 try actOnWidget(device, id: id, action: action, now: now)
-                return
+                return (true, nil)
             case let .activity(id): activityID = id
             }
             guard let row = try db.query("SELECT * FROM activities WHERE id = ? AND device_id = ? AND phase IN ('starting', 'live')",
@@ -710,7 +731,8 @@ actor Store {
                 throw APIError(.notFound, "The activity has ended.")
             }
             let activity = try Activity(row)
-            let layout = try activity.contentState().layout
+            let previous = try activity.contentState()
+            let layout = previous.layout
             var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
             let data = try decode(activity.data)
             let changed: JSONValue
@@ -729,6 +751,8 @@ actor Store {
                 detail["toggle"] = .string(path)
                 detail["isOn"] = .bool(isOn)
             }
+            var update: ActionUpdate?
+            var revision = activity.revision
             if changed != data {
                 let template = try decode(activity.layout)
                 let filled = try Self.pressing { () throws(LayoutError) in try template.filled(with: changed, for: .activity) }
@@ -738,11 +762,18 @@ actor Store {
                 try Self.admit(state, on: device)
                 try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
                            Self.text(changed), Self.encoded(state), now, activity.id)
-                _ = try Self.measure(self.activity(activity.id), contentState: state, filled: filled, on: device, now: now)
+                let updated = try self.activity(activity.id)
+                _ = try Self.measure(updated, contentState: state, filled: filled, on: device, now: now)
+                revision = updated.revision
+                update = try activity.actionUpdate(from: previous.fingerprint, contentState: state, now: now, layoutVersion: device.layoutVersion)
             }
-            detail["revision"] = .number(Double(try self.activity(activity.id).revision))
+            detail["revision"] = .number(Double(revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
+            return (true, update)
         }
+        if result.recorded { self.action.notify() }
+        if result.update != nil { work.notify() }
+        return result.update
     }
 
     func actions(_ device: Device, after: Int64, limit: Int) throws -> [ActionRecord] {
@@ -937,6 +968,8 @@ actor Store {
         case let .notification(job): try finish(job, attempt, now: now)
         case let .widgets(job): try finish(job, attempt, now: now)
         }
+        work.notify()
+        delivery.notify()
     }
 
     private func finish(_ job: NotificationJob, _ attempt: Attempt, now: Int) throws {
@@ -1242,7 +1275,7 @@ extension Store {
     }
 
     func putWidget(_ device: Device, name: Name, request: WidgetRequest, now: Int) throws -> (id: UUID, created: Bool) {
-        try db.transaction {
+        let (id, created, changed) = try db.transaction {
             let current = try widget(device, name: name)
             if let expected = request.ifRevision, expected != current?.revision {
                 throw APIError(.conflict, "The widget is no longer at revision \(expected). Read it again, then send your change.")
@@ -1268,8 +1301,10 @@ extension Store {
                 try record("widget.put", device: device.id, activity: nil,
                            ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
             }
-            return (id, current == nil)
+            return (id, current == nil, changed)
         }
+        if changed { work.notify() }
+        return (id, created)
     }
 
     func renderWidget(_ device: Device, name: Name, request: WidgetRequest, now: Int) throws -> RenderInput {
@@ -1346,13 +1381,15 @@ extension Store {
     }
 
     func deleteWidget(_ device: Device, name: Name) throws {
-        try db.transaction {
+        let notified = try db.transaction {
             guard let widget = try widget(device, name: name) else { throw APIError(.notFound, "No widget has the name \(name).") }
             let generation = try widgetGeneration(device, id: widget.id)
             try db.run("DELETE FROM widgets WHERE id = ?", widget.id)
             try record("widget.delete", device: device.id, activity: nil,
                        ["widget": .string(widget.id.uuidString), "revision": .number(Double(widget.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
+            return generation != nil
         }
+        if notified { work.notify() }
     }
 
     func widgetList(_ device: Device, now: Int) throws -> [WidgetStatus] {
@@ -1452,6 +1489,8 @@ extension Store {
             }
             try db.run("UPDATE widget_phones SET places_known = 1 WHERE device_id = ?", device.id)
         }
+        work.notify()
+        delivery.notify()
     }
 
     func widgetSummaries(_ device: Device) throws -> [WidgetSummary] {
@@ -1462,7 +1501,7 @@ extension Store {
     }
 
     func fetchWidget(_ device: Device, id: UUID, family: WidgetLayout.Family, have: Int?, layout: Version, now: Int) throws -> WidgetSnapshot? {
-        try db.transaction {
+        let snapshot = try db.transaction {
             guard let widget = try widget(device, id: id) else { throw APIError(.widgetDeleted, "This widget was deleted. Choose another widget.") }
             try db.run("UPDATE devices SET layout_version = ? WHERE id = ?", layout.description, device.id)
             let drawn = if layout >= widget.requires, case let .object(presentations) = widget.content {
@@ -1480,11 +1519,13 @@ extension Store {
             }
             try record("widget.fetch", device: device.id, activity: nil,
                        ["widget": .string(id.uuidString), "revision": .number(Double(widget.revision)), "family": .string(family.rawValue), "drawn": .bool(drawn)])
-            if drawn, have == widget.revision { return nil }
+            if drawn, have == widget.revision { return WidgetSnapshot?.none }
             return WidgetSnapshot(id: id, title: widget.title, revision: widget.revision,
                                   staleAt: widget.staleAfter.map { Date(timeIntervalSince1970: Double(widget.updatedAt) + Double($0)) },
                                   content: layout >= widget.requires ? .layout(widget.content) : .requires(widget.requires))
         }
+        delivery.notify()
+        return snapshot
     }
 
     private func claimWidgets(now: Int, limit: Int) throws -> [Job] {

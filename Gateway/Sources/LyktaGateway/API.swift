@@ -139,15 +139,15 @@ struct API: Sendable {
             return .noContent
         case ("POST", "v1/device/actions"):
             let device = try await phone(request)
-            try await store.act(device, try Self.decode(request.body), now: now)
-            return .noContent
+            let update = try await store.act(device, try Self.decode(request.body), now: now)
+            return update.map { Self.json(200, $0) } ?? .noContent
         case ("GET", "v1/actions"):
             let device = try await agent(request)
             let wait = try Self.wait(request)
             let after = try Self.cursor(request, of: "action")
             let cursor = if let after { after } else { try await store.latestAction(device) }
             var actions: [ActionRecord] = []
-            try await waiting(wait) {
+            try await waiting(wait, on: store.action) {
                 actions = try await store.actions(device, after: cursor, limit: 100)
                 return !actions.isEmpty
             }
@@ -170,7 +170,7 @@ struct API: Sendable {
             let wait = try Self.wait(request)
             let created = try await store.putNotification(device, name: name, request: try NotificationRequest.decode(try Self.decode(request.body)),
                                                           now: now)
-            try await waiting(wait) { try await store.notificationAttempted(device, name: name, now: Self.now()) }
+            try await waiting(wait, on: store.delivery) { try await store.notificationAttempted(device, name: name, now: Self.now()) }
             return Self.json(created ? 201 : 200, try await store.notification(device, name: name, now: Self.now()))
         case ("GET", "v1/notifications/{name}"):
             return Self.json(200, try await store.notification(try await agent(request), name: try Self.name(path[2]), now: now))
@@ -218,7 +218,7 @@ struct API: Sendable {
             let name = try Self.name(path[2])
             let wait = try Self.wait(request)
             let result = try await store.putWidget(device, name: name, request: try Self.decode(request.body), now: now)
-            try await waiting(wait) { try await store.widgetAttempted(device, id: result.id, deadline: now + wait, now: Self.now()) }
+            try await waiting(wait, on: store.delivery) { try await store.widgetAttempted(device, id: result.id, deadline: now + wait, now: Self.now()) }
             return Self.json(result.created ? 201 : 200, try await store.widgetDetail(device, name: name, now: Self.now()))
         case ("DELETE", "v1/widgets/{name}"):
             try await store.deleteWidget(try await agent(request), name: try Self.name(path[2]))
@@ -249,7 +249,7 @@ struct API: Sendable {
             let id = try await renders.submit(device: device.id, name: name, input: input, presentations: presentations)
             var outcome: Result<RenderReply, APIError>?
             do {
-                try await waiting(RenderQueue.wait) {
+                try await waiting(RenderQueue.wait, on: renders.signal) {
                     outcome = await renders.outcome(of: id)
                     return outcome != nil
                 }
@@ -272,7 +272,7 @@ struct API: Sendable {
             try worker(request)
             let wait = try Self.wait(request)
             var job: RenderJob?
-            try await waiting(wait) {
+            try await waiting(wait, on: renders.signal) {
                 job = await renders.claim()
                 return job != nil
             }
@@ -292,7 +292,7 @@ struct API: Sendable {
             let wait = try Self.wait(request)
             let (activity, payloadBytes) = try await store.put(device, name: name, request: try Self.activityRequest(request.body),
                                                                maximumLiveActivities: maximumLiveActivities, now: now)
-            try await waiting(wait) { try await store.attempted(activity, now: Self.now()) }
+            try await waiting(wait, on: store.delivery) { try await store.attempted(activity, now: Self.now()) }
             return Self.json(200, ActivityPut(detail: try await store.detail(device, id: activity.id), payloadBytes: payloadBytes))
         case ("DELETE", "v1/activities/{name}"):
             let device = try await agent(request)
@@ -322,10 +322,14 @@ struct API: Sendable {
         }
     }
 
-    private func waiting(_ seconds: Int, until done: () async throws -> Bool) async throws {
+    private func waiting(_ seconds: Int, on signal: Signal, until done: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
-        while !(try await done()), ContinuousClock.now < deadline, !shutdown.isClosing {
-            try await Task.sleep(for: .milliseconds(100))
+        while true {
+            let seen = signal.generation
+            if try await done() { return }
+            let remaining = deadline - ContinuousClock.now
+            guard remaining > .zero, !shutdown.isClosing else { return }
+            try await signal.wait(since: seen, timeout: min(remaining, .milliseconds(250)))
         }
     }
 

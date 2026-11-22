@@ -62,17 +62,22 @@ struct Delivery: Sendable {
     func run() async throws {
         try await store.recover(now: Int(Date().timeIntervalSince1970))
         await removeOrphanedChannels()
+        var lastHousekeep = 0
         try await withThrowingDiscardingTaskGroup { group in
-            for tick in 0... {
-                guard !shutdown.isRequested else { return }
+            while !shutdown.isRequested {
+                let seen = store.work.generation
                 let now = Int(Date().timeIntervalSince1970)
-                if tick % 240 == 0 { try await store.housekeep(now: now) }
+                if now - lastHousekeep >= 60 {
+                    try await store.housekeep(now: now)
+                    lastHousekeep = now
+                }
                 for job in try await store.claim(now: now, limit: Self.concurrency) {
                     group.addTask {
                         try await store.finish(job, try await send(job, now: now), now: now)
                     }
                 }
-                try await Task.sleep(for: .milliseconds(250))
+                guard !shutdown.isRequested else { return }
+                try await store.work.wait(since: seen, timeout: .milliseconds(250))
             }
         }
     }
