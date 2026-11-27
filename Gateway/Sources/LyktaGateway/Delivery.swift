@@ -145,7 +145,10 @@ struct Delivery: Sendable {
             "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
             "compact": .bool(LyktaActivity.ContentState.isCompact(for: job.layoutVersion)),
         ]
-        if job.kind != .deleteChannel { detail["priority"] = .number(job.immediate ? 10 : 5) }
+        if job.kind != .deleteChannel {
+            detail["priority"] = .number(job.immediate ? 10 : 5)
+            detail["idleMs"] = .null
+        }
         if let reason = job.priorityReason { detail["reason"] = .string(reason.rawValue) }
         let outcome: Outcome
         var idleMs: Double?
@@ -193,7 +196,7 @@ struct Delivery: Sendable {
         } catch let error as APNsError {
             outcome = job.kind == .start ? self.outcome(of: error, sentTo: job.environment, tokenMoved: job.tokenMoved) : Self.outcome(of: error)
         }
-        if job.kind != .deleteChannel { detail["idleMs"] = idleMs.map(JSONValue.number) ?? .null }
+        if let idleMs { detail["idleMs"] = .number(idleMs) }
         return Attempt(outcome: outcome, detail: detail)
     }
 
