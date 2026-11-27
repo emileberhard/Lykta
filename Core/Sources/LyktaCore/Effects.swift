@@ -10,6 +10,8 @@ public struct Effects: Equatable, Sendable {
 
     private let changes: [String: Change]
 
+    public var paths: [String] { changes.keys.sorted() }
+
     init(_ fields: Fields) throws {
         var changes: [String: Change] = [:]
         let set: [String: JSONValue] = try fields.optional("set") ?? [:]

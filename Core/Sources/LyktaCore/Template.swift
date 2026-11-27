@@ -17,6 +17,15 @@ extension JSONValue {
         return value
     }
 
+    public func keeping(_ paths: some Sequence<String>, from current: JSONValue) -> JSONValue {
+        var result = self
+        for path in paths.sorted() {
+            guard (try? value(at: path)) != nil, let value = try? current.value(at: path) else { continue }
+            if let replaced = try? result.replacing(path, with: value) { result = replaced }
+        }
+        return result
+    }
+
     public func replacing(_ path: String, with value: JSONValue) throws(LayoutError) -> JSONValue {
         try replacing(path.split(separator: ".", omittingEmptySubsequences: false)[...], with: value, path: path)
     }

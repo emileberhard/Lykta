@@ -13,7 +13,7 @@ struct Alert: Codable, Equatable, Sendable {
 
 struct ActivityRequest: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case title, layout, data, now, alert, staleAfter, endAfter, relevance, ifRevision
+        case title, layout, data, now, alert, staleAfter, endAfter, relevance, ifRevision, cursor
     }
 
     let title: String?
@@ -25,6 +25,7 @@ struct ActivityRequest: Decodable, Sendable {
     let endAfter: Int?
     let relevance: Double?
     let ifRevision: Int?
+    let cursor: Int64?
 }
 
 struct ActivityStatus: Encodable, Sendable {

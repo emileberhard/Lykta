@@ -7,10 +7,11 @@ struct WidgetRequest: Decodable, Sendable {
     let data: JSONValue?
     let now: [String: Double]?
     let ifRevision: Int?
+    let cursor: Int64?
     let staleAfter: Int?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case title, layout, data, now, ifRevision, staleAfter
+        case title, layout, data, now, ifRevision, staleAfter, cursor
     }
 
     init(from decoder: any Decoder) throws {
@@ -24,6 +25,7 @@ struct WidgetRequest: Decodable, Sendable {
         data = try fields.decodeIfPresent(JSONValue.self, forKey: WidgetKey(stringValue: "data"))
         now = try fields.decodeIfPresent([String: Double].self, forKey: WidgetKey(stringValue: "now"))
         ifRevision = try fields.decodeIfPresent(Int.self, forKey: WidgetKey(stringValue: "ifRevision"))
+        cursor = try fields.decodeIfPresent(Int64.self, forKey: WidgetKey(stringValue: "cursor"))
         staleAfter = try fields.decodeIfPresent(Int.self, forKey: WidgetKey(stringValue: "staleAfter"))
         func invalid(_ key: String, _ message: String) throws -> Never {
             throw DecodingError.dataCorruptedError(forKey: WidgetKey(stringValue: key), in: fields, debugDescription: message)
@@ -31,6 +33,7 @@ struct WidgetRequest: Decodable, Sendable {
         if let title, !(1...120).contains(title.count) { try invalid("title", "must be 1 to 120 characters") }
         if let staleAfter, staleAfter <= 0 { try invalid("staleAfter", "must be positive seconds") }
         if let ifRevision, ifRevision < 1 { try invalid("ifRevision", "must be a revision from GET /v1/widgets/{name}") }
+        if let cursor, cursor < 0 { try invalid("cursor", "must be a whole number 0 or greater") }
         let paths = now?.keys.sorted() ?? []
         for path in paths {
             if !(1...256).contains(path.utf8.count) || path.contains("{{") || path.split(separator: ".", omittingEmptySubsequences: false).contains("") {

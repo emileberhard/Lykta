@@ -303,10 +303,17 @@ actor Store {
         guard let title = request.title ?? current?.title, let layout = try request.layout ?? current.map({ try decode($0.layout) }) else {
             throw APIError(.invalidRequest, "Starting an activity needs a title and a layout.")
         }
-        var data = try request.data ?? current.map { try decode($0.data) } ?? .object([:])
+        let currentData = try current.map { try decode($0.data) }
+        var data = request.data ?? currentData ?? .object([:])
         for (path, offset) in request.now ?? [:] {
             do { data = try data.setting(path, to: .number(Double(now) + offset)) }
             catch { throw APIError(.invalidRequest, "now: \(error)") }
+        }
+        let kept: [String]
+        if let current, let currentData, let cursor = request.cursor {
+            (data, kept) = try keeping(data, from: currentData, for: .activity(current.id), on: device, after: cursor)
+        } else {
+            kept = []
         }
         let prepared = try expanding(layout, on: device) { saved throws(LayoutError) in try PreparedParts(layout, saved: saved, for: .activity) }
         let expandedLayout = prepared.value
@@ -326,7 +333,7 @@ actor Store {
         var stored = state
         if let current {
             id = current.id
-            let changed = try title != current.title || expandedLayout != decode(current.layout) || data != decode(current.data) || alert != nil
+            let changed = try title != current.title || expandedLayout != decode(current.layout) || data != currentData || alert != nil
                 || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
             if changed {
                 try db.run("""
@@ -355,6 +362,7 @@ actor Store {
         try record("activity.put", device: device.id, activity: id, [
             "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
             "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+            "cursor": request.cursor.map { .number(Double($0)) } ?? .null, "kept": .array(kept.map(JSONValue.string)),
             "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
         ])
         return (activity, size)
@@ -735,14 +743,14 @@ actor Store {
             case let .button(name):
                 guard let effects = layout?.buttons[name] else { throw APIError(.conflict, "The activity no longer shows the button \(name).") }
                 changed = try Self.pressing { () throws(LayoutError) in try effects.applied(to: data, at: Date(timeIntervalSince1970: TimeInterval(now))) }
-                try db.run("INSERT INTO actions (id, device_id, activity_id, button, at) VALUES (?, ?, ?, ?, ?)",
-                           action.id, device.id, activity.id, name, now)
+                try db.run("INSERT INTO actions (id, device_id, activity_id, button, at, paths) VALUES (?, ?, ?, ?, ?, ?)",
+                           action.id, device.id, activity.id, name, now, Self.actionPaths(effects.paths))
                 detail["button"] = .string(name)
             case let .toggle(path, isOn):
                 guard layout?.toggles[path] != nil else { throw APIError(.conflict, "The activity no longer shows the toggle \(path).") }
                 changed = try Self.pressing { () throws(LayoutError) in try data.replacing(path, with: .bool(isOn)) }
-                try db.run("INSERT INTO actions (id, device_id, activity_id, toggle, is_on, at) VALUES (?, ?, ?, ?, ?, ?)",
-                           action.id, device.id, activity.id, path, isOn, now)
+                try db.run("INSERT INTO actions (id, device_id, activity_id, toggle, is_on, at, paths) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           action.id, device.id, activity.id, path, isOn, now, Self.actionPaths([path]))
                 detail["toggle"] = .string(path)
                 detail["isOn"] = .bool(isOn)
             }
@@ -777,6 +785,29 @@ actor Store {
               FROM actions x LEFT JOIN activities a ON a.id = x.activity_id LEFT JOIN widgets w ON w.id = x.widget_id
               WHERE x.device_id = ? AND x.seq > ? ORDER BY x.seq LIMIT ?
             """, device.id, after, limit).map(ActionRecord.init)
+    }
+
+    private func keeping(_ data: JSONValue, from current: JSONValue, for target: Action.Target, on device: Device, after cursor: Int64) throws
+        -> (JSONValue, [String]) {
+        let (column, id) = switch target {
+        case let .activity(id): ("activity_id", id)
+        case let .widget(id): ("widget_id", id)
+        }
+        let rows = try db.query("""
+            SELECT paths FROM actions WHERE device_id = ? AND seq > ? AND \(column) = ? AND paths IS NOT NULL
+            """, device.id, cursor, id)
+        let decoder = JSONDecoder()
+        let paths = Set(try rows.flatMap { try decoder.decode([String].self, from: Data($0.string("paths").utf8)) })
+        let merged = data.keeping(paths, from: current)
+        let kept = paths.filter { path in
+            guard let incoming = try? data.value(at: path), let stored = try? current.value(at: path) else { return false }
+            return incoming != stored
+        }
+        return (merged, kept.sorted())
+    }
+
+    private static func actionPaths(_ paths: [String]) -> String {
+        text(.array(paths.map(JSONValue.string)))
     }
 
     func latestAction(_ device: Device) throws -> Int64 {
@@ -1277,7 +1308,7 @@ extension Store {
             if current == nil, try count(db.query("SELECT count(*) AS n FROM widgets WHERE device_id = ?", device.id)) >= Self.maximumWidgets {
                 throw APIError(.tooManyWidgets, "Delete a widget before creating another; the limit is \(Self.maximumWidgets).")
             }
-            let (title, layout, data, content, requirement) = try widgetContent(device, current: current, request: request, now: now)
+            let (title, layout, data, content, requirement, kept) = try widgetContent(device, current: current, request: request, now: now)
             let staleAfter = request.staleAfter ?? current?.staleAfter
             let id = current?.id ?? UUID()
             let changed = current == nil || current?.title != title || current?.layout != layout || current?.data != data || request.staleAfter != nil
@@ -1291,10 +1322,13 @@ extension Store {
                         revision = widgets.revision + 1, generation = excluded.generation, updated_at = excluded.updated_at
                     """, id, device.id, name, title, Self.text(layout), Self.text(data), Self.text(content),
                            requirement.version.description, staleAfter, generation, now, now)
-                let saved = try widget(device, id: id)!
-                try record("widget.put", device: device.id, activity: nil,
-                           ["widget": .string(id.uuidString), "revision": .number(Double(saved.revision)), "generation": generation.map { .number(Double($0)) } ?? .null])
             }
+            let saved = try widget(device, id: id)!
+            try record("widget.put", device: device.id, activity: nil, [
+                "widget": .string(id.uuidString), "revision": .number(Double(saved.revision)),
+                "generation": saved.generation.map { .number(Double($0)) } ?? .null,
+                "cursor": request.cursor.map { .number(Double($0)) } ?? .null, "kept": .array(kept.map(JSONValue.string)),
+            ])
             return (id, current == nil, changed)
         }
         if changed { changes.notify() }
@@ -1303,13 +1337,13 @@ extension Store {
 
     func renderWidget(_ device: Device, name: Name, request: WidgetRequest, now: Int) throws -> RenderInput {
         try db.transaction {
-            let (_, layout, data, _, _) = try widgetContent(device, current: try widget(device, name: name), request: request, now: now)
+            let (_, layout, data, _, _, _) = try widgetContent(device, current: try widget(device, name: name), request: request, now: now)
             return .widget(layout: layout, data: data)
         }
     }
 
     private func widgetContent(_ device: Device, current: Widget?, request: WidgetRequest, now: Int) throws
-        -> (title: String, layout: JSONValue, data: JSONValue, content: JSONValue, requirement: Layout.Requirement) {
+        -> (title: String, layout: JSONValue, data: JSONValue, content: JSONValue, requirement: Layout.Requirement, kept: [String]) {
         guard let title = request.title ?? current?.title, let template = request.layout ?? current?.layout else {
             throw APIError(.invalidRequest, "Creating a widget needs a title and a layout.")
         }
@@ -1318,9 +1352,15 @@ extension Store {
             do { data = try data.setting(path, to: .number(Double(now) + offset)) }
             catch { throw APIError(.invalidRequest, "$.now: \(error)") }
         }
+        let kept: [String]
+        if let current, let cursor = request.cursor {
+            (data, kept) = try keeping(data, from: current.data, for: .widget(current.id), on: device, after: cursor)
+        } else {
+            kept = []
+        }
         let prepared = try expanding(template, on: device) { saved throws(LayoutError) in try PreparedParts(template, saved: saved, for: .widget) }
         let (layout, content, requirement) = try Self.admitWidget(prepared, data: data, on: device)
-        return (title, layout, data, content, requirement)
+        return (title, layout, data, content, requirement, kept)
     }
 
     private static func admitWidget(_ prepared: PreparedParts, data: JSONValue, on device: Device) throws -> (JSONValue, JSONValue, Layout.Requirement) {
@@ -1351,14 +1391,14 @@ extension Store {
             changed = try Self.pressing { () throws(LayoutError) in
                 try effects.applied(to: widget.data, at: Date(timeIntervalSince1970: Double(now)))
             }
-            try db.run("INSERT INTO actions (id, device_id, widget_id, button, at) VALUES (?, ?, ?, ?, ?)",
-                       action.id, device.id, id, name, now)
+            try db.run("INSERT INTO actions (id, device_id, widget_id, button, at, paths) VALUES (?, ?, ?, ?, ?, ?)",
+                       action.id, device.id, id, name, now, Self.actionPaths(effects.paths))
             detail["button"] = .string(name)
         case let .toggle(path, isOn):
             guard shown.toggles[path] != nil else { throw APIError(.conflict, "The widget no longer shows the toggle \(path).") }
             changed = try Self.pressing { () throws(LayoutError) in try widget.data.replacing(path, with: .bool(isOn)) }
-            try db.run("INSERT INTO actions (id, device_id, widget_id, toggle, is_on, at) VALUES (?, ?, ?, ?, ?, ?)",
-                       action.id, device.id, id, path, isOn, now)
+            try db.run("INSERT INTO actions (id, device_id, widget_id, toggle, is_on, at, paths) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       action.id, device.id, id, path, isOn, now, Self.actionPaths([path]))
             detail["toggle"] = .string(path)
             detail["isOn"] = .bool(isOn)
         }

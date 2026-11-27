@@ -409,6 +409,7 @@ struct API: Sendable {
         guard request.endAfter.map({ (1...lifetime).contains($0) }) != false else { throw invalid("endAfter must be 1 to \(lifetime) seconds.") }
         guard request.relevance.map({ (0...100).contains($0) }) != false else { throw invalid("relevance must be 0 to 100.") }
         guard request.ifRevision.map({ $0 >= 1 }) != false else { throw invalid("ifRevision must be a revision from GET /v1/activities/{name}.") }
+        guard request.cursor.map({ $0 >= 0 }) != false else { throw invalid("$.cursor must be a whole number 0 or greater.") }
         let paths = request.now?.keys.sorted() ?? []
         if let path = paths.first(where: { !(1...256).contains($0.utf8.count) || $0.contains("{{") || $0.split(separator: ".", omittingEmptySubsequences: false).contains("") }) {
             throw invalid("now: \"\(path)\" is not a data path such as \"timer.ends\".")
