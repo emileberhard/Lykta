@@ -90,12 +90,12 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   when it teaches a technique the examples lack.
 - The gateway is the only content authority. The app never calls
   `Activity.request`, authors content or schedules local notifications; it
-  applies a gateway-computed `ActionUpdate` to a live activity only when its
-  shown content matches `from`, using `last_sent_at + 0.5` as ActivityKit's
-  `timestamp` so it sits above the preceding whole-second APNs push and below
-  any later update or end push (`Store.claim` requires `last_sent_at < now` for
-  update and end pushes, so never relax activity push pacing below one second),
-  and ends an activity only when the gateway reports it ended, or on Reset. The
+  applies every readable gateway-computed `ActionUpdate` to a live activity.
+  The gateway stamps each answer with its own clock, at least one millisecond
+  above the last push and answer. `Store.claim` sends update and end pushes
+  only in a later whole second than both. Preserve both rules so ActivityKit
+  can order pushes and answers. The app ends an activity only when the gateway
+  reports it ended, or on Reset. The
   gateway's answer to End Activity, which names the activity by its id, is such
   a report.
 - An activity or widget tap changes data only through the gateway, in the
@@ -104,6 +104,8 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   only for a control the current data shows, and a result that fails to fill,
   fit or pass the phone's decoder version changes nothing. Widget and activity
   taps share one log and cursor per phone, and each names exactly one target.
+  A PUT with a `cursor` keeps the stored values at paths changed by later
+  presses on that target, where both data objects contain the path.
 - Unknown stays unknown. A start or notification with an unknown outcome is
   never sent again. A missing report never ends an activity, except when the
   activity is absent from the first report of a new app install or update.

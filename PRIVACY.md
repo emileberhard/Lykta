@@ -34,15 +34,17 @@ For each Live Activity:
 - its delivery state and what the phone reports about it, such as active,
   ended or dismissed
 - when it started, last changed and ends, which the app shows
-- each button press and toggle change, with its time, so your agents can act
-  on it; these are kept for one day
+- each button press and toggle change, its time and the names of data fields
+  it can change, kept for one day so your agents can act on the tap and an
+  older write can preserve later taps
 
 For each widget, until your agents delete it:
 
 - the name, title, layout and data your agents send
 - which widget sizes on the phone show it, and which version each last loaded
-- each button press and toggle change, with its time, kept for one day like
-  Live Activity taps, or until the widget is deleted
+- each button press and toggle change, its time and the names of data fields
+  it can change, kept for one day like Live Activity taps, or until the
+  widget is deleted
 
 For each notification, for one day:
 
@@ -90,10 +92,15 @@ gateway a log of what it observes:
 - when you finish or skip the introduction, and whether an agent had
   connected by then
 - fingerprints of the content and push tokens it received
+- activity tap IDs, whether it observed a tap answer or a push, app age, how
+  long the request and update took, and the request's connection reuse,
+  protocol and DNS, connect and TLS times when available
 - errors, and Apple's MetricKit crash, hang and performance reports
 
 The gateway logs what it did with each request and push. These logs contain no
-tokens, no saved part, activity, widget or notification text and no uploaded files. Your agents can read your phone's log with the
+tokens, no saved part, activity, widget or notification text and no uploaded files. Tap diagnostics also record when agents read the tap log,
+the action cursor they write back, which data field names were preserved,
+and push timing and priority. Your agents can read your phone's log with the
 agent token. The gateway's operator can read every phone's log. A refused
 request's message names layout paths and byte counts, never layout values.
 
