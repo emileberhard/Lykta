@@ -24,6 +24,7 @@ name, and updates it otherwise. Names follow the rules for activities.
 | `now` | `{"path": seconds}` sets each path to the gateway's time plus the seconds, as for activities. |
 | `staleAfter` | Seconds after a change until the widget draws as out of date: Home Screen sizes add a clock badge, and `{"if": "stale"}` holds, which is the only sign in the Lock Screen sizes. |
 | `ifRevision` | Apply the PUT only if the widget is still at this `revision`; otherwise fail with `conflict`. |
+| `cursor` | Newest action sequence your data accounts for, 0 or greater. The gateway keeps its values for paths changed by later taps. |
 
 A widget has no `alert`, `endAfter` or `relevance`; it stays until you delete
 it. A phone holds at most 32 widgets. Updates normally send only `data`.
@@ -148,8 +149,10 @@ one cursor; a widget record names `widget` instead of `activity`:
 ```
 
 The [water example](../examples/widgets/water-widget.json) has a button and a
-toggle that work without an agent. Read `widgets/{name}` before rewriting its
-data, and send `ifRevision` so your update cannot overwrite a concurrent tap.
+toggle that work without an agent. Give every button a visible change with
+`set`, `add` or `now`. When rewriting data, send the latest press your
+values account for as `cursor`. The gateway keeps its values for paths
+changed by later taps and returns the merged data.
 
 ## Read, list and delete
 

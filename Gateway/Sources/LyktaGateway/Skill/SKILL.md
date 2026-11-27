@@ -215,6 +215,7 @@ from `a-z`, `0-9`, `-`, `_` and `.`.
 | `endAfter` | Seconds, up to 28800, until the gateway ends the activity and removes it from the Lock Screen, at the latest 7 hours 59 minutes after the activity started. A PUT that includes it moves the deadline; one without it keeps the deadline. Set it whenever you know when the activity is over, because you may not be running then. |
 | `relevance` | 0 to 100. The most relevant activity takes the Dynamic Island. |
 | `ifRevision` | Apply the PUT only if the activity is still at this `revision`; otherwise fail with `conflict`. |
+| `cursor` | Newest action sequence your data accounts for, 0 or greater. The gateway keeps its values for paths changed by later taps. |
 
 iOS budgets how many activities an app may start by push. Once the budget is
 spent it silently drops new starts for a while, so keep one name per purpose and
@@ -279,15 +280,15 @@ open until an action arrives, so loop on it with the returned cursor to answer
 presses within a second. Toggle changes appear as
 `{"toggle": "items.0.done", "isOn": true}`. Actions are kept for a day.
 
-Answer a press of a button without changes with a PUT, such as the next step
-or an outcome. A button with `set`, `add` or `now` has already changed the data
-when its press reaches you, so read the activity or widget for the result
-instead of applying the press again. A press counts for the button with that
-name that the activity or widget shows when the press arrives, so name buttons
-for what they do, such as `approve-deploy-42` rather than `yes`. Because the
-user can change the data at any moment, an agent that rewrites data reads the
-activity or widget first and sends the `revision` it read as `ifRevision`; on
-`conflict`, read again and redo the change.
+Give each button a visible change with `set`, `add` or `now` and correct it
+with a PUT if needed. With no visible change the button waits for an agent's
+answer. Read back the result of a tap that already changed data. A press
+counts only for a control still shown when it arrives, so use names such as
+`approve-deploy-42`.
+
+When sending data that reflects taps, include `"cursor": 41` for the latest
+press your values account for. The gateway keeps paths changed by later taps
+from its current data. The PUT returns the merged data.
 
 ## End
 
@@ -327,10 +328,18 @@ Accepted means Apple took the push, not that the phone displayed it.
 When an activity does not appear or update, read `lykta get events` before
 retrying. It returns this phone's newest events, oldest first, from both sides:
 
-- The gateway: `activity.put`, `push.start`, `push.update` and `push.end` with
-  Apple's outcome, `pushID` and `ms`, `device.sync`, `request.failed`.
-- The phone: `activity.observed`, `activity.content`, `activity.state`,
-  `app.error`, `app.authorization`, `metrickit.diagnostic`.
+- Tap timing: join the phone and gateway's `activity.action` and the phone's
+  `activity.tapUpdate` by `action`. The gateway includes `seq`, `ms`,
+  `fingerprint` and `stamp`. The phone includes `processAgeMs`, the answer's
+  outcome and `inSync`, request and update times, DNS, connect and TLS times,
+  connection reuse and protocol. `activity.content` reports `source` as `tap`
+  or `push`. `actions.read` records `count` and `cursor` for nonempty reads.
+- Writes and pushes: `activity.put` and `widget.put` show `cursor` and which
+  paths were `kept`. Activity PUTs also show `urgent`. `push.start`,
+  `push.update` and `push.end` report Apple's outcome, `pushID`, `ms`,
+  `priority` and `idleMs`. An update also gives its priority `reason`.
+- Other events include `activity.observed`, `activity.state`, `device.sync`,
+  `request.failed`, `app.error`, `app.authorization` and `metrickit.diagnostic`.
 
 A `fingerprint` that matches between `push.*` and `activity.content` proves the
 phone received that exact content. An accepted `push.start` followed by
