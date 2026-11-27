@@ -603,6 +603,135 @@ struct GatewayTests {
         #expect(pushedFingerprint == .string(u3.contentState.fingerprint))
     }
 
+    @Test(arguments: [(0.125, false), (1_200.125, false), (0.125, true)])
+    func tapStampsAdvanceBeyondArrivalPushAndEarlierAnswer(offset: Double, fresh: Bool) async throws {
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        if !fresh {
+            try await put("stepper", ["data": ["count": .number(1)]])
+            try await deliver(at: now + 1)
+        }
+        let lastPush = now + (fresh ? 0 : 1)
+        let arrival = Double(lastPush) + offset
+        let first: ActionUpdate = try await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")),
+                                                at: arrival).decoded()
+        let second: ActionUpdate = try await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")),
+                                                 at: arrival).decoded()
+        #expect(first.timestamp == arrival + 0.001)
+        #expect(first.timestamp > Double(lastPush))
+        #expect(second.timestamp == first.timestamp + 0.001)
+    }
+
+    @Test(arguments: [false, true])
+    func updateAndEndWaitUntilAWholeSecondAfterTheAnswer(ending: Bool) async throws {
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        let second = now + 5
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(second) + 0.5).status == 200)
+        if ending { #expect(try await send("DELETE", "/v1/activities/stepper", at: Double(second)).status == 200) }
+        #expect(try await store.claim(now: second, limit: 4).isEmpty)
+        try await deliver(at: second + 1)
+        #expect(push.sent.last == (ending ? "end 10" : "update 10"))
+    }
+
+    @Test(arguments: [false, true], ["set", "add", "now", "toggle"])
+    func agentCursorKeepsLaterTapPathsAndLetsAcknowledgedAgentValuesWin(widget: Bool, effect: String) async throws {
+        let surface = widget ? "widgets" : "activities"
+        let target = "/v1/\(surface)/cursor"
+        let control: JSONValue = switch effect {
+        case "set": ["button": "change", "label": "Set", "set": ["count": .number(7)]]
+        case "add": ["button": "change", "label": "Add", "add": ["count": .number(2)]]
+        case "now": ["button": "change", "label": "Now", "now": ["count": .number(3)]]
+        default: ["toggle": "count", "label": "Toggle"]
+        }
+        let nodes: JSONValue = ["vstack": .array(["Count {{count}}", "{{other}}", control])]
+        let original: JSONValue = effect == "toggle" ? .bool(false) : .number(1)
+        let agentValue: JSONValue = effect == "toggle" ? .bool(false) : .number(99)
+        let first = try await send("PUT", target, body: [
+            "title": "Cursor", "layout": widget ? ["systemSmall": nodes] : Self.layout(nodes),
+            "data": ["count": original, "other": "before"],
+        ])
+        let started: Identified = try first.decoded()
+        for offset in [5, 6] {
+            let input: Action.Input = effect == "toggle" ? .toggle("count", isOn: true) : .button("change")
+            let reply = await act(Action(id: UUID(), target: widget ? .widget(started.id) : .activity(started.id), input: input),
+                                  at: Double(now + offset))
+            #expect(reply.status == 200 || reply.status == 204)
+        }
+        let tapped: JSONValue = switch effect {
+        case "set": .number(7)
+        case "add": .number(5)
+        case "now": .number(Double(now + 9))
+        default: .bool(true)
+        }
+        let old: Detail = try await send("PUT", target, body: ["cursor": .number(0), "data": ["count": agentValue, "other": "after"]]).decoded()
+        #expect(old.data == ["count": tapped, "other": "after"])
+        let current: Detail = try await send("PUT", target, body: ["cursor": .number(2), "data": ["count": agentValue, "other": "after"]]).decoded()
+        #expect(current.data == ["count": agentValue, "other": "after"])
+    }
+
+    @Test func aFullyKeptWritingDoesNotAdvanceRevisionOrClaimAPush() async throws {
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        let tapped = await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(now + 3))
+        #expect(tapped.status == 200)
+        try await deliver(at: now + 4)
+        let stale: Detail = try await send("PUT", "/v1/activities/stepper", body: ["cursor": .number(0), "data": ["count": .number(0)]]).decoded()
+        #expect(stale.revision == 2)
+        #expect(stale.data == ["count": .number(1)])
+        #expect(try await store.claim(now: now + 5, limit: 4).isEmpty)
+        let higher: Detail = try await send("PUT", "/v1/activities/stepper", body: ["cursor": .number(10_000), "data": ["count": .number(0)]]).decoded()
+        #expect(higher.revision == 3)
+        #expect(higher.data == ["count": .number(0)])
+    }
+
+    @Test func aPreMigrationActionKeepsNoPaths() async throws {
+        let path = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).sqlite").path()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let prior = try Store(path: path)
+        try await prior.registerDevice(environment: .development, appVersion: "1.0 (1)", admission: .invited(try await prior.invite(now: now)),
+                                       credentials: credentials, maximumDevices: 1, now: now)
+        let registered = try #require(try await prior.device(secret: credentials.deviceSecret))
+        let report = DeviceReport(pushToStartToken: nil, appVersion: Layout.version.description, layoutVersion: Layout.version,
+                                  bundleInstance: bundleInstance, activities: [],
+                                  notifications: NotificationSettings(authorization: .notDetermined, alertStyle: .banner, registration: .pending))
+        _ = try await prior.sync(registered, report: report, now: now)
+        let device = try #require(try await prior.device(secret: credentials.deviceSecret))
+        let name = try #require(Name(rawValue: "legacy"))
+        let request = try JSONDecoder().decode(WidgetRequest.self, from: Data(Self.widgetCounter.json))
+        let started = try await prior.putWidget(device, name: name, request: request, now: now)
+        _ = try await prior.act(device, Action(id: UUID(), target: .widget(started.id), input: .button("up")), arrival: Double(now + 1))
+        try Database(path: path).execute("ALTER TABLE actions DROP COLUMN paths")
+        let migrated = try Store(path: path)
+        let update = try JSONDecoder().decode(WidgetRequest.self, from: Data(#"{"cursor":0,"data":{"count":9}}"#.utf8))
+        _ = try await migrated.putWidget(device, name: name, request: update, now: now + 2)
+        #expect(try await migrated.widgetDetail(device, name: name, now: now + 2).data == ["count": .number(9)])
+    }
+
+    @Test func agentAnswersUseTheTapPriorityWindowAndThreeSecondPacing() async throws {
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        #expect(try await send("PUT", "/v1/activities/stepper", body: ["data": ["count": .number(1)]], at: Double(now + 1)).status == 200)
+        try await deliver(at: now + 1)
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(now + 2)).status == 200)
+        try await deliver(at: now + 3)
+        for (offset, count) in [(7, 5), (8, 6), (13, 9)] {
+            #expect(try await send("PUT", "/v1/activities/stepper", body: ["data": ["count": .number(Double(count))]],
+                                   at: Double(now + offset)).status == 200)
+            try await deliver(at: now + offset)
+        }
+        #expect(push.sent.suffix(5) == ["update 10", "update 5", "update 10", "update 5", "update 5"])
+        let events: Events = try await send("GET", "/v1/events").decoded()
+        #expect(events.events.filter { $0.name == "push.update" }.compactMap { $0.detail["reason"] }
+            == ["interval", "paced", "tap", "paced", "paced"])
+    }
+
+    private static let counter: JSONValue = [
+        "hstack": .array(["Count {{count}}", ["button": "up", "label": "+", "add": ["count": .number(1)]]]),
+    ]
+    private static let buttonCounter: JSONValue = ["title": "Counter", "layout": layout(counter), "data": ["count": .number(0)]]
+    private static let widgetCounter: JSONValue = ["title": "Counter", "layout": ["systemSmall": counter], "data": ["count": .number(0)]]
+
     @Test func signalWakesBeforeLongTimeoutAndHandlesPriorNotifyAndCancellation() async throws {
         let signal = Signal()
         let clock = ContinuousClock()
@@ -859,9 +988,9 @@ struct GatewayTests {
                                                 body: Self.json(report))).decoded()
     }
 
-    private func send(_ method: String, _ target: String, body: JSONValue? = nil) async throws -> HTTPResponse {
+    private func send(_ method: String, _ target: String, body: JSONValue? = nil, at arrival: Double = Date().timeIntervalSince1970) async throws -> HTTPResponse {
         await api.handle(HTTPRequest(method: method, target: target, headers: ["authorization": "Bearer \(credentials.agentToken)"],
-                                     body: body?.json ?? []))
+                                     body: body?.json ?? []), arrival: arrival)
     }
 
     private func endOnPhone(_ id: UUID) async -> HTTPResponse {
@@ -869,9 +998,9 @@ struct GatewayTests {
                                      headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: []))
     }
 
-    private func act(_ action: Action) async -> HTTPResponse {
+    private func act(_ action: Action, at arrival: Double = Date().timeIntervalSince1970) async -> HTTPResponse {
         await api.handle(HTTPRequest(method: "POST", target: "/v1/device/actions",
-                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: Self.json(action)))
+                                     headers: ["authorization": "Bearer \(credentials.deviceSecret)"], body: Self.json(action)), arrival: arrival)
     }
 
     private func deliver(at time: Int) async throws {
