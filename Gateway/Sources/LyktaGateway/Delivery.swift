@@ -66,6 +66,7 @@ struct Delivery: Sendable {
         try await store.recover(now: Int(Date().timeIntervalSince1970))
         await removeOrphanedChannels()
         var lastHousekeep = 0
+        var lastKeepWarmCheck = 0
         try await withThrowingDiscardingTaskGroup { group in
             while !shutdown.isRequested {
                 let seen = store.changes.generation
@@ -80,6 +81,14 @@ struct Delivery: Sendable {
                     }
                 }
                 guard !shutdown.isRequested else { return }
+                if now - lastKeepWarmCheck >= 5 {
+                    lastKeepWarmCheck = now
+                    for environment in try await store.activePushEnvironments().intersection(push.environments) {
+                        group.addTask {
+                            if !shutdown.isRequested { await push.keepWarm(environment: environment) }
+                        }
+                    }
+                }
                 try await store.changes.wait(since: seen, timeout: .milliseconds(250))
             }
         }
@@ -139,6 +148,7 @@ struct Delivery: Sendable {
         if job.kind != .deleteChannel { detail["priority"] = .number(job.immediate ? 10 : 5) }
         if let reason = job.priorityReason { detail["reason"] = .string(reason.rawValue) }
         let outcome: Outcome
+        var idleMs: Double?
         do {
             switch job.kind {
             case .start:
@@ -163,7 +173,7 @@ struct Delivery: Sendable {
                 detail["channel"] = .string(channel)
                 let payload = try activity.payload(.start, now: now, channel: channel, layoutVersion: job.layoutVersion)
                 detail["payloadBytes"] = .number(Double(payload.count))
-                detail["uniqueID"] = try await push.start(payload, deviceToken: token, environment: job.environment, id: id).map(JSONValue.string)
+                detail["uniqueID"] = try await push.start(payload, deviceToken: token, environment: job.environment, id: id, idleMs: &idleMs).map(JSONValue.string)
             case .update, .end:
                 guard let channel = activity.channel else { return Attempt(outcome: .channelGone, detail: detail) }
                 let event: Payload.Event = job.kind == .end ? .end : .update
@@ -172,7 +182,7 @@ struct Delivery: Sendable {
                 detail["channel"] = .string(channel)
                 detail["alert"] = .bool(activity.alert != nil)
                 detail["payloadBytes"] = .number(Double(payload.count))
-                detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, environment: job.environment, id: id)
+                detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, environment: job.environment, id: id, idleMs: &idleMs)
                     .map(JSONValue.string)
             case .deleteChannel:
                 guard let channel = activity.channel else { return Attempt(outcome: .accepted, detail: detail) }
@@ -183,6 +193,7 @@ struct Delivery: Sendable {
         } catch let error as APNsError {
             outcome = job.kind == .start ? self.outcome(of: error, sentTo: job.environment, tokenMoved: job.tokenMoved) : Self.outcome(of: error)
         }
+        if job.kind != .deleteChannel { detail["idleMs"] = idleMs.map(JSONValue.number) ?? .null }
         return Attempt(outcome: outcome, detail: detail)
     }
 

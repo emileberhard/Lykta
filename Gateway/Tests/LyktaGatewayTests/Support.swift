@@ -109,7 +109,7 @@ final class FakePush: PushService {
         state.withLock { $0.tokenEnvironments = environments }
     }
 
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         struct Sent: Decodable {
             struct APS: Decodable {
                 struct Alert: Decodable { let title: String; let body: String }
@@ -130,7 +130,7 @@ final class FakePush: PushService {
         return "unique-\(id)"
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         struct Sent: Decodable {
             struct APS: Decodable {
                 let event: String
@@ -163,6 +163,8 @@ final class FakePush: PushService {
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError) {
         try record("deleteChannel")
     }
+
+    func keepWarm(environment: PushEnvironment) async {}
 
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String] {
         []

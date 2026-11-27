@@ -355,6 +355,13 @@ phone's frequent-update setting. Push events record priority, the interval
 since the previous request to that APNs origin, and the reason for an
 update's priority.
 
+On Linux, an unauthenticated request on the APNs push origin stayed fast at
+60 and 100 seconds idle and paid a fresh connection's cost at 130 seconds.
+While an activity is starting or live, delivery checks its APNs environment
+every five seconds. An existing push-origin connection that has been idle
+for at least 90 seconds gets a keyless GET with no device, channel or payload.
+The probe and pushes share the same session.
+
 **Each token finds its APNs environment.** A token works only in the
 environment of the build that obtained it, and a phone can move between Xcode,
 TestFlight and App Store builds while staying registered. iOS keeps an

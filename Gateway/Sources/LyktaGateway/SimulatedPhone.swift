@@ -142,7 +142,7 @@ final class SimulatedPhone: PushService {
         }
     }
 
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         let aps = Self.decode(payload)
         guard let activity = aps.attributes?.id, let channel = aps.inputPushChannel else { preconditionFailure("Starts carry attributes and a channel") }
         channels.withLock { $0[channel] = activity }
@@ -150,7 +150,7 @@ final class SimulatedPhone: PushService {
         return id.uuidString.lowercased()
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         if let activity = channels.withLock({ $0[channel] }) {
             pushes.yield(Push(aps: Self.decode(payload), activity: activity, received: .now))
         }
@@ -164,6 +164,8 @@ final class SimulatedPhone: PushService {
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError) {
         channels.withLock { _ = $0.removeValue(forKey: channel) }
     }
+
+    func keepWarm(environment: PushEnvironment) async {}
 
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String] {
         channels.withLock { Array($0.keys) }

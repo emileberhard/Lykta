@@ -992,6 +992,14 @@ actor Store {
         return try !db.query("SELECT 1 FROM activities WHERE id = ?", activityID).isEmpty
     }
 
+    func activePushEnvironments() throws -> Set<PushEnvironment> {
+        Set(try db.query("""
+            SELECT DISTINCT COALESCE(a.channel_environment, d.environment) AS environment
+              FROM activities a JOIN devices d ON d.id = a.device_id
+              WHERE a.phase IN ('starting', 'live')
+            """).map { try $0.text("environment", as: PushEnvironment.init(rawValue:)) })
+    }
+
     func channels() throws -> Set<String> {
         Set(try db.query("SELECT channel FROM activities WHERE channel IS NOT NULL").map { try $0.string("channel") })
     }

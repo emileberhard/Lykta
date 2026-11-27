@@ -40,13 +40,14 @@ enum APNsError: Error, Sendable, CustomStringConvertible {
 
 protocol PushService: Sendable {
     var environments: Set<PushEnvironment> { get }
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String?
     func notify(_ payload: Data, deviceToken: PushToken, expiration: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
     func reloadWidgets(deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String?
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String?
     func createChannel(environment: PushEnvironment) async throws(APNsError) -> String
     func deleteChannel(_ channel: String, environment: PushEnvironment) async throws(APNsError)
     func channels(environment: PushEnvironment) async throws(APNsError) -> [String]
+    func keepWarm(environment: PushEnvironment) async
 }
 
 final class APNs: PushService {
@@ -54,6 +55,7 @@ final class APNs: PushService {
     private let bundleID: String
     private let signers: [PushEnvironment: Signer]
     private let session: URLSession
+    private let lastRequest = Mutex<[String: ContinuousClock.Instant]>([:])
 
     init(bundleID: String, teamID: String, keys: [PushEnvironment: (id: String, pem: String)]) throws {
         let bundleCharacters = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-".utf8)
@@ -72,11 +74,11 @@ final class APNs: PushService {
         session = URLSession(configuration: configuration)
     }
 
-    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func start(_ payload: Data, deviceToken: PushToken, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         let headers = ["apns-topic": "\(bundleID).push-type.liveactivity", "apns-push-type": "liveactivity", "apns-priority": "10",
                        "apns-id": id.uuidString.lowercased()]
         let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "3/device/\(deviceToken)"), environment,
-                                           headers: headers, body: payload)
+                                           headers: headers, body: payload) { idleMs = $0 }
         return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
@@ -88,11 +90,11 @@ final class APNs: PushService {
         return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
-    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID) async throws(APNsError) -> String? {
+    func broadcast(_ payload: Data, channel: String, priority: Int, environment: PushEnvironment, id: UUID, idleMs: inout Double?) async throws(APNsError) -> String? {
         let headers = ["apns-channel-id": channel, "apns-push-type": "LiveActivity", "apns-priority": String(priority), "apns-expiration": "0",
                        "apns-request-id": id.uuidString.lowercased()]
         let (response, _) = try await send("POST", environment.pushOrigin.appending(path: "4/broadcasts/apps/\(bundleID)"), environment,
-                                           headers: headers, body: payload)
+                                           headers: headers, body: payload) { idleMs = $0 }
         return response.value(forHTTPHeaderField: "apns-unique-id")
     }
 
@@ -125,13 +127,32 @@ final class APNs: PushService {
         return list.channels
     }
 
+    func keepWarm(environment: PushEnvironment) async {
+        let origin = environment.pushOrigin
+        let host = origin.host()!
+        let due = lastRequest.withLock { times in
+            let now = ContinuousClock.now
+            guard let previous = times[host], previous.duration(to: now) >= .seconds(90) else { return false }
+            times[host] = now
+            return true
+        }
+        guard due else { return }
+        do {
+            let (_, response) = try await session.data(from: origin.appending(path: "3/device/0"))
+            if let status = (response as? HTTPURLResponse)?.statusCode, status == 403 || status == 405 { return }
+            log("APNs \(environment.rawValue) keepalive got HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch {
+            log("APNs \(environment.rawValue) keepalive failed: \(error.localizedDescription)")
+        }
+    }
+
     private static func isAppleIdentifier(_ text: String) -> Bool {
         let characters = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".utf8)
         return text.utf8.count == 10 && text.utf8.allSatisfy(characters.contains)
     }
 
     private func send(_ method: String, _ url: URL, _ environment: PushEnvironment, headers: [String: String],
-                      body: Data?) async throws(APNsError) -> (HTTPURLResponse, Data) {
+                      body: Data?, onRequest: (Double?) -> Void = { _ in }) async throws(APNsError) -> (HTTPURLResponse, Data) {
         guard let signer = signers[environment] else { throw .notSent("no APNs key is configured for \(environment.rawValue)") }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -140,6 +161,15 @@ final class APNs: PushService {
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         let data: Data
         let response: URLResponse
+        let host = url.host()!
+        let idle = lastRequest.withLock { times in
+            let now = ContinuousClock.now
+            return times.updateValue(now, forKey: host).map { $0.duration(to: now) }
+        }
+        onRequest(idle.map {
+            let elapsed = $0.components
+            return (Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded()
+        })
         do {
             (data, response) = try await session.data(for: request)
         } catch let error as URLError where [.cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .notConnectedToInternet].contains(error.code) {
