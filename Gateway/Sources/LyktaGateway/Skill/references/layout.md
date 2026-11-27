@@ -334,7 +334,7 @@ label uses its own boolean to draw the selection immediately.
                  "else": {"text": "Mac", "modifiers": [{"foreground": "#FFFFFF99"}, {"padding": 6}]},
                  "modifiers": [{"animation": {"value": "{{inputs.mac.active}}", "curve": "linear", "duration": 0.05}}]}}
     ], "spacing": 6, "modifiers": [{"padding": 14}]},
-    "compactLeading": "TV", "compactTrailing": "Input", "minimal": "TV"
+    "background": "#131517", "compactLeading": "TV", "compactTrailing": "Input", "minimal": "TV"
   }
 }
 ```
