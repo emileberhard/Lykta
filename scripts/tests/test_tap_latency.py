@@ -23,6 +23,9 @@ class TapLatencyTests(unittest.TestCase):
             event(9, "01.300", "push.update", outcome="accepted", fingerprint="two", priority=10, reason="tap", ms=100, idleMs=900),
             event(10, "01.450", "activity.content", "app", source="push", fingerprint="two"),
             event(11, "02.000", "push.update", outcome="accepted", fingerprint="three", priority=10, reason="interval", ms=100),
+            event(12, "00.600", "push.update", outcome="accepted", fingerprint="one", priority=10, reason="tap", ms=100),
+            event(13, "02.200", "push.update", outcome="accepted", fingerprint="one", priority=10, reason="tap", ms=100),
+            event(14, "02.400", "activity.content", "app", source="tap", fingerprint="one"),
         ]}
         result = subprocess.run([str(Path(__file__).resolve().parents[1] / "tap-latency")],
                                 input=json.dumps(data), text=True, capture_output=True, check=True).stdout
@@ -31,4 +34,7 @@ class TapLatencyTests(unittest.TestCase):
         self.assertRegex(second, r"22222222 +input-mac.*push \+450.*10/100/900")
         self.assertIn("taps 2 · shown by tap 1 · called but shown only by a push 1", result)
         self.assertIn("priority-10 updates never reported 1", result)
+        self.assertIn("priority-10 pushes for content a tap had already shown 1", result)
         self.assertIn("seq 11", result)
+        self.assertNotIn("seq 12", result)
+        self.assertNotIn("seq 13", result)

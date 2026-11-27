@@ -41,22 +41,25 @@ def report(events):
     older_writes = sum(bool(event["detail"].get("kept")) for event in puts)
     reads = sorted((event for event in events if event["name"] == "actions.read"), key=lambda event: event["seq"])
     unreported = []
+    already_shown = 0
     observations = {}
     pushes = {}
     for activity, rows in activities.items():
         observations[activity] = [row for row in rows if row["name"] == "activity.content"]
         pushes[activity] = [row for row in rows if row["name"] == "push.update"]
-        recorded = set()
-        for observation in rows:
-            if observation["name"] not in {"activity.content", "activity.observed"} or observation["detail"].get("source") == "tap":
+        states = [row for row in rows if row["source"] == "app" and row["name"] in {"activity.content", "activity.observed"}
+                  and row["detail"].get("fingerprint")]
+        for push in pushes[activity]:
+            detail = push["detail"]
+            if detail.get("priority") != 10 or detail.get("outcome") != "accepted":
                 continue
-            fingerprint = observation["detail"].get("fingerprint")
-            matches = [push for push in pushes[activity] if started(push) <= at(observation)
-                       and push["detail"].get("fingerprint") == fingerprint and push["detail"].get("outcome") == "accepted"]
-            if matches:
-                recorded.add(max(matches, key=started)["seq"])
-        unreported.extend(push for push in pushes[activity] if push["detail"].get("priority") == 10
-                          and push["detail"].get("outcome") == "accepted" and push["seq"] not in recorded)
+            fingerprint = detail.get("fingerprint")
+            beginning = started(push)
+            prior = next((state for state in reversed(states) if at(state) < beginning), None)
+            if prior and prior["detail"]["fingerprint"] == fingerprint:
+                already_shown += 1
+            elif not any(at(state) >= beginning and state["detail"]["fingerprint"] == fingerprint for state in states):
+                unreported.append(push)
 
     table = [("action", "button", "app", "→gw", "gw", "answer", "inSync", "net (DNS/connect/TLS)", "reused",
               "shown", "push (prio/ms/idle)", "agent read", "agent PUT (+ms/kept)")]
@@ -123,7 +126,9 @@ def report(events):
     p50 = statistics.median(ordered) if ordered else None
     print(f"taps {len(table) - 1} · shown by tap {shown_by_tap} · called but shown only by a push {shown_by_push}"
           f" · p50 tap→shown {show(p50)} ms · p90 {show(p90)} ms")
-    print(f"agent writes that tried an older value {older_writes} · priority-10 updates never reported {len(unreported)}")
+    print(f"agent writes that tried an older value {older_writes}"
+          f" · priority-10 pushes for content a tap had already shown {already_shown}"
+          f" · priority-10 updates never reported {len(unreported)}")
     for push in unreported:
         print(f"  seq {push['seq']} · {push['activity']} · {push['at']} · {push['detail'].get('reason', '—')}")
 

@@ -287,7 +287,7 @@ final class Model {
             activity = id
             event = "activity.action"
             detail["action"] = .string(action.id.uuidString)
-            detail["processAgeMs"] = Self.milliseconds(since: processStarted)
+            detail["processAgeMs"] = .number(Self.milliseconds(since: processStarted))
         case let .widget(id):
             activity = nil
             event = "widget.action"
@@ -301,21 +301,21 @@ final class Model {
             reply = try await gateway.act(action, secret: credentials.deviceSecret, metrics: metrics)
         } catch {
             if let activity, let metrics {
-                recordTap(action.id, activity: activity, requestMs: Self.milliseconds(since: requestStarted), metrics: metrics, ["outcome": .string("failed")])
+                recordTap(action.id, activity: activity, requestMs: Self.milliseconds(since: requestStarted), metrics: metrics, .failed)
             }
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
         let requestMs = Self.milliseconds(since: requestStarted)
-        let outcome: [String: JSONValue]
+        let outcome: TapUpdate.Outcome
         switch (action.target, reply) {
         case let (.activity(id), .update(update)):
             outcome = await apply(update, to: id)
         case let (_, .unreadable(error)):
             telemetry.record("app.error", activity: activity, ["operation": .string("actionUpdate"), "error": .string(error)])
-            outcome = ["outcome": .string("unreadable")]
+            outcome = .unreadable
         default:
-            outcome = ["outcome": .string("none")]
+            outcome = .none
         }
         if let activity, let metrics {
             recordTap(action.id, activity: activity, requestMs: requestMs, metrics: metrics, outcome)
@@ -326,22 +326,36 @@ final class Model {
         }
     }
 
-    private func recordTap(_ action: UUID, activity: UUID, requestMs: JSONValue, metrics: TapRequestMetrics, _ outcome: [String: JSONValue]) {
-        var detail = metrics.detail.merging(outcome) { $1 }
+    private func recordTap(_ action: UUID, activity: UUID, requestMs: Double, metrics: TapRequestMetrics, _ outcome: TapUpdate.Outcome) {
+        var detail = metrics.detail
         detail["action"] = .string(action.uuidString)
-        detail["requestMs"] = requestMs
-        detail["inSync"] = detail["inSync"] ?? .null
-        detail["updateMs"] = detail["updateMs"] ?? .null
+        detail["requestMs"] = .number(requestMs)
+        detail["inSync"] = .null
+        detail["updateMs"] = .null
+        switch outcome {
+        case let .called(inSync, updateMs, from, to, timestamp):
+            detail["outcome"] = .string("called")
+            detail["inSync"] = .bool(inSync)
+            detail["updateMs"] = .number(updateMs)
+            detail["from"] = .string(from)
+            detail["to"] = .string(to)
+            detail["timestamp"] = .number(timestamp)
+        case .missing: detail["outcome"] = .string("missing")
+        case let .state(state): detail["outcome"] = .string(state.rawValue)
+        case .unreadable: detail["outcome"] = .string("unreadable")
+        case .none: detail["outcome"] = .string("none")
+        case .failed: detail["outcome"] = .string("failed")
+        }
         telemetry.record("activity.tapUpdate", activity: activity, detail)
     }
 
-    private func apply(_ update: ActionUpdate, to id: UUID) async -> [String: JSONValue] {
+    private func apply(_ update: ActionUpdate, to id: UUID) async -> TapUpdate.Outcome {
         let result = await TapUpdate.apply(update, to: id) { [self] in
             let now = ContinuousClock.now
             pruneTapAnswers(at: now)
             tapAnswers[id, default: [:]][update.contentState.fingerprint] = now
         }
-        if result["outcome"] == .string("called") { refreshActivities() }
+        if case .called = result { refreshActivities() }
         return result
     }
 
@@ -352,9 +366,9 @@ final class Model {
         }
     }
 
-    fileprivate nonisolated static func milliseconds(since start: ContinuousClock.Instant) -> JSONValue {
+    fileprivate nonisolated static func milliseconds(since start: ContinuousClock.Instant) -> Double {
         let elapsed = start.duration(to: .now).components
-        return .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
+        return (Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded()
     }
 
     func reset() async {
@@ -731,14 +745,23 @@ extension Model {
 #endif
 
 private nonisolated enum TapUpdate {
-    @concurrent static func apply(_ update: ActionUpdate, to id: UUID, willApply: @MainActor @Sendable () -> Void) async -> [String: JSONValue] {
+    enum Outcome: Sendable {
+        case called(inSync: Bool, updateMs: Double, from: String, to: String, timestamp: Double)
+        case missing
+        case state(ObservedState)
+        case unreadable
+        case none
+        case failed
+    }
+
+    @concurrent static func apply(_ update: ActionUpdate, to id: UUID, willApply: @MainActor @Sendable () -> Void) async -> Outcome {
         guard let shown = Activity<LyktaActivity>.activities.first(where: { $0.attributes.id == id }) else {
-            return ["outcome": .string("missing")]
+            return .missing
         }
         guard [.pending, .active, .stale].contains(shown.activityState) else {
-            return ["outcome": .string(ObservedState(shown.activityState).rawValue)]
+            return .state(ObservedState(shown.activityState))
         }
-        guard update.contentState.layout != nil else { return ["outcome": .string("unreadable")] }
+        guard update.contentState.layout != nil else { return .unreadable }
         let current = shown.content.state.fingerprint
         let next = update.contentState.fingerprint
         let content = ActivityContent(state: update.contentState,
@@ -747,11 +770,8 @@ private nonisolated enum TapUpdate {
         await willApply()
         let started = ContinuousClock.now
         await shown.update(content, timestamp: Date(timeIntervalSince1970: update.timestamp))
-        let updateMs = Model.milliseconds(since: started)
-        return [
-            "outcome": .string("called"), "inSync": .bool(current == update.from), "updateMs": updateMs,
-            "from": .string(update.from), "to": .string(next), "timestamp": .number(update.timestamp),
-        ]
+        return .called(inSync: current == update.from, updateMs: Model.milliseconds(since: started),
+                       from: update.from, to: next, timestamp: update.timestamp)
     }
 }
 
