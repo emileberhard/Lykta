@@ -115,6 +115,8 @@ struct Activity: Sendable {
     let channelEnvironment: PushEnvironment?
     let lastSentAt: Int
     let answerAt: Double
+    let tappedAt: Int
+    let urgent: Bool
     let immediateAt: Int
     let failures: Int
     let delivery: DeliveryState
@@ -144,6 +146,8 @@ struct Activity: Sendable {
         channelEnvironment = try row.optionalText("channel_environment", as: PushEnvironment.init(rawValue:))
         lastSentAt = Int(try row.integer("last_sent_at"))
         answerAt = try row.real("answer_at")
+        tappedAt = Int(try row.integer("tapped_at"))
+        urgent = try row.integer("urgent") != 0
         immediateAt = Int(try row.integer("immediate_at"))
         failures = Int(try row.integer("failures"))
         delivery = try row.text("delivery", as: DeliveryState.init(rawValue:))

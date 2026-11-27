@@ -51,6 +51,8 @@ extension StoredEvent {
 actor Store {
     static let maximumAttempts = 5
     static let immediateUpdateInterval = 30
+    private static let tapAnswerWindow = 10
+    private static let tapAnswerInterval = 3
     static let maximumPayloadBytes = 4096
     static let eventRetention = 14 * 86400
     static let maximumEventBytesPerDevice = 8 << 20
@@ -336,10 +338,11 @@ actor Store {
             let changed = try title != current.title || expandedLayout != decode(current.layout) || data != currentData || alert != nil
                 || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
             if changed {
+                let urgent = content != current.content && current.tappedAt > 0 && now - current.tappedAt <= Self.tapAnswerWindow
                 try db.run("""
                     UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
-                      alert = COALESCE(?, alert), revision = revision + 1, updated_at = ? WHERE id = ?
-                    """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, now, id)
+                      alert = COALESCE(?, alert), urgent = MAX(urgent, ?), revision = revision + 1, updated_at = ? WHERE id = ?
+                    """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, urgent, now, id)
             } else {
                 stored = try current.contentState()
             }
@@ -361,7 +364,7 @@ actor Store {
         let size = try Self.measure(activity, contentState: stored, filled: filled, on: device, now: now)
         try record("activity.put", device: device.id, activity: id, [
             "name": .string(name.rawValue), "created": .bool(current == nil), "revision": .number(Double(activity.revision)),
-            "fingerprint": .string(stored.fingerprint), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
+            "fingerprint": .string(stored.fingerprint), "urgent": .bool(activity.urgent), "payloadBytes": .number(Double(size)), "alert": .bool(request.alert != nil),
             "cursor": request.cursor.map { .number(Double($0)) } ?? .null, "kept": .array(kept.map(JSONValue.string)),
             "endsAt": activity.endsAt.map { .number(Double($0)) } ?? .null,
         ])
@@ -754,6 +757,7 @@ actor Store {
                 detail["toggle"] = .string(path)
                 detail["isOn"] = .bool(isOn)
             }
+            try db.run("UPDATE activities SET tapped_at = ? WHERE id = ?", now, activity.id)
             var update: ActionUpdate?
             var revision = activity.revision
             if changed != data {
@@ -958,7 +962,7 @@ actor Store {
                 """, now, free)
             jobs += try rows.map { row in
                 let activity = try Activity(row)
-                try db.run("UPDATE activities SET in_flight = 1, last_sent_at = ?, alert = NULL WHERE id = ?", now, activity.id)
+                try db.run("UPDATE activities SET in_flight = 1, last_sent_at = ?, alert = NULL, urgent = 0 WHERE id = ?", now, activity.id)
                 let kind: ActivityJob.Kind = switch activity.phase {
                 case .starting: .start
                 case .live: .update
@@ -969,8 +973,12 @@ actor Store {
                 let token = try row.optionalText("push_token", as: PushToken.init(hex:))
                 let movedHash = try row.optionalString("moved_push_token_hash")
                 let moved = token.map { Self.hash($0.description) == movedHash } ?? false
-                let immediate = kind != .update || activity.alert != nil || now - activity.immediateAt >= Self.immediateUpdateInterval
-                return Job.activity(ActivityJob(kind: kind, immediate: immediate, activity: activity,
+                let reason: ActivityJob.PriorityReason? = if kind != .update { nil }
+                    else if activity.alert != nil { .alert }
+                    else if now - activity.immediateAt >= Self.immediateUpdateInterval { .interval }
+                    else if activity.urgent && now - activity.immediateAt >= Self.tapAnswerInterval { .tap }
+                    else { .paced }
+                return Job.activity(ActivityJob(kind: kind, priorityReason: reason, activity: activity,
                                                 environment: kind == .start ? (moved ? device.other : device) : activity.channelEnvironment ?? device,
                                                 pushToken: token, tokenMoved: moved,
                                                 layoutVersion: try row.optionalText("layout_version", as: Version.init)))

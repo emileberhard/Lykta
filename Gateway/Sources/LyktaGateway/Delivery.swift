@@ -10,8 +10,11 @@ enum Job: Sendable {
 struct ActivityJob: Sendable {
     enum Kind: String, Sendable { case start, update, end, deleteChannel }
 
+    enum PriorityReason: String, Sendable { case interval, alert, tap, paced }
+
     let kind: Kind
-    let immediate: Bool
+    let priorityReason: PriorityReason?
+    var immediate: Bool { priorityReason != .paced }
     let activity: Activity
     let environment: PushEnvironment
     let pushToken: PushToken?
@@ -133,6 +136,8 @@ struct Delivery: Sendable {
             "revision": .number(Double(activity.revision)), "fingerprint": .string(try activity.fingerprint()),
             "compact": .bool(LyktaActivity.ContentState.isCompact(for: job.layoutVersion)),
         ]
+        if job.kind != .deleteChannel { detail["priority"] = .number(job.immediate ? 10 : 5) }
+        if let reason = job.priorityReason { detail["reason"] = .string(reason.rawValue) }
         let outcome: Outcome
         do {
             switch job.kind {
@@ -165,7 +170,6 @@ struct Delivery: Sendable {
                 let priority = job.immediate ? 10 : 5
                 let payload = try activity.payload(event, now: now, layoutVersion: job.layoutVersion)
                 detail["channel"] = .string(channel)
-                detail["priority"] = .number(Double(priority))
                 detail["alert"] = .bool(activity.alert != nil)
                 detail["payloadBytes"] = .number(Double(payload.count))
                 detail["uniqueID"] = try await push.broadcast(payload, channel: channel, priority: priority, environment: job.environment, id: id)
