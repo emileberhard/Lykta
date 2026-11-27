@@ -80,11 +80,14 @@ struct Row: Sendable {
     }
 
     func optionalReal(_ column: String) throws -> Double? {
+        self[column] == .null ? nil : try real(column)
+    }
+
+    func real(_ column: String) throws -> Double {
         switch self[column] {
-        case .null: nil
         case let .real(value): value
         case let .integer(value): Double(value)
-        case .text, .blob: throw mismatch(column)
+        case .null, .text, .blob: throw mismatch(column)
         }
     }
 

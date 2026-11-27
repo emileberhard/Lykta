@@ -314,10 +314,10 @@ final class Model {
     private func apply(_ update: ActionUpdate, to id: UUID) async {
         let next = update.contentState.fingerprint
         switch await TapUpdate.apply(update, to: id) {
-        case .updated:
+        case let .called(inSync):
             refreshActivities()
             telemetry.record("activity.tapUpdate", activity: id, [
-                "outcome": .string("updated"),
+                "outcome": .string("called"), "inSync": .bool(inSync),
                 "from": .string(update.from), "to": .string(next),
                 "timestamp": .number(update.timestamp),
             ])
@@ -701,7 +701,7 @@ extension Model {
 
 private nonisolated enum TapUpdate: Sendable {
     enum Outcome: Sendable {
-        case updated
+        case called(inSync: Bool)
         case skipped(reason: String, current: String?)
     }
 
@@ -713,14 +713,14 @@ private nonisolated enum TapUpdate: Sendable {
             return .skipped(reason: ObservedState(shown.activityState).rawValue, current: nil)
         }
         let current = shown.content.state.fingerprint
-        guard current == update.from else {
-            return .skipped(reason: "stale", current: current)
+        guard update.contentState.layout != nil else {
+            return .skipped(reason: "unreadable", current: current)
         }
         let content = ActivityContent(state: update.contentState,
                                       staleDate: update.staleDate.map { Date(timeIntervalSince1970: Double($0)) },
                                       relevanceScore: update.relevanceScore ?? 0)
         await shown.update(content, timestamp: Date(timeIntervalSince1970: update.timestamp))
-        return .updated
+        return .called(inSync: current == update.from)
     }
 }
 

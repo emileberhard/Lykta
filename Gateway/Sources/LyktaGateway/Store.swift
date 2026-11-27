@@ -710,7 +710,8 @@ actor Store {
         }
     }
 
-    func act(_ device: Device, _ action: Action, now: Int) throws -> ActionUpdate? {
+    func act(_ device: Device, _ action: Action, arrival: TimeInterval) throws -> ActionUpdate? {
+        let now = Int(arrival)
         let result: (recorded: Bool, update: ActionUpdate?) = try db.transaction {
             guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return (false, nil) }
             let activityID: UUID
@@ -754,12 +755,13 @@ actor Store {
                     try LyktaActivity.ContentState(title: activity.title, layout: filled.json)
                 }
                 try Self.admit(state, on: device)
-                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
-                           Self.text(changed), Self.encoded(state), now, activity.id)
+                let answer = try activity.actionUpdate(from: previous.fingerprint, contentState: state, arrival: arrival, layoutVersion: device.layoutVersion)
+                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, answer_at = ?, updated_at = ? WHERE id = ?",
+                           Self.text(changed), Self.encoded(state), answer.timestamp, now, activity.id)
                 let updated = try self.activity(activity.id)
                 _ = try Self.measure(updated, contentState: state, filled: filled, on: device, now: now)
                 revision = updated.revision
-                update = try activity.actionUpdate(from: previous.fingerprint, contentState: state, now: now, layoutVersion: device.layoutVersion)
+                update = answer
             }
             detail["revision"] = .number(Double(revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
@@ -918,8 +920,8 @@ actor Store {
                 SELECT a.*, d.environment, d.push_token, d.moved_push_token_hash, d.layout_version FROM activities a JOIN devices d ON d.id = a.device_id
                 WHERE a.in_flight = 0 AND a.retry_at <= ?1 AND (
                   (a.phase = 'starting' AND d.push_token IS NOT NULL)
-                  OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1)
-                  OR (a.phase = 'ending' AND a.last_sent_at < ?1)
+                  OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1 AND a.answer_at < ?1)
+                  OR (a.phase = 'ending' AND a.last_sent_at < ?1 AND a.answer_at < ?1)
                   OR (a.phase = 'ended' AND a.channel IS NOT NULL AND a.ended_at <= ?1 - 300))
                 ORDER BY a.retry_at, a.last_sent_at LIMIT ?2
                 """, now, free)

@@ -199,11 +199,11 @@ extension Activity {
         return try Self.encoder().encode(envelope(event, now: now, channel: channel, contentState: state))
     }
 
-    func actionUpdate(from previous: String, contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> ActionUpdate {
+    func actionUpdate(from previous: String, contentState: LyktaActivity.ContentState, arrival: TimeInterval, layoutVersion: Version?) throws -> ActionUpdate {
         let state = try contentState.encoded(for: layoutVersion)
-        let base = lastSentAt > 0 ? lastSentAt : createdAt
-        return ActionUpdate(from: previous, contentState: state, timestamp: Double(base) + 0.5,
-                            staleDate: staleDate(at: now), relevanceScore: relevance)
+        let stamp = max(arrival, Double(lastSentAt), answerAt) + 0.001
+        return ActionUpdate(from: previous, contentState: state, timestamp: stamp,
+                            staleDate: staleDate(at: Int(arrival)), relevanceScore: relevance)
     }
 
     func admissionBytes(contentState: LyktaActivity.ContentState, now: Int, layoutVersion: Version?) throws -> (push: Int, activityKit: Int) {

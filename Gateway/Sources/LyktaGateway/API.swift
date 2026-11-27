@@ -25,7 +25,7 @@ struct API: Sendable {
     private func respond(to request: HTTPRequest) async -> HTTPResponse {
         let failure: APIError
         do {
-            return try await route(request, now: Self.now())
+            return try await route(request, arrival: Date().timeIntervalSince1970)
         } catch let error as APIError {
             failure = error
         } catch {
@@ -100,7 +100,8 @@ struct API: Sendable {
     private static let skillDigest = Store.hex(Array(SHA256.hash(data: Data(skillFiles.sorted { $0.key < $1.key }
         .map { path, body in "\(Store.hex(Array(SHA256.hash(data: Data(body)))))  \(path)\n" }.joined().utf8))))
 
-    private func route(_ request: HTTPRequest, now: Int) async throws -> HTTPResponse {
+    private func route(_ request: HTTPRequest, arrival: TimeInterval) async throws -> HTTPResponse {
+        let now = Int(arrival)
         let path = request.path
         if request.method == "GET", let file = Self.skill[path.joined(separator: "/")] {
             return file
@@ -139,7 +140,7 @@ struct API: Sendable {
             return .noContent
         case ("POST", "v1/device/actions"):
             let device = try await phone(request)
-            let update = try await store.act(device, try Self.decode(request.body), now: now)
+            let update = try await store.act(device, try Self.decode(request.body), arrival: arrival)
             return update.map { Self.json(200, $0) } ?? .noContent
         case ("GET", "v1/actions"):
             let device = try await agent(request)

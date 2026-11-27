@@ -128,7 +128,7 @@ final class SimulatedPhone: PushService {
             return try WidgetLayout(json: detail.layout.filled(with: detail.data, for: .widget).json)
         }
         func press(_ input: Action.Input) async throws {
-            do { _ = try await store.act(device, Action(id: UUID(), target: .widget(id), input: input), now: now) }
+            do { _ = try await store.act(device, Action(id: UUID(), target: .widget(id), input: input), arrival: Double(now)) }
             catch let error as APIError { log("The simulated widget tap was refused: \(error.code.rawValue): \(error.message)") }
         }
         let initial = try await layout()

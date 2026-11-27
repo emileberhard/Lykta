@@ -14,6 +14,7 @@ enum Schema {
         (table: "activities", column: "channel_environment", type: "TEXT"),
         (table: "activities", column: "updated_at", type: "INTEGER"),
         (table: "activities", column: "immediate_at", type: "INTEGER NOT NULL DEFAULT 0"),
+        (table: "activities", column: "answer_at", type: "REAL NOT NULL DEFAULT 0"),
     ]
 
     static func migrate(_ db: Database) throws {
