@@ -708,6 +708,52 @@ struct GatewayTests {
         #expect(try await migrated.widgetDetail(device, name: name, now: now + 2).data == ["count": .number(9)])
     }
 
+    @Test func aTapsOwnPushWaitsUntilTheTapsPause() async throws {
+        try await reportVersion("0.22.0 (1)", layoutVersion: Layout.version)
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        let first = now + 5
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(first) + 0.5).status == 200)
+        #expect(try await store.claim(now: first + Store.tapAnswerHold - 1, limit: 4).isEmpty)
+        let second = first + Store.tapAnswerHold - 1
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(second) + 0.5).status == 200)
+        #expect(try await store.claim(now: second + Store.tapAnswerHold - 1, limit: 4).isEmpty)
+        try await deliver(at: second + Store.tapAnswerHold)
+        #expect(push.sent == ["createChannel", "start", "update 10"])
+        let detail: Detail = try await send("GET", "/v1/activities/stepper").decoded()
+        #expect(detail.data == ["count": .number(2)])
+    }
+
+    @Test(arguments: [false, true])
+    func contentThePhoneLacksAndEndsAreNotHeld(ending: Bool) async throws {
+        try await reportVersion("0.22.0 (1)", layoutVersion: Layout.version)
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        let tapped = now + 5
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(tapped) + 0.5).status == 200)
+        #expect(try await send("PUT", "/v1/activities/stepper", body: ["data": ["count": .number(1)], "endAfter": .number(600)],
+                               at: Double(tapped) + 0.6).status == 200)
+        #expect(try await store.claim(now: tapped + 1, limit: 4).isEmpty)
+        if ending {
+            #expect(try await send("DELETE", "/v1/activities/stepper", at: Double(tapped) + 0.7).status == 200)
+        } else {
+            #expect(try await send("PUT", "/v1/activities/stepper", body: ["data": ["count": .number(9)]], at: Double(tapped) + 0.7).status == 200)
+        }
+        try await deliver(at: tapped + 1)
+        #expect(push.sent.last == (ending ? "end 10" : "update 10"))
+    }
+
+    @Test(arguments: ["0.21.0 (7)", "custom"])
+    func aPhoneThatMayDropAnAnswerGetsItsPushInTheNextSecond(appVersion: String) async throws {
+        try await reportVersion(appVersion, layoutVersion: Layout.version)
+        let started: Identified = try await put("stepper", Self.buttonCounter)
+        try await deliver(at: now)
+        let tapped = now + 5
+        #expect(await act(Action(id: UUID(), target: .activity(started.id), input: .button("up")), at: Double(tapped) + 0.5).status == 200)
+        try await deliver(at: tapped + 1)
+        #expect(push.sent == ["createChannel", "start", "update 10"])
+    }
+
     @Test func agentAnswersUseTheTapPriorityWindowAndThreeSecondPacing() async throws {
         let started: Identified = try await put("stepper", Self.buttonCounter)
         try await deliver(at: now)

@@ -95,10 +95,13 @@ boundary below. `CLAUDE.md` is a symlink to this file.
   The gateway stamps each answer with its own clock, at least one millisecond
   above the last push and answer. `Store.claim` sends update and end pushes
   only in a later whole second than both. Preserve both rules so ActivityKit
-  can order pushes and answers. The app ends an activity only when the gateway
-  reports it ended, or on Reset. The
-  gateway's answer to End Activity, which names the activity by its id, is such
-  a report.
+  can order pushes and answers. On a phone that applies every answer, 0.22.0
+  or later, a tap's own push also waits `Store.tapAnswerHold` seconds after
+  the last tap, because a push that arrives while iOS builds the answer makes
+  it build twice; never hold content the phone lacks. The app ends an
+  activity only when the gateway reports it ended, or on Reset. The gateway's
+  answer to End Activity, which names the activity by its id, is such a
+  report.
 - An activity or widget tap changes data only through the gateway, in the
   transaction that logs it: a toggle sets its boolean and a button applies its
   `set`, `add` and `now`, all read from the data before the tap. A tap counts

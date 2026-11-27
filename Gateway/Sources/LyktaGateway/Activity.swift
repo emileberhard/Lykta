@@ -117,6 +117,7 @@ struct Activity: Sendable {
     let answerAt: Double
     let tappedAt: Int
     let urgent: Bool
+    let heldUntil: Int
     let immediateAt: Int
     let failures: Int
     let delivery: DeliveryState
@@ -148,6 +149,7 @@ struct Activity: Sendable {
         answerAt = try row.real("answer_at")
         tappedAt = Int(try row.integer("tapped_at"))
         urgent = try row.integer("urgent") != 0
+        heldUntil = Int(try row.integer("held_until"))
         immediateAt = Int(try row.integer("immediate_at"))
         failures = Int(try row.integer("failures"))
         delivery = try row.text("delivery", as: DeliveryState.init(rawValue:))

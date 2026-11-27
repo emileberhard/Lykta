@@ -18,6 +18,7 @@ enum Schema {
         (table: "actions", column: "paths", type: "TEXT"),
         (table: "activities", column: "tapped_at", type: "INTEGER NOT NULL DEFAULT 0"),
         (table: "activities", column: "urgent", type: "INTEGER NOT NULL DEFAULT 0"),
+        (table: "activities", column: "held_until", type: "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     static func migrate(_ db: Database) throws {

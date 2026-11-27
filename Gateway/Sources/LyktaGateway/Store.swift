@@ -53,6 +53,8 @@ actor Store {
     static let immediateUpdateInterval = 30
     private static let tapAnswerWindow = 10
     private static let tapAnswerInterval = 3
+    static let tapAnswerHold = 5
+    private static let everyAnswerApplied = Version(0, 22, 0)
     static let maximumPayloadBytes = 4096
     static let eventRetention = 14 * 86400
     static let maximumEventBytesPerDevice = 8 << 20
@@ -338,11 +340,13 @@ actor Store {
             let changed = try title != current.title || expandedLayout != decode(current.layout) || data != currentData || alert != nil
                 || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
             if changed {
-                let urgent = try current.tappedAt > 0 && now - current.tappedAt <= Self.tapAnswerWindow && state.fingerprint != current.fingerprint()
+                let fresh = try state.fingerprint != current.fingerprint()
+                let urgent = fresh && current.tappedAt > 0 && now - current.tappedAt <= Self.tapAnswerWindow
                 try db.run("""
                     UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
-                      alert = COALESCE(?, alert), urgent = MAX(urgent, ?), revision = revision + 1, updated_at = ? WHERE id = ?
-                    """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, urgent, now, id)
+                      alert = COALESCE(?, alert), urgent = MAX(urgent, ?), held_until = ?, revision = revision + 1, updated_at = ? WHERE id = ?
+                    """, title, Self.text(expandedLayout), Self.text(data), content, staleAfter, endsAt, relevance, alert, urgent,
+                           fresh || alert != nil ? 0 : current.heldUntil, now, id)
             } else {
                 stored = try current.contentState()
             }
@@ -769,8 +773,10 @@ actor Store {
                 }
                 try Self.admit(state, on: device)
                 let answer = try activity.actionUpdate(from: previous.fingerprint, contentState: state, arrival: arrival, layoutVersion: device.layoutVersion)
-                try db.run("UPDATE activities SET data = ?, content = ?, revision = revision + 1, answer_at = ?, updated_at = ? WHERE id = ?",
-                           Self.text(changed), Self.encoded(state), answer.timestamp, now, activity.id)
+                let applied = Version(leading: device.appVersion).map { $0 >= Self.everyAnswerApplied } ?? false
+                try db.run("""
+                    UPDATE activities SET data = ?, content = ?, revision = revision + 1, answer_at = ?, held_until = ?, updated_at = ? WHERE id = ?
+                    """, Self.text(changed), Self.encoded(state), answer.timestamp, applied ? now + Self.tapAnswerHold : 0, now, activity.id)
                 let updated = try self.activity(activity.id)
                 _ = try Self.measure(updated, contentState: state, filled: filled, on: device, now: now)
                 revision = updated.revision
@@ -966,7 +972,7 @@ actor Store {
                 SELECT a.*, d.environment, d.push_token, d.moved_push_token_hash, d.layout_version FROM activities a JOIN devices d ON d.id = a.device_id
                 WHERE a.in_flight = 0 AND a.retry_at <= ?1 AND (
                   (a.phase = 'starting' AND d.push_token IS NOT NULL)
-                  OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1 AND a.answer_at < ?1)
+                  OR (a.phase = 'live' AND a.revision > a.sent_revision AND a.last_sent_at < ?1 AND a.answer_at < ?1 AND a.held_until <= ?1)
                   OR (a.phase = 'ending' AND a.last_sent_at < ?1 AND a.answer_at < ?1)
                   OR (a.phase = 'ended' AND a.channel IS NOT NULL AND a.ended_at <= ?1 - 300))
                 ORDER BY a.retry_at, a.last_sent_at LIMIT ?2

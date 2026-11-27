@@ -368,7 +368,8 @@ the gateway also sends it at priority 10 if the last accepted priority-10
 update is at least `Store.tapAnswerInterval` old, because the user is waiting
 for that answer. The cost is up to one immediate push every three seconds
 while the user keeps tapping, and its effect on the budget is unmeasured.
-The tap's own fallback push follows the regular interval. The gateway clears
+The tap's own fallback push follows the regular interval once its hold, described
+with taps below, ends. The gateway clears
 urgency when it claims the push, and its event records the priority, the
 time since the previous request to that APNs origin and, on an update, the
 reason for its priority.
@@ -461,6 +462,32 @@ timestamp above both the last push and last answer. The fallback push can
 therefore wait until the next second, with coalescing and the existing 250 ms
 delivery wake-up bound. This ordering relies on ActivityKit's observed
 behavior and the gateway clock keeping up with the phone's creation clock.
+
+A phone that applies every readable answer, Lykta 0.22.0 or later by its
+reported app version, already shows a tap's result, so the gateway holds
+that tap's own fallback push for `Store.tapAnswerHold` seconds, and each
+further tap holds it again. A push that reaches the phone while iOS still
+builds the answer costs one more build before anything is drawn. On an
+iPhone 14 Plus running iOS 27.0.1, with the draw slowed to 405 ms, pushes
+Apple accepted 37 and 187 ms after the update call drew after 681 and 697 ms,
+while pushes accepted from 217 ms on, and all pushes at the unslowed 265 ms
+draw, changed nothing. On an iPhone 17 Pro running iOS 27.2.1, a remote
+control that drew in about 630 ms took 1,250 ms with a push accepted 174 ms
+after the update call. Sent in the next second, the push arrived between 0.1
+and 1.4 s after the answer, so it also met later taps: with taps 1.07 s
+apart on the slowed test phone, 5 of 22 drew 110 to 250 ms late with only an
+earlier tap's push near them. The hold is five seconds so that the push
+falls after the pauses within one adjustment, such as the two to three
+seconds between that iPhone 17 Pro's recorded taps, and not only after one
+draw. An agent's PUT that changes the content or carries an alert ends the
+hold, because the phone lacks that content. An older phone is never held,
+because it can drop or ignore the answer and the push is then its only
+result. The cost is that an answer iOS drops is repaired four to five
+seconds after the tap instead of one, and that a waiting PUT which changes
+no content waits as long for Apple's outcome. None of 222 answers in those
+measurements was dropped. A tap that comes just as the hold ends can still
+meet the push; skipping the push once the phone reports showing the content
+would close that, and is not built.
 
 | Phone | Gateway | Behavior |
 | --- | --- | --- |
