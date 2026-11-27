@@ -47,19 +47,27 @@ Define a repeated node once in the layout's root `parts` object, then place
 {"layout":{"parts":{"icon":{"symbol":"bolt.fill","modifiers":[{"foreground":"yellow"}]}},"lockScreen":{"hstack":[{"use":"icon"},"Charging"]},"compactLeading":{"use":"icon"},"compactTrailing":"80%","minimal":{"use":"icon","modifiers":[{"font":"caption"}]}}}
 ```
 
-Unknown names and cycles fail, and unused parts are dropped. The gateway
-expands within the 256-node cap before filling data, so a part sees the
-data and `each` names at its use site. Phones receive expanded nodes.
+Parts may use other parts, but cycles and unknown names are errors; unused
+definitions are dropped. Expansion is bounded by the layout's 256-node budget. It happens before
+placeholders and `each` are filled: a part reads data and `each` variables at
+its use site exactly as copied JSON would, with no parameters or separate scope.
+The gateway stores the expanded template, so parts cost no phone compatibility.
 
-Each phone holds up to 64 saved parts. `lykta put parts/NAME FILE` saves one
-node, without root `parts`, and returns `{"name","node"}` with 201 (new) or
-200 (replaced). A 65th gets `too_many_parts`. `lykta get parts` returns
-`{"parts":{"NAME":node}}`, and `lykta delete parts/NAME` removes one.
+Saved parts belong to one phone, up to 64 names. `lykta put parts/NAME FILE`
+saves a node or template without root `parts` and answers 201 or, replacing
+one, 200 with `{"name","node"}`; a 65th name gets `too_many_parts`.
+`lykta get parts` returns `{"parts":{"NAME":node}}`, and
+`lykta delete parts/NAME` removes one.
 
-Body parts shadow saved parts. Saving checks node shape and size, so
-placeholders, `each` and widget-only nodes work. The use site checks the
-rest. Errors identify the part and use site. Saving and writing layouts
-take snapshots of references. Replacing a part affects later writes.
+`use` resolves body parts first, then saved parts, and an unknown name's error
+lists both. Saving checks only that the part is a node within the byte limit,
+so placeholders, `each` and widget-only nodes are fine. The rest is checked
+where the part is used, with errors such as
+`parts/icon.value: expected a value within 0...1 (used at lockScreen)`.
+
+Saving copies the saved parts a part uses, and a layout stores its parts
+copied, so replacing or deleting a saved part changes neither until you send
+it again.
 
 ## Data
 
@@ -285,6 +293,16 @@ must change the data alike. A press counts only for a control the data shows,
 so a button in the branch of an `if` on data that is not taken does nothing,
 and a second tap on Pause after the activity paused is ignored.
 
+```json
+{
+  "hstack": [
+    {"button": "back", "label": {"symbol": "chevron.left"}, "add": {"index": -1}},
+    {"text": "{{steps[index].name}}"},
+    {"button": "next", "label": {"symbol": "chevron.right"}, "add": {"index": 1}}
+  ]
+}
+```
+
 A timer that pauses and resumes keeps `pausedAt` null while it runs:
 
 ```json
@@ -314,48 +332,13 @@ A timer that pauses and resumes keeps `pausedAt` null while it runs:
 }
 ```
 
-A picker keeps one boolean per option. Every button sets all of them, and its
-label uses its own boolean to draw the selection immediately.
-
-```json
-{
-  "title": "Input picker",
-  "data": {"inputs": {"shield": {"active": true}, "mac": {"active": false}}},
-  "layout": {
-    "lockScreen": {"hstack": [
-      {"button": "input-shield", "style": "plain", "set": {"inputs.shield.active": true, "inputs.mac.active": false},
-       "label": {"if": "{{inputs.shield.active}}",
-                 "then": {"text": "Shield", "modifiers": [{"fontWeight": "bold"}, {"foreground": "white"}, {"padding": 6}, {"background": "#0A84FF"}, {"clip": "capsule"}]},
-                 "else": {"text": "Shield", "modifiers": [{"foreground": "#FFFFFF99"}, {"padding": 6}]},
-                 "modifiers": [{"animation": {"value": "{{inputs.shield.active}}", "curve": "linear", "duration": 0.05}}]}},
-      {"button": "input-mac", "style": "plain", "set": {"inputs.shield.active": false, "inputs.mac.active": true},
-       "label": {"if": "{{inputs.mac.active}}",
-                 "then": {"text": "Mac", "modifiers": [{"fontWeight": "bold"}, {"foreground": "white"}, {"padding": 6}, {"background": "#0A84FF"}, {"clip": "capsule"}]},
-                 "else": {"text": "Mac", "modifiers": [{"foreground": "#FFFFFF99"}, {"padding": 6}]},
-                 "modifiers": [{"animation": {"value": "{{inputs.mac.active}}", "curve": "linear", "duration": 0.05}}]}}
-    ], "spacing": 6, "modifiers": [{"padding": 14}]},
-    "background": "#131517", "compactLeading": "TV", "compactTrailing": "Input", "minimal": "TV"
-  }
-}
-```
-
 ## Motion
 
 The phone animates the change from one update to the next for up to two
-seconds, and not at all on the Always-On display. For a number changed by a
-control, use `{"contentTransition": "identity"}`. On an iPhone 14 Plus it was
-readable about 250 ms after the update instead of 890 ms. A ten-tap burst
-showed intermediate values and settled 437 ms after the last touch. The
-default roll showed one jump at 542 ms. Keep `numericText` for numbers that
-change by themselves.
-
-For a changing background, colour or bar, use
-`{"animation": {"value": "{{…}}", "curve": "linear", "duration": 0.05}}`.
-A picker background settled in about 320 ms instead of 790 ms.
-`contentTransition` does not affect these changes.
-
-To make a node slide or fade in, give it a `transition` and an `id` from the
-data, and an `animation` on a container whose `value` changes with it:
+seconds, and not at all on the Always-On display. Numbers roll with
+`contentTransition`. To make a node slide or fade in, give it a `transition`
+and an `id` from the data, and an `animation` on a container whose `value`
+changes with it:
 
 ```json
 {
@@ -366,30 +349,56 @@ data, and an `animation` on a container whose `value` changes with it:
 
 ## Fitting
 
-Limits: 32 KB, 256 nodes, 16 levels, 512 modifiers and a 4 KB compressed
-push. Repeats compress well. Trim invisible SVG decimals and reuse symmetric
-parts with `rotation`.
+A layout may be at most 32 KB with 256 nodes, 16 levels and 512 modifiers, and
+its compressed push must fit Apple's 4 KB limit. Compression makes repeats
+nearly free and spends the bytes on distinct detail, so long SVG paths cost
+most: drop decimals a mark's display size cannot show, but keep the points
+its shape needs, and build a symmetric mark from one part repeated with
+`rotation`. Within a presentation:
 
-- Use 14-point Lock Screen padding to align with notifications. Drawings and
-  buttons can come closer. `containerRelativeShape` keeps inset corners
-  concentric. Use inset blocks because StandBy backgrounds reach the edges.
-- Align related content to the same leading inset. Leave about 10 points
-  between text and decoration and 8 around rings. Keep ring text within two
-  thirds of the inner diameter. Pair `scale` with a smaller `frame` to reduce
-  layout space. Shapes and SVG resize with their frame.
-- Expanded regions inset 18 points. Leading and trailing move below the
-  camera if wider than 120 points or overlapping center. Bottom starts
-  about 8 points below. Past 160 points iOS shrinks, truncates or clips.
-  `lykta render` warns. Use `fixedSize: "vertical"` to preserve wrapped text.
-- With `{"if": "limitedWidth"}`, compact and minimal get 28-point circles.
-  Use a symbol, short number or ring. Frame circular progress, e.g. at 24
-  points in minimal. Its tint uses only the first color of a gradient.
-- On black, use medium text, round ring strokes at least a tenth of the
-  ring's width, and 1.5–2 point chart lines. An area alone fades. Draw a shape
-  track at 35% of its tint. Keep shadows small in compact and minimal.
-- Frame timer width so it does not reserve room for its longest value or
-  displace expanded regions. Use `viewThatFits`, `lineLimit`,
-  `minimumScaleFactor`, spacers and alignment for varying widths.
+- Pad Lock Screen content 14 points from its edges, the margin notifications
+  use, so the two line up in the list. Drawings and buttons may come closer.
+- Keep an even margin to the rounded outline so nothing pokes into a corner.
+  A `containerRelativeShape` takes the activity's corner radius, so an inset
+  card or tile nests concentrically.
+- Separate a block with an inset shape or a thick line, not a fill that runs
+  to the edge; in StandBy the `background` extends to the screen's edges and
+  such a fill looks cut off.
+- Start related elements, such as a header, the text under it and its
+  progress bar, at one leading inset; a few points off reads as a mistake.
+- Keep about 10 points between text and drawn decoration, such as a border or
+  a curtain; closer, the text looks pinned to it.
+- Keep about 8 points between a ring or gauge and its tile's edge, and value
+  text inside a ring within two thirds of the inner diameter. `scale` shrinks
+  the drawing but not the space it takes, so pair it with a `frame` of the
+  scaled size, as homelab's gauges do; shapes and SVG resize to a smaller
+  `frame` on their own.
+- Expanded regions start 18 points inside the top and sides. `leading` and
+  `trailing` stay beside the camera while at most 120 points wide and clear
+  of `center`, or else move under `center`; `bottom` starts about 8 points
+  under the lowest region. Past 160 points the phone shrinks text that can
+  shrink, drops lines of wrapping text and cuts off the rest; `lykta render`
+  shows it and warns. Add `fixedSize: "vertical"` to text that must keep its
+  second line.
+- When `{"if": "limitedWidth"}` holds, as in landscape, each compact side and
+  the minimal get a 28-point circle: show a symbol, a short number or a ring.
+- Size a circular `progress` with a `frame`, such as 24 points in `minimal`.
+- Thin lines and light text fade on black: stroke rings at least a tenth of
+  their width with round caps, use medium weight or heavier, and draw tiny
+  charts with a `line` mark of 1.5 to 2 points, since an `area` alone vanishes.
+- When you draw a ring or bar from shapes, draw its track in the tint at
+  about 35% opacity; `quaternary` or near-black tracks disappear on black, so
+  a nearly empty ring shows nothing.
+- Glows and shadows are clipped at the edge of a Dynamic Island region; keep
+  their radius small in compact and minimal.
+- `tint` on `progress` takes one color; a gradient shows only its first.
+- Give timers a fixed `frame` width; timer text otherwise reserves room for its
+  longest value. In the expanded `center`, an unframed timer pushes `leading`
+  and `trailing` below the camera.
+- Offer shorter alternatives with `viewThatFits`.
+- Bound text with `lineLimit` and `minimumScaleFactor`.
+- Prefer `spacer` and alignment over fixed offsets so content adapts to each
+  iPhone.
 
 ## Examples
 

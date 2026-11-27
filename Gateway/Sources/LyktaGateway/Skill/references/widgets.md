@@ -149,10 +149,9 @@ one cursor; a widget record names `widget` instead of `activity`:
 ```
 
 The [water example](../examples/widgets/water-widget.json) has a button and a
-toggle that work without an agent. Give every button a visible change with
-`set`, `add` or `now`. When rewriting data, send the latest press your
-values account for as `cursor`. The gateway keeps its values for paths
-changed by later taps and returns the merged data.
+toggle that work without an agent. When you rewrite a widget's data, send
+`cursor` as for activities, or read `widgets/{name}` first and send
+`ifRevision`, so your update cannot overwrite a tap.
 
 ## Read, list and delete
 

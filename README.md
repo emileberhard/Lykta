@@ -41,12 +41,10 @@ The app registers with your gateway, proving with App Attest that it is a
 genuine copy, and shares its push-to-start token. When an agent starts an
 activity, the gateway validates the layout with the same Swift code the widget
 renders it with, then starts it through APNs and updates it over a broadcast
-channel. A control can update the activity from the gateway's tap answer
-before the push arrives. Agents writing data use a cursor to preserve later
-taps. Update pushes use immediate priority for alerts, after 30 seconds
-without an immediate update, or for an agent answer to a recent tap after
-3 seconds without one. Timers and progress run on the phone, so agents only
-send changes. Widgets reload when the gateway sends a contentless widget push, at most every
+channel. A control updates the activity from the gateway's answer to the tap
+before the push arrives, and an agent's `cursor` keeps what the user tapped
+since the actions its data includes. Timers and progress run on the phone,
+so agents only send changes. Widgets reload when the gateway sends a contentless widget push, at most every
 20 minutes, or when the app opens, and then fetch their content from the gateway with a credential
 that can only read them. Notifications go out as alert pushes, and the app's notification extension
 fetches the sender's picture, the sound and the image the agent uploaded, and

@@ -343,17 +343,35 @@ activity's eight hours are over. Only other errors count toward the five
 attempts after which it gives up on an update or end, starting again from none
 once the throttling stops.
 
-**Immediate updates are paced per activity.** APNs delivers priority 10
-against an unpublished hourly budget. Priority 5 can be grouped, delayed or
-dropped. Starts and ends go at 10. Updates go at 10 with an alert, after 30
-seconds without an accepted priority-10 update, or after 3 seconds when a PUT
-changed content within 10 seconds of a tap. The tap's own fallback push
-uses the regular interval. The gateway clears urgency when it claims the
-push and records the priority-10 time when Apple accepts the update.
-It applies the same pacing to every phone because it does not store the
-phone's frequent-update setting. Push events record priority, the interval
-since the previous request to that APNs origin, and the reason for an
-update's priority.
+**Immediate updates are paced per activity.** Apple delivers a priority 10 push at once and counts it toward an
+hourly budget it does not publish, which the app's
+`NSSupportsLiveActivitiesFrequentUpdates` raises; a priority 5 push costs no
+budget, and iOS may group, delay or drop it to save power. Until 0.20.7 only
+alerts and ends went at 10. Twice in two weeks, on 2026-11-12 and 2026-11-17,
+a phone in use on cellular kept a bus card several minutes old while Apple
+accepted four and then six updates for it, among them unchanged content its
+sender sent again every second minute, so sending the same content again at
+priority 5 does not repair it. The gateway therefore sends an update at
+priority 10 when it carries an alert or when the activity's last accepted
+priority 10 update is at least `Store.immediateUpdateInterval` old, and at 5
+otherwise. A card that changes once a minute goes entirely at 10, and a
+burst, such as taps on a remote control, spends one such push per half minute
+while the rest keep priority 5's best effort. The cost is that the last
+update of a burst is not sent again at 10, so it can be late or lost as every
+update could before. `Store` decides when it claims the update and
+records the time only when Apple accepts it, so an update Apple throttles
+keeps its priority. Unmeasured: the size of the budget, and what iOS does
+with priority 10 pushes beyond it.
+
+When an agent's PUT changes content within `Store.tapAnswerWindow` of a tap,
+the gateway also sends it at priority 10 if the last accepted priority-10
+update is at least `Store.tapAnswerInterval` old, because the user is waiting
+for that answer. The cost is up to one immediate push every three seconds
+while the user keeps tapping, and its effect on the budget is unmeasured.
+The tap's own fallback push follows the regular interval. The gateway clears
+urgency when it claims the push, and its event records the priority, the
+time since the previous request to that APNs origin and, on an update, the
+reason for its priority.
 
 On Linux, an unauthenticated request on the APNs push origin stayed fast at
 60 and 100 seconds idle and paid a fresh connection's cost at 130 seconds.
@@ -425,7 +443,9 @@ the pre-tap data, admits the result, and logs the action with its affected
 paths. A result the phone cannot draw or that exceeds its limits changes
 nothing. Activity taps that change data return `ActionUpdate` with the
 content, `timestamp`, `from`, `staleDate` and `relevanceScore`. Unchanged
-activity taps, duplicate action IDs and widget taps return 204.
+activity taps, duplicate action IDs and widget taps return 204. That covers
+steppers, resets and pause buttons without a scripting language or an agent,
+and anything richer stays with agents.
 
 The phone applies every readable answer to its live activity. It records
 whether its prior fingerprint matches `from`. ActivityKit orders the
@@ -453,8 +473,10 @@ Taps share a one-day action log (up to 1,000 per phone). Agents long-poll
 represents the latest press reflected in its data. In the same transaction
 as the write, the gateway keeps the current values at paths changed by
 later actions when the path exists on both sides. The response returns the
-merged data. `ifRevision` still checks the whole revision first. Older
-action rows have no stored paths and keep nothing. The schema is additive
+merged data. An agent that does not follow presses reads the activity or
+widget and sends `ifRevision`, which the gateway refuses with 409 if a tap
+landed in between. The gateway checks that revision before merging the
+data. Older action rows have no stored paths and keep nothing. The schema is additive
 and released device wire forms stay readable.
 
 The goal is to show any agent-authored control result at ActivityKit speed,
@@ -470,7 +492,9 @@ becomes a long-term API contract once callers rely on it.
 
 `Store` commits and `RenderQueue` state changes wake delivery and waiting
 HTTP requests. The 250 ms fallback covers time-based eligibility and
-shutdown. Links open through the app's URL handler, so a layout can
+shutdown. The gateway never calls out, because webhooks would need every
+agent to expose an endpoint and would let a layout make the gateway request
+arbitrary URLs. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip. A notification's
 `link` travels in its push and opens the same way when the user taps the
 notification. iOS always brings Lykta forward first, so `Model.handoff`

@@ -280,15 +280,34 @@ open until an action arrives, so loop on it with the returned cursor to answer
 presses within a second. Toggle changes appear as
 `{"toggle": "items.0.done", "isOn": true}`. Actions are kept for a day.
 
-Give each button a visible change with `set`, `add` or `now` and correct it
-with a PUT if needed. With no visible change the button waits for an agent's
-answer. Read back the result of a tap that already changed data. A press
-counts only for a control still shown when it arrives, so use names such as
-`approve-deploy-42`.
+A button that changes the data shows its result on the tap, before any agent
+has seen the press; one that changes nothing shows nothing until your PUT
+arrives, a second or more later. So give every button a visible change with
+`set`, `add` or `now`, even when an agent does the real work, such as marking
+the pressed option or showing "Starting…", and correct it with a PUT if the
+work fails. A picker keeps one boolean per option: every option's button sets
+them all, as in `"set": {"inputs.mac": true, "inputs.shield": false}`, and its
+label draws the selected look from its own boolean. Make the change itself
+quick: text a control changes takes `{"contentTransition": "identity"}`,
+which shows the new value at once and every step of a burst of taps, where
+the default animation takes most of a second, and a background, color or bar
+a control changes takes
+`{"animation": {"value": "{{level}}", "curve": "linear", "duration": 0.05}}`.
 
-When sending data that reflects taps, include `"cursor": 41` for the latest
-press your values account for. The gateway keeps paths changed by later taps
-from its current data. The PUT returns the merged data.
+Such a press has already changed the data when it reaches you, so read the
+activity or widget for the result instead of applying the press again. A
+press counts for the button with that name that the activity or widget shows
+when the press arrives, so name buttons for what they do, such as
+`approve-deploy-42` rather than `yes`.
+
+The user can tap again while you work. When you send `data` after reading
+presses, add `"cursor"` with the `seq` of the newest press your values
+account for, such as `"cursor": 41`. For every path a later press changed,
+the gateway then keeps its own value instead of yours, and the PUT prints the
+data it stored. Without `cursor`, your data replaces everything, including
+what the user tapped after you read it. An agent that does not follow presses
+reads the activity or widget first and sends the `revision` it read as
+`ifRevision`; on `conflict`, read again and redo the change.
 
 ## End
 
@@ -328,18 +347,20 @@ Accepted means Apple took the push, not that the phone displayed it.
 When an activity does not appear or update, read `lykta get events` before
 retrying. It returns this phone's newest events, oldest first, from both sides:
 
-- Tap timing: join the phone and gateway's `activity.action` and the phone's
-  `activity.tapUpdate` by `action`. The gateway includes `seq`, `ms`,
-  `fingerprint` and `stamp`. The phone includes `processAgeMs`, the answer's
-  outcome and `inSync`, request and update times, DNS, connect and TLS times,
-  connection reuse and protocol. `activity.content` reports `source` as `tap`
-  or `push`. `actions.read` records `count` and `cursor` for nonempty reads.
-- Writes and pushes: `activity.put` and `widget.put` show `cursor` and which
-  paths were `kept`. Activity PUTs also show `urgent`. `push.start`,
-  `push.update` and `push.end` report Apple's outcome, `pushID`, `ms`,
-  `priority` and `idleMs`. An update also gives its priority `reason`.
-- Other events include `activity.observed`, `activity.state`, `device.sync`,
-  `request.failed`, `app.error`, `app.authorization` and `metrickit.diagnostic`.
+- The gateway: `activity.put` and `widget.put` with the `cursor` and the
+  paths `kept` from later presses, `actions.read` when an agent reads
+  presses, `push.start`, `push.update` and `push.end` with Apple's outcome,
+  `pushID`, `ms`, `priority` and `idleMs`, the time since the gateway last
+  used its connection to Apple, `device.sync`, `request.failed`.
+- The phone: `activity.observed`, `activity.content` with `source`, `tap`
+  when a tap's answer drew it and `push` otherwise, `activity.state`,
+  `app.error`, `app.authorization`, `metrickit.diagnostic`.
+- A tap: `activity.action` from the phone and from the gateway and the
+  phone's `activity.tapUpdate` share an `action` id. Together they time it:
+  the app's age when the tap ran (`processAgeMs`), the request (`requestMs`,
+  with `dnsMs`, `connectMs`, `tlsMs` and `reusedConnection`), the gateway's
+  handling (`ms`) and the update call (`updateMs`). A `tapUpdate` whose
+  content never appears with `source: tap` was dropped by iOS.
 
 A `fingerprint` that matches between `push.*` and `activity.content` proves the
 phone received that exact content. An accepted `push.start` followed by
