@@ -338,7 +338,7 @@ actor Store {
             let changed = try title != current.title || expandedLayout != decode(current.layout) || data != currentData || alert != nil
                 || request.staleAfter != nil || relevance != current.relevance || endsAt != current.endsAt
             if changed {
-                let urgent = content != current.content && current.tappedAt > 0 && now - current.tappedAt <= Self.tapAnswerWindow
+                let urgent = try current.tappedAt > 0 && now - current.tappedAt <= Self.tapAnswerWindow && state.fingerprint != current.fingerprint()
                 try db.run("""
                     UPDATE activities SET title = ?, layout = ?, data = ?, content = ?, stale_after = ?, ends_at = ?, relevance = ?,
                       alert = COALESCE(?, alert), urgent = MAX(urgent, ?), revision = revision + 1, updated_at = ? WHERE id = ?
@@ -723,6 +723,7 @@ actor Store {
 
     func act(_ device: Device, _ action: Action, arrival: TimeInterval) throws -> ActionUpdate? {
         let now = Int(arrival)
+        let started = ContinuousClock.now
         let result: (recorded: Bool, update: ActionUpdate?) = try db.transaction {
             guard try db.query("SELECT 1 FROM actions WHERE id = ?", action.id).isEmpty else { return (false, nil) }
             let activityID: UUID
@@ -739,7 +740,7 @@ actor Store {
             let activity = try Activity(row)
             let previous = try activity.contentState()
             let layout = previous.layout
-            var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue)]
+            var detail: [String: JSONValue] = ["name": .string(activity.name.rawValue), "action": .string(action.id.uuidString)]
             let data = try decode(activity.data)
             let changed: JSONValue
             switch action.input {
@@ -775,6 +776,12 @@ actor Store {
                 revision = updated.revision
                 update = answer
             }
+            let sequence = try db.query("SELECT seq FROM actions WHERE id = ?", action.id)[0].integer("seq")
+            let elapsed = started.duration(to: .now).components
+            detail["seq"] = .number(Double(sequence))
+            detail["ms"] = .number(Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15)
+            detail["fingerprint"] = .string(update?.contentState.fingerprint ?? previous.fingerprint)
+            detail["stamp"] = update.map { .number($0.timestamp) } ?? .null
             detail["revision"] = .number(Double(revision))
             try record("activity.action", device: device.id, activity: activity.id, detail)
             return (true, update)
@@ -784,11 +791,15 @@ actor Store {
     }
 
     func actions(_ device: Device, after: Int64, limit: Int) throws -> [ActionRecord] {
-        try db.query("""
+        let actions = try db.query("""
             SELECT x.seq, x.button, x.toggle, x.is_on, x.at, a.name AS activity, w.name AS widget
               FROM actions x LEFT JOIN activities a ON a.id = x.activity_id LEFT JOIN widgets w ON w.id = x.widget_id
               WHERE x.device_id = ? AND x.seq > ? ORDER BY x.seq LIMIT ?
             """, device.id, after, limit).map(ActionRecord.init)
+        if let last = actions.last {
+            try record("actions.read", device: device.id, activity: nil, ["count": .number(Double(actions.count)), "cursor": .number(Double(last.seq))])
+        }
+        return actions
     }
 
     private func keeping(_ data: JSONValue, from current: JSONValue, for target: Action.Target, on device: Device, after cursor: Int64) throws

@@ -16,16 +16,16 @@ struct API: Sendable {
     let shutdown: Shutdown
     let renders: RenderQueue
 
-    func handle(_ request: HTTPRequest) async -> HTTPResponse {
-        var response = await respond(to: request)
+    func handle(_ request: HTTPRequest, arrival: TimeInterval = Date().timeIntervalSince1970) async -> HTTPResponse {
+        var response = await respond(to: request, arrival: arrival)
         response.headers["lykta-skill"] = Self.skillDigest
         return response
     }
 
-    private func respond(to request: HTTPRequest) async -> HTTPResponse {
+    private func respond(to request: HTTPRequest, arrival: TimeInterval) async -> HTTPResponse {
         let failure: APIError
         do {
-            return try await route(request, arrival: Date().timeIntervalSince1970)
+            return try await route(request, arrival: arrival)
         } catch let error as APIError {
             failure = error
         } catch {

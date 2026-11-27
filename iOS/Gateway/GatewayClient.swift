@@ -1,5 +1,6 @@
 import Foundation
 import LyktaCore
+import Synchronization
 
 nonisolated struct AppError: LocalizedError {
     let status: Int?
@@ -17,6 +18,30 @@ nonisolated enum ActionResult: Sendable {
     case update(ActionUpdate)
     case none
     case unreadable(String)
+}
+
+nonisolated final class TapRequestMetrics: NSObject, URLSessionTaskDelegate {
+    private let transaction = Mutex<URLSessionTaskTransactionMetrics?>(nil)
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        transaction.withLock { $0 = metrics.transactionMetrics.last }
+    }
+
+    var detail: [String: JSONValue] {
+        func milliseconds(from start: Date?, to end: Date?) -> JSONValue {
+            guard let start, let end else { return .null }
+            return .number(max(0, end.timeIntervalSince(start) * 1000).rounded())
+        }
+        return transaction.withLock { metrics in
+            [
+                "dnsMs": milliseconds(from: metrics?.domainLookupStartDate, to: metrics?.domainLookupEndDate),
+                "connectMs": milliseconds(from: metrics?.connectStartDate, to: metrics?.connectEndDate),
+                "tlsMs": milliseconds(from: metrics?.secureConnectionStartDate, to: metrics?.secureConnectionEndDate),
+                "reusedConnection": metrics.map { .bool($0.isReusedConnection) } ?? .null,
+                "protocol": metrics?.networkProtocolName.map(JSONValue.string) ?? .null,
+            ]
+        }
+    }
 }
 
 nonisolated struct GatewayClient: Sendable {
@@ -44,9 +69,9 @@ nonisolated struct GatewayClient: Sendable {
         _ = try await send("POST", url.appending(path: "v1/device/events"), token: secret, body: batch)
     }
 
-    func act(_ action: Action, secret: String) async throws -> ActionResult {
+    func act(_ action: Action, secret: String, metrics: TapRequestMetrics?) async throws -> ActionResult {
         let (data, status) = try await exchange("POST", url.appending(path: "v1/device/actions"), token: secret,
-                                                body: try JSONEncoder().encode(action), type: "application/json")
+                                                body: try JSONEncoder().encode(action), type: "application/json", metrics: metrics)
         switch status {
         case 200:
             do { return .update(try JSONDecoder().decode(ActionUpdate.self, from: data)) }
@@ -126,7 +151,8 @@ nonisolated struct GatewayClient: Sendable {
         return data
     }
 
-    private func exchange(_ method: String, _ target: URL, token: String?, body: Data?, type: String) async throws -> (Data, Int) {
+    private func exchange(_ method: String, _ target: URL, token: String?, body: Data?, type: String,
+                          metrics: TapRequestMetrics? = nil) async throws -> (Data, Int) {
         var request = URLRequest(url: target, timeoutInterval: timeout)
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
@@ -135,7 +161,7 @@ nonisolated struct GatewayClient: Sendable {
             request.httpBody = body
         }
         let (data, response) = try await withThrowingTaskGroup(of: (Data, URLResponse).self) { group in
-            group.addTask { [request] in try await URLSession.shared.data(for: request) }
+            group.addTask { [request] in try await URLSession.shared.data(for: request, delegate: metrics) }
             group.addTask {
                 try await Task.sleep(for: .seconds(timeout))
                 throw URLError(.timedOut)

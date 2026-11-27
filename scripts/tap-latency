@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import math
+import statistics
+import sys
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+
+def at(event):
+    return datetime.fromisoformat(event["at"]).timestamp()
+
+
+def milliseconds(start, end):
+    return round((at(end) - at(start)) * 1000) if start and end else None
+
+
+def show(value):
+    if value is None:
+        return "—"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(round(value)) if isinstance(value, float) else str(value)
+
+
+def started(push):
+    return at(push) - push["detail"].get("ms", 0) / 1000
+
+
+def report(events):
+    actions, activities = defaultdict(dict), defaultdict(list)
+    for event in sorted(events, key=lambda row: (at(row), row["seq"])):
+        if activity := event.get("activity"):
+            activities[activity].append(event)
+        if action := event["detail"].get("action"):
+            actions[action][(event["name"], event["source"])] = event
+
+    puts = [event for event in events if event["name"] in {"activity.put", "widget.put"}]
+    older_writes = sum(bool(event["detail"].get("kept")) for event in puts)
+    reads = sorted((event for event in events if event["name"] == "actions.read"), key=lambda event: event["seq"])
+    unreported = []
+    observations = {}
+    pushes = {}
+    for activity, rows in activities.items():
+        observations[activity] = [row for row in rows if row["name"] == "activity.content"]
+        pushes[activity] = [row for row in rows if row["name"] == "push.update"]
+        recorded = set()
+        for observation in rows:
+            if observation["name"] not in {"activity.content", "activity.observed"} or observation["detail"].get("source") == "tap":
+                continue
+            fingerprint = observation["detail"].get("fingerprint")
+            matches = [push for push in pushes[activity] if started(push) <= at(observation)
+                       and push["detail"].get("fingerprint") == fingerprint and push["detail"].get("outcome") == "accepted"]
+            if matches:
+                recorded.add(max(matches, key=started)["seq"])
+        unreported.extend(push for push in pushes[activity] if push["detail"].get("priority") == 10
+                          and push["detail"].get("outcome") == "accepted" and push["seq"] not in recorded)
+
+    table = [("action", "button", "app", "→gw", "gw", "answer", "inSync", "net (DNS/connect/TLS)", "reused",
+              "shown", "push (prio/ms/idle)", "agent read", "agent PUT (+ms/kept)")]
+    shown_by_tap = shown_by_push = 0
+    latencies = []
+    seen_pushes, seen_observations = set(), set()
+    for action, rows in actions.items():
+        phone = rows.get(("activity.action", "app"))
+        gateway = rows.get(("activity.action", "gateway"))
+        tap_update = rows.get(("activity.tapUpdate", "app"))
+        begin = phone or gateway
+        if begin is None:
+            continue
+        activity = begin["activity"]
+        tap = tap_update["detail"] if tap_update else {}
+        handled = gateway["detail"] if gateway else {}
+        fingerprint = tap.get("to") or (handled.get("fingerprint") if handled.get("stamp") is not None else None)
+        observed = push = None
+        if fingerprint:
+            observed = next((row for row in observations[activity] if at(row) >= at(begin) and row["seq"] not in seen_observations
+                             and row["detail"].get("fingerprint") == fingerprint), None)
+            push = next((row for row in pushes[activity] if row["seq"] not in seen_pushes
+                         and row["detail"].get("fingerprint") == fingerprint
+                         and (not gateway or row["seq"] > gateway["seq"])), None)
+            if push:
+                seen_pushes.add(push["seq"])
+        elapsed = milliseconds(phone, observed)
+        displayed = "—"
+        if observed:
+            seen_observations.add(observed["seq"])
+            source = observed["detail"].get("source") or "unknown"
+            displayed = source if elapsed is None else f"{source} {elapsed:+d}"
+            shown_by_tap += source == "tap"
+            shown_by_push += source == "push" and tap.get("outcome") == "called"
+            if elapsed is not None:
+                latencies.append(elapsed)
+
+        next_put = first_read = None
+        if gateway:
+            revision = handled.get("revision")
+            action_seq = handled.get("seq")
+            if action_seq is not None:
+                first_read = next((row for row in reads if row["seq"] > gateway["seq"] and row["detail"]["cursor"] >= action_seq), None)
+            next_put = next((row for row in activities[activity] if row["name"] == "activity.put"
+                             and row["seq"] > gateway["seq"]
+                             and ((action_seq is not None and row["detail"].get("cursor") == action_seq)
+                                  or row["detail"].get("revision") == revision)), None)
+        push_detail = push["detail"] if push else {}
+        process_age = begin["detail"].get("processAgeMs")
+        app = "—" if process_age is None else f"{'cold' if process_age < 1000 else 'warm'} {show(process_age)}"
+        network = "/".join(show(tap.get(key)) for key in ("dnsMs", "connectMs", "tlsMs"))
+        push_timing = "/".join(show(push_detail.get(key)) for key in ("priority", "ms", "idleMs"))
+        put_timing = f"{milliseconds(gateway, next_put):+d}, kept {len(next_put['detail'].get('kept', []))}" if next_put else "—"
+        table.append((action[:8], begin["detail"].get("button") or begin["detail"].get("toggle") or "—", app,
+                      show(milliseconds(phone, gateway)), show(handled.get("ms")), show(tap.get("outcome")), show(tap.get("inSync")),
+                      f"{show(tap.get('requestMs'))} ({network})" if tap else "—", show(tap.get("reusedConnection")),
+                      displayed, push_timing if push else "—", show(milliseconds(gateway, first_read)), put_timing))
+
+    widths = [max(map(len, column)) for column in zip(*table)]
+    for row in table:
+        print("  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip())
+    ordered = sorted(latencies)
+    p90 = ordered[math.ceil(0.9 * len(ordered)) - 1] if ordered else None
+    p50 = statistics.median(ordered) if ordered else None
+    print(f"taps {len(table) - 1} · shown by tap {shown_by_tap} · called but shown only by a push {shown_by_push}"
+          f" · p50 tap→shown {show(p50)} ms · p90 {show(p90)} ms")
+    print(f"agent writes that tried an older value {older_writes} · priority-10 updates never reported {len(unreported)}")
+    for push in unreported:
+        print(f"  seq {push['seq']} · {push['activity']} · {push['at']} · {push['detail'].get('reason', '—')}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Summarize one phone's Lykta gateway events.")
+    parser.add_argument("file", nargs="?", type=Path, help="JSON from lykta get 'events?limit=1000'. Reads stdin by default.")
+    args = parser.parse_args()
+    try:
+        payload = json.loads(args.file.read_text(encoding="utf-8") if args.file else sys.stdin.read())
+        report(payload["events"])
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        parser.exit(2, f"tap-latency: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

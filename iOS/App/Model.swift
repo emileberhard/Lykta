@@ -41,6 +41,8 @@ final class Model {
     private let gateway: GatewayClient?
     private let environment: PushEnvironment
     private let telemetry = Telemetry()
+    private let processStarted = ContinuousClock.now
+    private var tapAnswers: [UUID: [String: ContinuousClock.Instant]] = [:]
     private var credentials: Credentials?
     private var times: [UUID: ActivityTimes] = [:]
     private var requestedEnds: Set<UUID> = []
@@ -284,26 +286,39 @@ final class Model {
         case let .activity(id):
             activity = id
             event = "activity.action"
+            detail["action"] = .string(action.id.uuidString)
+            detail["processAgeMs"] = Self.milliseconds(since: processStarted)
         case let .widget(id):
             activity = nil
             event = "widget.action"
             detail["widget"] = .string(id.uuidString)
         }
         telemetry.record(event, activity: activity, detail)
+        let metrics = activity.map { _ in TapRequestMetrics() }
+        let requestStarted = ContinuousClock.now
         let reply: ActionResult
         do {
-            reply = try await gateway.act(action, secret: credentials.deviceSecret)
+            reply = try await gateway.act(action, secret: credentials.deviceSecret, metrics: metrics)
         } catch {
+            if let activity, let metrics {
+                recordTap(action.id, activity: activity, requestMs: Self.milliseconds(since: requestStarted), metrics: metrics, ["outcome": .string("failed")])
+            }
             telemetry.record("app.error", activity: activity, ["operation": .string("action"), "error": .string(error.localizedDescription)])
             throw error
         }
+        let requestMs = Self.milliseconds(since: requestStarted)
+        let outcome: [String: JSONValue]
         switch (action.target, reply) {
         case let (.activity(id), .update(update)):
-            await apply(update, to: id)
+            outcome = await apply(update, to: id)
         case let (_, .unreadable(error)):
             telemetry.record("app.error", activity: activity, ["operation": .string("actionUpdate"), "error": .string(error)])
+            outcome = ["outcome": .string("unreadable")]
         default:
-            break
+            outcome = ["outcome": .string("none")]
+        }
+        if let activity, let metrics {
+            recordTap(action.id, activity: activity, requestMs: requestMs, metrics: metrics, outcome)
         }
         if case let .widget(id) = action.target, let configurations = try? await WidgetCenter.shared.currentConfigurations(),
            WidgetSelection.places(in: configurations).count(where: { $0.widget == id }) > 1 {
@@ -311,24 +326,35 @@ final class Model {
         }
     }
 
-    private func apply(_ update: ActionUpdate, to id: UUID) async {
-        let next = update.contentState.fingerprint
-        switch await TapUpdate.apply(update, to: id) {
-        case let .called(inSync):
-            refreshActivities()
-            telemetry.record("activity.tapUpdate", activity: id, [
-                "outcome": .string("called"), "inSync": .bool(inSync),
-                "from": .string(update.from), "to": .string(next),
-                "timestamp": .number(update.timestamp),
-            ])
-        case let .skipped(reason, current):
-            var detail: [String: JSONValue] = [
-                "outcome": .string("skipped"), "reason": .string(reason),
-                "from": .string(update.from), "to": .string(next),
-            ]
-            if let current { detail["current"] = .string(current) }
-            telemetry.record("activity.tapUpdate", activity: id, detail)
+    private func recordTap(_ action: UUID, activity: UUID, requestMs: JSONValue, metrics: TapRequestMetrics, _ outcome: [String: JSONValue]) {
+        var detail = metrics.detail.merging(outcome) { $1 }
+        detail["action"] = .string(action.uuidString)
+        detail["requestMs"] = requestMs
+        detail["inSync"] = detail["inSync"] ?? .null
+        detail["updateMs"] = detail["updateMs"] ?? .null
+        telemetry.record("activity.tapUpdate", activity: activity, detail)
+    }
+
+    private func apply(_ update: ActionUpdate, to id: UUID) async -> [String: JSONValue] {
+        let result = await TapUpdate.apply(update, to: id) { [self] in
+            let now = ContinuousClock.now
+            pruneTapAnswers(at: now)
+            tapAnswers[id, default: [:]][update.contentState.fingerprint] = now
         }
+        if result["outcome"] == .string("called") { refreshActivities() }
+        return result
+    }
+
+    private func pruneTapAnswers(at now: ContinuousClock.Instant) {
+        for id in Array(tapAnswers.keys) {
+            let pending = tapAnswers[id]?.filter { $0.value.duration(to: now) <= .milliseconds(150) }
+            tapAnswers[id] = pending?.isEmpty == false ? pending : nil
+        }
+    }
+
+    fileprivate nonisolated static func milliseconds(since start: ContinuousClock.Instant) -> JSONValue {
+        let elapsed = start.duration(to: .now).components
+        return .number((Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15).rounded())
     }
 
     func reset() async {
@@ -493,7 +519,12 @@ final class Model {
     private func observeContent(of id: String) async {
         guard let activity = Activity<LyktaActivity>.activities.first(where: { $0.id == id }) else { return }
         for await content in activity.contentUpdates {
-            telemetry.record("activity.content", activity: activity.attributes.id, Self.describe(content))
+            let activityID = activity.attributes.id
+            pruneTapAnswers(at: .now)
+            let fromTap = tapAnswers[activityID]?.removeValue(forKey: content.state.fingerprint) != nil
+            var detail = Self.describe(content)
+            detail["source"] = .string(fromTap ? "tap" : "push")
+            telemetry.record("activity.content", activity: activityID, detail)
             await sync()
         }
     }
@@ -699,28 +730,28 @@ extension Model {
 }
 #endif
 
-private nonisolated enum TapUpdate: Sendable {
-    enum Outcome: Sendable {
-        case called(inSync: Bool)
-        case skipped(reason: String, current: String?)
-    }
-
-    @concurrent static func apply(_ update: ActionUpdate, to id: UUID) async -> Outcome {
+private nonisolated enum TapUpdate {
+    @concurrent static func apply(_ update: ActionUpdate, to id: UUID, willApply: @MainActor @Sendable () -> Void) async -> [String: JSONValue] {
         guard let shown = Activity<LyktaActivity>.activities.first(where: { $0.attributes.id == id }) else {
-            return .skipped(reason: "missing", current: nil)
+            return ["outcome": .string("missing")]
         }
         guard [.pending, .active, .stale].contains(shown.activityState) else {
-            return .skipped(reason: ObservedState(shown.activityState).rawValue, current: nil)
+            return ["outcome": .string(ObservedState(shown.activityState).rawValue)]
         }
+        guard update.contentState.layout != nil else { return ["outcome": .string("unreadable")] }
         let current = shown.content.state.fingerprint
-        guard update.contentState.layout != nil else {
-            return .skipped(reason: "unreadable", current: current)
-        }
+        let next = update.contentState.fingerprint
         let content = ActivityContent(state: update.contentState,
                                       staleDate: update.staleDate.map { Date(timeIntervalSince1970: Double($0)) },
                                       relevanceScore: update.relevanceScore ?? 0)
+        await willApply()
+        let started = ContinuousClock.now
         await shown.update(content, timestamp: Date(timeIntervalSince1970: update.timestamp))
-        return .called(inSync: current == update.from)
+        let updateMs = Model.milliseconds(since: started)
+        return [
+            "outcome": .string("called"), "inSync": .bool(current == update.from), "updateMs": updateMs,
+            "from": .string(update.from), "to": .string(next), "timestamp": .number(update.timestamp),
+        ]
     }
 }
 
