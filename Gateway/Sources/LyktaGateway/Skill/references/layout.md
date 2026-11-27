@@ -318,9 +318,25 @@ A picker keeps one boolean per option. Every button sets all of them, and its
 label uses its own boolean to draw the selection immediately.
 
 ```json
-{"title":"Input picker","data":{"inputs":{"shield":{"active":true},"mac":{"active":false}}},"layout":{"lockScreen":{"hstack":[
-{"button":"input-shield","style":"plain","set":{"inputs.shield.active":true,"inputs.mac.active":false},"label":{"if":"{{inputs.shield.active}}","then":{"text":"Shield","modifiers":[{"fontWeight":"bold"},{"foreground":"white"},{"background":"#0A84FF"}]},"else":{"text":"Shield","modifiers":[{"foreground":"#FFFFFF99"}]},"modifiers":[{"animation":{"value":"{{inputs.shield.active}}","curve":"linear","duration":0.05}}]}},
-{"button":"input-mac","style":"plain","set":{"inputs.shield.active":false,"inputs.mac.active":true},"label":{"if":"{{inputs.mac.active}}","then":{"text":"Mac","modifiers":[{"fontWeight":"bold"},{"foreground":"white"},{"background":"#0A84FF"}]},"else":{"text":"Mac","modifiers":[{"foreground":"#FFFFFF99"}]},"modifiers":[{"animation":{"value":"{{inputs.mac.active}}","curve":"linear","duration":0.05}}]}}],"spacing":6,"modifiers":[{"padding":14}]},"compactLeading":"TV","compactTrailing":"Input","minimal":"TV"}}
+{
+  "title": "Input picker",
+  "data": {"inputs": {"shield": {"active": true}, "mac": {"active": false}}},
+  "layout": {
+    "lockScreen": {"hstack": [
+      {"button": "input-shield", "style": "plain", "set": {"inputs.shield.active": true, "inputs.mac.active": false},
+       "label": {"if": "{{inputs.shield.active}}",
+                 "then": {"text": "Shield", "modifiers": [{"fontWeight": "bold"}, {"foreground": "white"}, {"padding": 6}, {"background": "#0A84FF"}, {"clip": "capsule"}]},
+                 "else": {"text": "Shield", "modifiers": [{"foreground": "#FFFFFF99"}, {"padding": 6}]},
+                 "modifiers": [{"animation": {"value": "{{inputs.shield.active}}", "curve": "linear", "duration": 0.05}}]}},
+      {"button": "input-mac", "style": "plain", "set": {"inputs.shield.active": false, "inputs.mac.active": true},
+       "label": {"if": "{{inputs.mac.active}}",
+                 "then": {"text": "Mac", "modifiers": [{"fontWeight": "bold"}, {"foreground": "white"}, {"padding": 6}, {"background": "#0A84FF"}, {"clip": "capsule"}]},
+                 "else": {"text": "Mac", "modifiers": [{"foreground": "#FFFFFF99"}, {"padding": 6}]},
+                 "modifiers": [{"animation": {"value": "{{inputs.mac.active}}", "curve": "linear", "duration": 0.05}}]}}
+    ], "spacing": 6, "modifiers": [{"padding": 14}]},
+    "compactLeading": "TV", "compactTrailing": "Input", "minimal": "TV"
+  }
+}
 ```
 
 ## Motion
