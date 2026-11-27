@@ -490,9 +490,11 @@ value. Partial PUTs and skill guidance alone would leave whole-data
 writers to coordinate the race themselves. The meaning of the cursor
 becomes a long-term API contract once callers rely on it.
 
-`Store` commits and `RenderQueue` state changes wake delivery and waiting
-HTTP requests. The 250 ms fallback covers time-based eligibility and
-shutdown. The gateway never calls out, because webhooks would need every
+`Store` commits and `RenderQueue` state changes signal `Delivery` and waiting
+HTTP requests directly, keeping a 250 ms fallback wait for time-based
+eligibility, tap push coalescing and shutdown, so pushes, action long-polls,
+waiting PUTs and previews wake immediately instead of polling fixed intervals.
+The gateway never calls out, because webhooks would need every
 agent to expose an endpoint and would let a layout make the gateway request
 arbitrary URLs. Links open through the app's URL handler, so a layout can
 reach any https or app URL without a gateway round trip. A notification's

@@ -285,9 +285,8 @@ has seen the press; one that changes nothing shows nothing until your PUT
 arrives, a second or more later. So give every button a visible change with
 `set`, `add` or `now`, even when an agent does the real work, such as marking
 the pressed option or showing "Starting…", and correct it with a PUT if the
-work fails. A picker keeps one boolean per option: every option's button sets
-them all, as in `"set": {"inputs.mac": true, "inputs.shield": false}`, and its
-label draws the selected look from its own boolean. Make the change itself
+work fails. In a picker, every option's button sets what marks the selection
+for all options, such as each option's background color. Make the change itself
 quick: text a control changes takes `{"contentTransition": "identity"}`,
 which shows the new value at once and every step of a burst of taps, where
 the default animation takes most of a second, and a background, color or bar
